@@ -1,0 +1,71 @@
+plugins {
+    id 'java'
+    alias(libs.plugins.spring.boot)
+    alias(libs.plugins.spring.dependency.management)
+}
+
+group = 'com.feike'
+version = '0.1.0-SNAPSHOT'
+
+repositories {
+    maven { url = uri('https://maven.aliyun.com/repository/public/') }
+    maven { url = uri('https://maven.aliyun.com/repository/spring/') }
+    mavenCentral()
+}
+
+dependencies {
+    implementation platform("org.springframework.ai:spring-ai-bom:${libs.versions.springAi.get()}")
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.ai:spring-ai-starter-model-openai'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation libs.junit.jupiter
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 25
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+tasks.named('bootRun') {
+    jvmArgs = [
+            '-Dfile.encoding=UTF-8',
+            '-Dconsole.encoding=UTF-8',
+            '--enable-native-access=ALL-UNNAMED'
+    ]
+
+    def envFile = rootProject.file('../.env')
+    if (!envFile.exists()) {
+        envFile = rootProject.file('.env')
+    }
+    if (envFile.exists()) {
+        envFile.eachLine { line ->
+            def trimmed = line.trim()
+            if (trimmed.isEmpty() || trimmed.startsWith('#')) {
+                return
+            }
+            def eq = trimmed.indexOf('=')
+            if (eq <= 0) {
+                return
+            }
+            def key = trimmed.substring(0, eq).trim()
+            def val = trimmed.substring(eq + 1).trim()
+            if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+                val = val.substring(1, val.length() - 1)
+            }
+            environment key, val
+        }
+    }
+}

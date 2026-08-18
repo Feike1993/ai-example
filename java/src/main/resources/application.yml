@@ -1,0 +1,38 @@
+server:
+  port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+spring:
+  application:
+    name: ai-example
+  threads:
+    virtual:
+      enabled: true
+  ai:
+    openai:
+      # 仅占位：真正的 ChatClient 由 LlmClientFactory 按 app.ai 手动创建，避免双模型
+      api-key: ${AI_API_KEY:placeholder}
+      base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode}
+    retry:
+      max-attempts: 1
+      on-client-errors: false
+
+app:
+  ai:
+    base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode}
+    api-key: ${AI_API_KEY:}
+    model: ${AI_MODEL:qwen3.5-flash}
+    temperature: ${AI_TEMPERATURE:0.2}
+    structured:
+      max-attempts: 2
+      include-last-error: true
+      retry-use-repair-prompt: true
+      retry-append-strict-json-instruction: true
+      error-message-max-length: 200
+      schema-validation-enabled: false
+    agent:
+      max-steps: 8

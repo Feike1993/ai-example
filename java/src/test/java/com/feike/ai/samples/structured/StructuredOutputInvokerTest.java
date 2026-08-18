@@ -1,0 +1,51 @@
+package com.feike.ai.samples.structured;
+
+import com.feike.ai.core.AiProperties;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+/**
+ * 验证 {@link StructuredOutputInvoker#parse} 走与生产相同的围栏剥离路径，不调用 LLM。
+ */
+@DisplayName("StructuredOutputInvoker.parse")
+class StructuredOutputInvokerTest {
+
+    /**
+     * 测试用工单结构，字段需与生产 {@code Ticket} 对齐。
+     *
+     * @param title    标题
+     * @param priority 优先级
+     * @param labels   标签
+     * @param summary  摘要
+     */
+    public record Ticket(String title, String priority, List<String> labels, String summary) {}
+
+    @Test
+    void shouldParseJsonAfterStrippingFence() {
+        StructuredOutputInvoker invoker = new StructuredOutputInvoker(properties());
+        String raw = """
+            ```json
+            {"title":"登录 500","priority":"P1","labels":["backend","auth"],"summary":"登录页偶发 500"}
+            ```
+            """;
+        Ticket ticket = invoker.parse(raw, Ticket.class);
+        assertEquals("登录 500", ticket.title());
+        assertEquals("P1", ticket.priority());
+        assertEquals(List.of("backend", "auth"), ticket.labels());
+    }
+
+    private static AiProperties properties() {
+        return new AiProperties(
+            "http://localhost",
+            "test",
+            "mock",
+            0.2,
+            new AiProperties.Structured(2, true, true, true, 200, false),
+            new AiProperties.Agent(8)
+        );
+    }
+}

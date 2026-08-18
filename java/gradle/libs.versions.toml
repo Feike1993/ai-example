@@ -1,0 +1,11 @@
+[versions]
+spring-boot = "4.1.0"
+springAi = "2.0.0"
+junit-jupiter = "5.12.0"
+
+[libraries]
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit-jupiter" }
+
+[plugins]
+spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
+spring-dependency-management = { id = "io.spring.dependency-management", version = "1.1.7" }
