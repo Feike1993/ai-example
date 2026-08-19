@@ -16,9 +16,10 @@ import org.springframework.web.bind.annotation.RestController;
 public class ToolSampleController {
 
     /**
-     * @param prompt 用户问题，不能为空
+     * @param prompt   用户问题，不能为空
+     * @param provider 可选 LLM Provider id，空则用默认 DeepSeek
      */
-    public record ToolChatRequest(@NotBlank String prompt) {}
+    public record ToolChatRequest(@NotBlank String prompt, String provider) {}
 
     /**
      * @param content 结合工具结果后的回复
@@ -42,6 +43,6 @@ public class ToolSampleController {
      */
     @PostMapping
     public ToolChatResponse chat(@RequestBody @Validated ToolChatRequest request) {
-        return new ToolChatResponse(toolSampleService.chatWithTools(request.prompt()));
+        return new ToolChatResponse(toolSampleService.chatWithTools(request.prompt(), request.provider()));
     }
 }

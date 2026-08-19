@@ -22,8 +22,9 @@ public class ChatSampleController {
     /**
      * @param prompt      用户问题，不能为空
      * @param temperature 可选采样温度
+     * @param provider    可选 LLM Provider id，空则用默认 DeepSeek
      */
-    public record ChatRequest(@NotBlank String prompt, Double temperature) {}
+    public record ChatRequest(@NotBlank String prompt, Double temperature, String provider) {}
 
     /**
      * @param content 模型完整回复
@@ -47,17 +48,21 @@ public class ChatSampleController {
      */
     @PostMapping
     public ChatResponse chat(@RequestBody @Validated ChatRequest request) {
-        return new ChatResponse(chatSampleService.chat(request.prompt(), request.temperature()));
+        return new ChatResponse(chatSampleService.chat(request.prompt(), request.temperature(), request.provider()));
     }
 
     /**
      * SSE 流式聊天。
      *
-     * @param prompt 用户问题
+     * @param prompt   用户问题
+     * @param provider 可选 LLM Provider id
      * @return {@code text/event-stream} 增量
      */
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<String> stream(@RequestParam @NotBlank String prompt) {
-        return chatSampleService.stream(prompt);
+    public Flux<String> stream(
+        @RequestParam @NotBlank String prompt,
+        @RequestParam(required = false) String provider
+    ) {
+        return chatSampleService.stream(prompt, provider);
     }
 }

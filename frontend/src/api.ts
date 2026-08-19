@@ -41,6 +41,45 @@ export type AgentTrace = {
 
 export type FrameworkResponse = { content: string }
 
+export type ProviderView = {
+  id: string
+  label: string
+  model: string
+  configured: boolean
+}
+
+export type ProviderListResponse = {
+  defaultProvider: string
+  providers: ProviderView[]
+}
+
+/**
+ * GET JSON。非 2xx 抛 {@link ApiError}。
+ */
+export async function getJson<T>(path: string): Promise<T> {
+  let response: Response
+  try {
+    response = await fetch(path)
+  } catch {
+    throw new Error('无法连接后端，请先在 8080 端口启动 Java 服务')
+  }
+  const text = await response.text()
+  if (!response.ok) {
+    throw new ApiError(response.status, text)
+  }
+  if (!text) {
+    throw new ApiError(response.status, '空响应')
+  }
+  return JSON.parse(text) as T
+}
+
+/**
+ * 拉取可切换的 LLM Provider 清单。
+ */
+export function listProviders(): Promise<ProviderListResponse> {
+  return getJson<ProviderListResponse>(`${API_BASE}/providers`)
+}
+
 /**
  * POST JSON 并解析响应。非 2xx 抛 {@link ApiError}。
  */
@@ -84,18 +123,24 @@ function decodeSseData(raw: string): string {
 /**
  * 订阅 Chat SSE。返回取消函数；服务端关流时调用 onDone。
  *
- * @param prompt 用户问题，会放进 query
+ * @param prompt   用户问题，会放进 query
+ * @param provider Provider id，空则走后端默认
  * @param onChunk 每个 token / 片段
  * @param onDone 正常结束或主动取消
  * @param onError 尚未收到任何数据就断开（多为后端未启动）
  */
 export function streamChat(
   prompt: string,
+  provider: string,
   onChunk: (text: string) => void,
   onDone: () => void,
   onError: (error: Error) => void,
 ): () => void {
-  const url = `${API_BASE}/chat/stream?prompt=${encodeURIComponent(prompt)}`
+  const params = new URLSearchParams({ prompt })
+  if (provider) {
+    params.set('provider', provider)
+  }
+  const url = `${API_BASE}/chat/stream?${params.toString()}`
   const source = new EventSource(url)
   let received = false
   let closed = false

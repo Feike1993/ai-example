@@ -17,7 +17,7 @@ type Mode = 'react' | 'framework'
 /**
  * Agent 样例：显式 ReAct Loop 与框架托管 tool-calling 对照。
  */
-export function AgentPanel() {
+export function AgentPanel({ provider }: { provider: string }) {
   const [prompt, setPrompt] = useState('北京天气怎么样？再算 3+5')
   const [maxSteps, setMaxSteps] = useState<number | string>(8)
   const [mode, setMode] = useState<Mode>('react')
@@ -32,7 +32,7 @@ export function AgentPanel() {
     setFramework(null)
     setLoading(true)
     try {
-      const body: { prompt: string; maxSteps?: number } = { prompt }
+      const body: { prompt: string; maxSteps?: number; provider: string } = { prompt, provider }
       if (mode === 'react' && typeof maxSteps === 'number') {
         body.maxSteps = maxSteps
       }

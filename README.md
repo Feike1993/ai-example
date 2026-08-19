@@ -24,11 +24,12 @@ Java 用 **Spring Boot 4.1 + Spring AI 2.0 + Gradle**；Python 用 **LangGraph**
 - JDK **25**
 - Python **3.11+**（建议 [uv](https://docs.astral.sh/uv/)）
 - Node.js **20.19+**（前端 playground，建议 [pnpm](https://pnpm.io/)，`corepack enable` 即可）
-- 一个 OpenAI 兼容 API Key（默认阿里云 DashScope / Qwen，也可换成任何兼容网关）
+- 一个 OpenAI 兼容 API Key（**默认 DeepSeek**，也可在配置 / 前端切换阿里云通义、Kimi、智谱 GLM）
 
 ```bash
 cp .env.example .env
-# 填写 AI_API_KEY
+# 填写 PROVIDER_DEEPSEEK_API_KEY（或 AI_API_KEY）
+# 切换默认厂商：AI_PROVIDER=dashscope|kimi|glm
 ```
 
 ## 跑 Java 样例
@@ -75,7 +76,7 @@ pnpm install
 pnpm dev
 ```
 
-浏览器打开 http://localhost:5173 ，可测 Chat（同步 / SSE）、结构化输出、Tool Calling、Agent Loop。Vite 会把 `/ai-example` 代理到 `localhost:8080`。
+浏览器打开 http://localhost:5173 ，可测 Chat（同步 / SSE）、结构化输出、Tool Calling、Agent Loop。侧栏可切换模型（默认 DeepSeek）。Vite 会把 `/ai-example` 代理到 `localhost:8080`。
 
 ## 跑 Python 对照
 

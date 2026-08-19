@@ -11,7 +11,7 @@ type Mode = 'sync' | 'sse'
 /**
  * Chat 样例：同步补全与 SSE，旁注 TTFT。
  */
-export function ChatPanel() {
+export function ChatPanel({ provider }: { provider: string }) {
   const [prompt, setPrompt] = useState('用一句话介绍 Token 和上下文窗口')
   const [temperature, setTemperature] = useState<number | string>(0.2)
   const [mode, setMode] = useState<Mode>('sync')
@@ -45,7 +45,7 @@ export function ChatPanel() {
     const started = performance.now()
     try {
       const temp = typeof temperature === 'number' ? temperature : undefined
-      const body: { prompt: string; temperature?: number } = { prompt }
+      const body: { prompt: string; temperature?: number; provider: string } = { prompt, provider }
       if (temp !== undefined) {
         body.temperature = temp
       }
@@ -74,6 +74,7 @@ export function ChatPanel() {
 
     stopRef.current = streamChat(
       prompt,
+      provider,
       (chunk) => {
         if (first) {
           first = false

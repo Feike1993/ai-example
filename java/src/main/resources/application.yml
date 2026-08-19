@@ -16,20 +16,40 @@ spring:
       enabled: true
   ai:
     openai:
-      # 仅占位：真正的 ChatClient 由 LlmClientFactory 按 app.ai 手动创建，避免双模型
+      # 仅占位：真正的 ChatClient 由 LlmProviderRegistry 按 app.ai.providers 手动创建，避免双模型
       api-key: ${AI_API_KEY:placeholder}
-      base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode}
+      base-url: ${AI_BASE_URL:https://api.deepseek.com}
     retry:
       max-attempts: 1
       on-client-errors: false
 
 app:
   ai:
-    base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode}
-    api-key: ${AI_API_KEY:}
-    model: ${AI_MODEL:qwen3.5-flash}
-    # 调度器参数
+    default-provider: ${AI_PROVIDER:deepseek}
+    # 调度器参数；各 Provider 可单独覆盖
     temperature: ${AI_TEMPERATURE:0.2}
+    providers:
+      deepseek:
+        label: DeepSeek
+        base-url: https://api.deepseek.com
+        api-key: ${PROVIDER_DEEPSEEK_API_KEY:${AI_API_KEY:}}
+        model: ${PROVIDER_DEEPSEEK_MODEL:deepseek-v4-flash}
+      dashscope:
+        label: 阿里云百炼
+        base-url: https://dashscope.aliyuncs.com/compatible-mode
+        api-key: ${PROVIDER_DASHSCOPE_API_KEY:}
+        model: ${PROVIDER_DASHSCOPE_MODEL:qwen3.5-flash}
+      kimi:
+        label: Kimi
+        base-url: https://api.moonshot.cn/v1
+        api-key: ${PROVIDER_KIMI_API_KEY:}
+        model: ${PROVIDER_KIMI_MODEL:kimi-latest}
+        temperature: 1
+      glm:
+        label: 智谱 GLM
+        base-url: https://open.bigmodel.cn/api/coding/paas/v4
+        api-key: ${PROVIDER_GLM_API_KEY:}
+        model: ${PROVIDER_GLM_MODEL:glm-5}
     # 结构化输入参数
     structured:
       # 重试次数

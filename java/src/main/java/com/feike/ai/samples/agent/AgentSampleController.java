@@ -18,8 +18,9 @@ public class AgentSampleController {
     /**
      * @param prompt   用户任务，不能为空
      * @param maxSteps 可选熔断步数；仅显式 Loop 使用
+     * @param provider 可选 LLM Provider id，空则用默认 DeepSeek
      */
-    public record AgentRequest(@NotBlank String prompt, Integer maxSteps) {}
+    public record AgentRequest(@NotBlank String prompt, Integer maxSteps, String provider) {}
 
     /**
      * @param content 框架托管循环的最终回复
@@ -43,7 +44,7 @@ public class AgentSampleController {
      */
     @PostMapping("/react")
     public ReactAgentLoop.Trace react(@RequestBody @Validated AgentRequest request) {
-        return agentSampleService.react(request.prompt(), request.maxSteps());
+        return agentSampleService.react(request.prompt(), request.maxSteps(), request.provider());
     }
 
     /**
@@ -54,6 +55,6 @@ public class AgentSampleController {
      */
     @PostMapping("/framework")
     public FrameworkResponse framework(@RequestBody @Validated AgentRequest request) {
-        return new FrameworkResponse(agentSampleService.framework(request.prompt()));
+        return new FrameworkResponse(agentSampleService.framework(request.prompt(), request.provider()));
     }
 }

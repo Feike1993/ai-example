@@ -1,7 +1,7 @@
 package com.feike.ai.samples.agent;
 
 import com.feike.ai.core.AiProperties;
-import com.feike.ai.core.LlmClientFactory;
+import com.feike.ai.core.LlmProviderRegistry;
 import com.feike.ai.samples.tools.DemoTools;
 import org.springframework.stereotype.Service;
 
@@ -16,17 +16,17 @@ public class AgentSampleService {
         得到工具结果后，用中文给出最终答案。
         """;
 
-    private final LlmClientFactory factory;
+    private final LlmProviderRegistry registry;
     private final DemoTools demoTools;
     private final AiProperties properties;
 
     /**
-     * @param factory    同时提供 ChatModel 与 ChatClient
+     * @param registry   同时提供 ChatModel 与 ChatClient
      * @param demoTools  演示工具
      * @param properties 读取默认 maxSteps
      */
-    public AgentSampleService(LlmClientFactory factory, DemoTools demoTools, AiProperties properties) {
-        this.factory = factory;
+    public AgentSampleService(LlmProviderRegistry registry, DemoTools demoTools, AiProperties properties) {
+        this.registry = registry;
         this.demoTools = demoTools;
         this.properties = properties;
     }
@@ -36,21 +36,23 @@ public class AgentSampleService {
      *
      * @param prompt   用户任务
      * @param maxSteps 为空则用配置默认值
+     * @param provider Provider id，空则用默认 DeepSeek
      * @return 最终答案、工具步骤、是否触达步数上限
      */
-    public ReactAgentLoop.Trace react(String prompt, Integer maxSteps) {
+    public ReactAgentLoop.Trace react(String prompt, Integer maxSteps, String provider) {
         int steps = maxSteps != null ? maxSteps : properties.agent().maxSteps();
-        return ReactAgentLoop.run(factory.chatModel(), demoTools, SYSTEM, prompt, steps);
+        return ReactAgentLoop.run(registry.chatModel(provider), demoTools, SYSTEM, prompt, steps);
     }
 
     /**
      * 框架托管的 tool-calling 循环，对照 {@link ReactAgentLoop}。
      *
-     * @param prompt 用户任务
+     * @param prompt   用户任务
+     * @param provider Provider id，空则用默认 DeepSeek
      * @return 仅最终文本，不含逐步轨迹
      */
-    public String framework(String prompt) {
-        return factory.plainClient()
+    public String framework(String prompt, String provider) {
+        return registry.plainClient(provider)
             .prompt()
             .system(SYSTEM)
             .user(prompt)

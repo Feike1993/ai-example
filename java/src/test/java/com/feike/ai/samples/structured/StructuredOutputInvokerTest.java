@@ -40,10 +40,9 @@ class StructuredOutputInvokerTest {
 
     private static AiProperties properties() {
         return new AiProperties(
-            "http://localhost",
-            "test",
-            "mock",
+            "deepseek",
             0.2,
+            java.util.Map.of(),
             new AiProperties.Structured(2, true, true, true, 200, false),
             new AiProperties.Agent(8)
         );

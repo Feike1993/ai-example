@@ -1,5 +1,6 @@
-import { AppShell, NavLink, Stack, Text } from '@mantine/core'
-import { useState } from 'react'
+import { AppShell, NavLink, Select, Stack, Text } from '@mantine/core'
+import { useEffect, useState } from 'react'
+import { listProviders, type ProviderView } from './api'
 import { AgentPanel } from './panels/AgentPanel'
 import { ChatPanel } from './panels/ChatPanel'
 import { StructuredPanel } from './panels/StructuredPanel'
@@ -14,11 +15,44 @@ const samples = [
 
 type SampleId = (typeof samples)[number]['id']
 
+const PROVIDER_STORAGE_KEY = 'ai-example.provider'
+
 /**
- * 样例 playground 壳：侧栏品牌 + 四个接口面板。
+ * 样例 playground 壳：侧栏品牌、模型选择、四个接口面板。
  */
 function App() {
   const [sample, setSample] = useState<SampleId>('chat')
+  const [provider, setProvider] = useState('deepseek')
+  const [providers, setProviders] = useState<ProviderView[]>([])
+
+  useEffect(() => {
+    void listProviders()
+      .then((data) => {
+        setProviders(data.providers)
+        const stored = localStorage.getItem(PROVIDER_STORAGE_KEY)
+        const allowed = new Set(data.providers.map((item) => item.id))
+        if (stored && allowed.has(stored)) {
+          setProvider(stored)
+          return
+        }
+        setProvider(data.defaultProvider || 'deepseek')
+      })
+      .catch(() => {
+        setProviders([
+          { id: 'deepseek', label: 'DeepSeek', model: 'deepseek-v4-flash', configured: false },
+        ])
+      })
+  }, [])
+
+  const onProviderChange = (value: string | null) => {
+    if (!value) {
+      return
+    }
+    setProvider(value)
+    localStorage.setItem(PROVIDER_STORAGE_KEY, value)
+  }
+
+  const selected = providers.find((item) => item.id === provider)
 
   return (
     <AppShell
@@ -33,7 +67,7 @@ function App() {
             接口 playground
           </Text>
         </Stack>
-        <Stack gap={4}>
+        <Stack gap={4} mb="lg">
           {samples.map((item) => (
             <NavLink
               key={item.id}
@@ -45,12 +79,23 @@ function App() {
             />
           ))}
         </Stack>
+        <Select
+          label="模型"
+          description={selected ? selected.model : '默认 DeepSeek'}
+          data={providers.map((item) => ({
+            value: item.id,
+            label: item.configured ? item.label : `${item.label}（未配 Key）`,
+          }))}
+          value={provider}
+          onChange={onProviderChange}
+          allowDeselect={false}
+        />
       </AppShell.Navbar>
       <AppShell.Main>
-        {sample === 'chat' && <ChatPanel />}
-        {sample === 'structured' && <StructuredPanel />}
-        {sample === 'tools' && <ToolsPanel />}
-        {sample === 'agent' && <AgentPanel />}
+        {sample === 'chat' && <ChatPanel provider={provider} />}
+        {sample === 'structured' && <StructuredPanel provider={provider} />}
+        {sample === 'tools' && <ToolsPanel provider={provider} />}
+        {sample === 'agent' && <AgentPanel provider={provider} />}
       </AppShell.Main>
     </AppShell>
   )

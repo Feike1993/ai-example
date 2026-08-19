@@ -5,14 +5,14 @@
 ## 通用准备
 
 1. 依赖：Spring AI BOM `2.0.0` + `spring-ai-starter-model-openai`（或你项目已有的等价 starter）
-2. 配置：OpenAI 兼容 `base-url` / `api-key` / `model`，本仓用 `AI_API_KEY`
+2. 配置：`app.ai.providers` 多网关 + `default-provider`（默认 `deepseek`），本仓用 `PROVIDER_DEEPSEEK_API_KEY` / `AI_API_KEY`
 3. Prompt 放 `resources/prompts/`，不要把长 prompt 写进 Service
 
 ## 按样例拷贝
 
 ### Chat
 
-拷 `ApiPathResolver.java`、`LlmClientFactory.java`、`AiProperties.java`。
+拷 `ApiPathResolver.java`、`LlmProviderRegistry.java`、`AiProperties.java`。
 
 业务里若已有自己的 ChatClient 工厂，只拷调用方式即可，不必再引入本仓工厂。
 

@@ -9,7 +9,7 @@ import { Workbench } from '../components/Workbench'
 /**
  * Tool Calling 样例：模型可调天气与计算器演示工具。
  */
-export function ToolsPanel() {
+export function ToolsPanel({ provider }: { provider: string }) {
   const [prompt, setPrompt] = useState('北京天气怎么样？再算 3+5')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -20,7 +20,7 @@ export function ToolsPanel() {
     setResult(null)
     setLoading(true)
     try {
-      const data = await postJson<ToolChatResponse>(`${API_BASE}/tools`, { prompt })
+      const data = await postJson<ToolChatResponse>(`${API_BASE}/tools`, { prompt, provider })
       setResult(data)
     } catch (err) {
       const message = describeError(err)

@@ -22,6 +22,7 @@ public class IndexController {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("name", "ai-example");
         body.put("phase", 1);
+        body.put("providers", "GET /ai-example/providers");
         body.put("samples", Map.of(
             "chat", "POST /ai-example/chat  GET /ai-example/chat/stream?prompt=",
             "structured", "POST /ai-example/structured/ticket",

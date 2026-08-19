@@ -1,6 +1,6 @@
 package com.feike.ai.samples.structured;
 
-import com.feike.ai.core.LlmClientFactory;
+import com.feike.ai.core.LlmProviderRegistry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
@@ -25,24 +25,24 @@ public class StructuredSampleService {
      */
     public record Ticket(String title, String priority, List<String> labels, String summary) {}
 
-    private final LlmClientFactory factory;
+    private final LlmProviderRegistry registry;
     private final StructuredOutputInvoker invoker;
     private final String systemPrompt;
 
     /**
      * 启动时加载 {@code prompts/extract-ticket.st}，避免把长 prompt 写进业务方法。
      *
-     * @param factory         提供 plain ChatClient
+     * @param registry        按请求选择 Provider
      * @param invoker         带重试的结构化调用
      * @param promptResource  classpath 上的提示词模板
      * @throws IOException 模板读失败
      */
     public StructuredSampleService(
-        LlmClientFactory factory,
+        LlmProviderRegistry registry,
         StructuredOutputInvoker invoker,
         @Value("classpath:prompts/extract-ticket.st") Resource promptResource
     ) throws IOException {
-        this.factory = factory;
+        this.registry = registry;
         this.invoker = invoker;
         this.systemPrompt = promptResource.getContentAsString(StandardCharsets.UTF_8);
     }
@@ -51,9 +51,10 @@ public class StructuredSampleService {
      * 把用户描述解析为 {@link Ticket}。
      *
      * @param userText 工单自然语言
+     * @param provider Provider id，空则用默认 DeepSeek
      * @return 解析后的工单
      */
-    public Ticket extract(String userText) {
-        return invoker.invoke(factory.plainClient(), systemPrompt, userText, Ticket.class);
+    public Ticket extract(String userText, String provider) {
+        return invoker.invoke(registry.plainClient(provider), systemPrompt, userText, Ticket.class);
     }
 }

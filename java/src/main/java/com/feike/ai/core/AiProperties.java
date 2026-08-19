@@ -2,28 +2,37 @@ package com.feike.ai.core;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 /**
  * LLM 接入与样例行为配置，绑定 {@code app.ai.*}。
+ * <p>
+ * 多 Provider 对齐 interview-guide：按 id 选网关，默认 DeepSeek。
  *
- * @param baseUrl      OpenAI 兼容网关地址；可带或不带 {@code /v1}
- * @param apiKey       调用密钥，对应环境变量 {@code AI_API_KEY}
- * @param model        聊天模型名
- * @param temperature  采样温度，未配置时默认 0.2（偏确定性，便于对照）
- * @param structured   结构化输出重试策略
- * @param agent        Agent Loop 步数上限
+ * @param defaultProvider 未传 provider 时使用的 id
+ * @param temperature     全局默认采样温度；Provider 未单独配置时用此值
+ * @param providers       OpenAI 兼容网关列表，key 为 provider id
+ * @param structured      结构化输出重试策略
+ * @param agent           Agent Loop 步数上限
  */
 @ConfigurationProperties(prefix = "app.ai")
 public record AiProperties(
-    String baseUrl,
-    String apiKey,
-    String model,
+    String defaultProvider,
     Double temperature,
+    Map<String, Provider> providers,
     Structured structured,
     Agent agent
 ) {
     public AiProperties {
+        if (defaultProvider == null || defaultProvider.isBlank()) {
+            defaultProvider = "deepseek";
+        }
         if (temperature == null) {
             temperature = 0.2;
+        }
+        if (providers == null) {
+            providers = new LinkedHashMap<>();
         }
         if (structured == null) {
             structured = new Structured(2, true, true, true, 200, false);
@@ -32,6 +41,23 @@ public record AiProperties(
             agent = new Agent(8);
         }
     }
+
+    /**
+     * 单个 OpenAI 兼容网关。
+     *
+     * @param label       前端展示名；空则用 provider id
+     * @param baseUrl     网关地址，可带或不带 {@code /v1}
+     * @param apiKey      调用密钥
+     * @param model       聊天模型名
+     * @param temperature 覆盖全局温度；为空则用 {@link AiProperties#temperature()}
+     */
+    public record Provider(
+        String label,
+        String baseUrl,
+        String apiKey,
+        String model,
+        Double temperature
+    ) {}
 
     /**
      * 结构化输出的重试与修复开关。

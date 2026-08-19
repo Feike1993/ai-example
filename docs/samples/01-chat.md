@@ -21,5 +21,5 @@ cd python && uv run python -m ai_example.samples.chat
 
 ## 对照 / 拷贝
 
-- Java：`ChatSampleService`、`LlmClientFactory`
+- Java：`ChatSampleService`、`LlmProviderRegistry`
 - 拷贝清单见 [integration.md](../integration.md)

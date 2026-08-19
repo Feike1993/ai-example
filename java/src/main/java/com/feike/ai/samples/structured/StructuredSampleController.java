@@ -16,9 +16,10 @@ import org.springframework.web.bind.annotation.RestController;
 public class StructuredSampleController {
 
     /**
-     * @param text 待抽取的自然语言，不能为空
+     * @param text     待抽取的自然语言，不能为空
+     * @param provider 可选 LLM Provider id，空则用默认 DeepSeek
      */
-    public record ExtractRequest(@NotBlank String text) {}
+    public record ExtractRequest(@NotBlank String text, String provider) {}
 
     private final StructuredSampleService structuredSampleService;
 
@@ -37,6 +38,6 @@ public class StructuredSampleController {
      */
     @PostMapping("/ticket")
     public StructuredSampleService.Ticket extract(@RequestBody @Validated ExtractRequest request) {
-        return structuredSampleService.extract(request.text());
+        return structuredSampleService.extract(request.text(), request.provider());
     }
 }

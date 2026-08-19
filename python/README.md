@@ -1,6 +1,6 @@
 # Python 对照样例
 
-与 Java 四个概念一一对应，默认读仓库根目录 `.env`。
+与 Java 四个概念一一对应，默认读仓库根目录 `.env`（`AI_PROVIDER` 默认 `deepseek`）。
 
 ```bash
 uv sync --group dev

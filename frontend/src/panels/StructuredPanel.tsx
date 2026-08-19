@@ -17,7 +17,7 @@ function priorityColor(priority: string): string {
 /**
  * 结构化输出样例：自然语言抽工单。
  */
-export function StructuredPanel() {
+export function StructuredPanel({ provider }: { provider: string }) {
   const [text, setText] = useState('登录页偶尔 500，P1，标签 backend,auth')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -28,7 +28,7 @@ export function StructuredPanel() {
     setTicket(null)
     setLoading(true)
     try {
-      const data = await postJson<Ticket>(`${API_BASE}/structured/ticket`, { text })
+      const data = await postJson<Ticket>(`${API_BASE}/structured/ticket`, { text, provider })
       setTicket(data)
     } catch (err) {
       const message = describeError(err)
