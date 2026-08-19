@@ -16,14 +16,14 @@ Agent = LLM + Planning + Memory + Tools。第一期 Memory 只用当轮消息列
 
 | 方式 | 入口 | 适合 |
 | --- | --- | --- |
-| 显式 Loop | `POST /api/samples/agent/react` | 要审计每一步、限制步数 |
-| Spring AI 自动执行 | `POST /api/samples/agent/framework` | 业务里快速接入 |
+| 显式 Loop | `POST /ai-example/agent/react` | 要审计每一步、限制步数 |
+| Spring AI 自动执行 | `POST /ai-example/agent/framework` | 业务里快速接入 |
 | LangGraph | `python -m ai_example.samples.react_agent` | 产业界主流图编排 |
 
 ## 怎么跑
 
 ```bash
-curl -s http://localhost:8080/api/samples/agent/react \
+curl -s http://localhost:8080/ai-example/agent/react \
   -H 'Content-Type: application/json' \
   -d '{"prompt":"北京天气怎么样？再算 3+5","maxSteps":8}'
 ```

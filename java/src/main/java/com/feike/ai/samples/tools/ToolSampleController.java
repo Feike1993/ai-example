@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Validated
 @RestController
-@RequestMapping("/api/samples/tools")
+@RequestMapping("/tools")
 public class ToolSampleController {
 
     /**

@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Validated
 @RestController
-@RequestMapping("/api/samples/agent")
+@RequestMapping("/agent")
 public class AgentSampleController {
 
     /**

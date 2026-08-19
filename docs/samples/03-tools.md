@@ -10,7 +10,7 @@
 ## 怎么跑
 
 ```bash
-curl -s http://localhost:8080/api/samples/tools \
+curl -s http://localhost:8080/ai-example/tools \
   -H 'Content-Type: application/json' \
   -d '{"prompt":"北京天气怎么样？再算 3+5"}'
 ```

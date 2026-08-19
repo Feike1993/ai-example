@@ -23,11 +23,11 @@ public class IndexController {
         body.put("name", "ai-example");
         body.put("phase", 1);
         body.put("samples", Map.of(
-            "chat", "POST /api/samples/chat  GET /api/samples/chat/stream?prompt=",
-            "structured", "POST /api/samples/structured/ticket",
-            "tools", "POST /api/samples/tools",
-            "agentReact", "POST /api/samples/agent/react",
-            "agentFramework", "POST /api/samples/agent/framework"
+            "chat", "POST /ai-example/chat  GET /ai-example/chat/stream?prompt=",
+            "structured", "POST /ai-example/structured/ticket",
+            "tools", "POST /ai-example/tools",
+            "agentReact", "POST /ai-example/agent/react",
+            "agentFramework", "POST /ai-example/agent/framework"
         ));
         return body;
     }

@@ -27,3 +27,6 @@ bin/
 .agents/
 .claude/
 .playwright-mcp/
+
+frontend/node_modules/
+frontend/dist/

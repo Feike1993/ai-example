@@ -11,7 +11,7 @@
 ## 怎么跑
 
 ```bash
-curl -s http://localhost:8080/api/samples/structured/ticket \
+curl -s http://localhost:8080/ai-example/structured/ticket \
   -H 'Content-Type: application/json' \
   -d '{"text":"登录页偶尔 500，P1，标签 backend,auth"}'
 ```

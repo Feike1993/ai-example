@@ -16,7 +16,7 @@ import reactor.core.publisher.Flux;
  */
 @Validated
 @RestController
-@RequestMapping("/api/samples/chat")
+@RequestMapping("/chat")
 public class ChatSampleController {
 
     /**

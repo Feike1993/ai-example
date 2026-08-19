@@ -8,10 +8,10 @@ Java 用 **Spring Boot 4.1 + Spring AI 2.0 + Gradle**；Python 用 **LangGraph**
 
 | 样例 | 概念 | Java | Python |
 | --- | --- | --- | --- |
-| Chat | Token、采样参数、SSE / 流式、TTFT | `POST /api/samples/chat` | `python -m ai_example.samples.chat` |
-| 结构化输出 | JSON Schema、重试修 JSON | `POST /api/samples/structured/ticket` | `python -m ai_example.samples.structured` |
-| Tool Calling | Function Calling、工具粒度 | `POST /api/samples/tools` | `python -m ai_example.samples.tools` |
-| Agent Loop | ReAct、maxSteps 熔断 | `POST /api/samples/agent/react` | `python -m ai_example.samples.react_agent` |
+| Chat | Token、采样参数、SSE / 流式、TTFT | `POST /ai-example/chat` | `python -m ai_example.samples.chat` |
+| 结构化输出 | JSON Schema、重试修 JSON | `POST /ai-example/structured/ticket` | `python -m ai_example.samples.structured` |
+| Tool Calling | Function Calling、工具粒度 | `POST /ai-example/tools` | `python -m ai_example.samples.tools` |
+| Agent Loop | ReAct、maxSteps 熔断 | `POST /ai-example/agent/react` | `python -m ai_example.samples.react_agent` |
 
 对照文档：
 
@@ -23,6 +23,7 @@ Java 用 **Spring Boot 4.1 + Spring AI 2.0 + Gradle**；Python 用 **LangGraph**
 
 - JDK **25**
 - Python **3.11+**（建议 [uv](https://docs.astral.sh/uv/)）
+- Node.js **20.19+**（前端 playground，建议 [pnpm](https://pnpm.io/)，`corepack enable` 即可）
 - 一个 OpenAI 兼容 API Key（默认阿里云 DashScope / Qwen，也可换成任何兼容网关）
 
 ```bash
@@ -40,29 +41,41 @@ cd java
 然后：
 
 ```bash
-curl http://localhost:8080/
-curl -s http://localhost:8080/api/samples/chat \
+curl http://localhost:8080/ai-example/
+curl -s http://localhost:8080/ai-example/chat \
   -H 'Content-Type: application/json' \
   -d '{"prompt":"用一句话介绍 Token 和上下文窗口"}'
-curl -N 'http://localhost:8080/api/samples/chat/stream?prompt=hello'
-curl -s http://localhost:8080/api/samples/structured/ticket \
+curl -N 'http://localhost:8080/ai-example/chat/stream?prompt=hello'
+curl -s http://localhost:8080/ai-example/structured/ticket \
   -H 'Content-Type: application/json' \
   -d '{"text":"登录页偶尔 500，P1，标签 backend,auth"}'
-curl -s http://localhost:8080/api/samples/tools \
+curl -s http://localhost:8080/ai-example/tools \
   -H 'Content-Type: application/json' \
   -d '{"prompt":"北京天气怎么样？再算 3+5"}'
-curl -s http://localhost:8080/api/samples/agent/react \
+curl -s http://localhost:8080/ai-example/agent/react \
   -H 'Content-Type: application/json' \
   -d '{"prompt":"北京天气怎么样？再算 3+5"}'
 ```
 
-`POST /api/samples/agent/framework` 是 Spring AI 自动 tool-calling，用来对照手写 Loop。
+`POST /ai-example/agent/framework` 是 Spring AI 自动 tool-calling，用来对照手写 Loop。
 
 测试（不需要真实 Key）：
 
 ```bash
 cd java && ./gradlew test
 ```
+
+## 跑前端 playground
+
+先按上面启动 Java 服务，再：
+
+```bash
+cd frontend
+pnpm install
+pnpm dev
+```
+
+浏览器打开 http://localhost:5173 ，可测 Chat（同步 / SSE）、结构化输出、Tool Calling、Agent Loop。Vite 会把 `/ai-example` 代理到 `localhost:8080`。
 
 ## 跑 Python 对照
 

@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Validated
 @RestController
-@RequestMapping("/api/samples/structured")
+@RequestMapping("/structured")
 public class StructuredSampleController {
 
     /**

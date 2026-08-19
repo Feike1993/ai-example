@@ -11,7 +11,7 @@
 
 ```bash
 # Java
-curl -s http://localhost:8080/api/samples/chat \
+curl -s http://localhost:8080/ai-example/chat \
   -H 'Content-Type: application/json' \
   -d '{"prompt":"用一句话介绍 Token","temperature":0.2}'
 

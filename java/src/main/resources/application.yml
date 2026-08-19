@@ -1,5 +1,7 @@
 server:
   port: 8080
+  servlet:
+    context-path: /ai-example
 
 spring:
   servlet:
@@ -26,13 +28,22 @@ app:
     base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode}
     api-key: ${AI_API_KEY:}
     model: ${AI_MODEL:qwen3.5-flash}
+    # 调度器参数
     temperature: ${AI_TEMPERATURE:0.2}
+    # 结构化输入参数
     structured:
+      # 重试次数
       max-attempts: 2
+      # 是否包含最后一个错误
       include-last-error: true
+      # 重试时是否使用修复提示
       retry-use-repair-prompt: true
+      # 重试时是否附加严格的 JSON 指令
       retry-append-strict-json-instruction: true
+      # 错误消息最大长度
       error-message-max-length: 200
+      # 模式验证是否启用
       schema-validation-enabled: false
     agent:
+      # 最大步骤数
       max-steps: 8
