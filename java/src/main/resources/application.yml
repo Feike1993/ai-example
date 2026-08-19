@@ -1,12 +1,12 @@
 server:
   port: 8080
+
+spring:
   servlet:
     encoding:
       charset: UTF-8
       enabled: true
       force: true
-
-spring:
   application:
     name: ai-example
   threads:
