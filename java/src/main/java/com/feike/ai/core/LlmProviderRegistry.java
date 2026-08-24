@@ -148,7 +148,7 @@ public class LlmProviderRegistry {
         log.info("Building ChatModel provider={} baseUrl={} model={}", providerId, cfg.baseUrl(), cfg.model());
         return OpenAiChatModel.builder()
             .openAiClient(openAiClient)
-            .openAiClientAsync(openAiClient.async()) // 添加 async 客户端
+            .openAiClientAsync(openAiClient.async()) // 添加 async 客户端 作用：提高请求处理效率
             .options(options)
             .build();
     }

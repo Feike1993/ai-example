@@ -53,8 +53,11 @@ public class StructuredOutputInvoker {
         Class<T> type
     ) {
         BeanOutputConverter<T> converter = new BeanOutputConverter<>(type);
+        // 1. 构建 Prompt
         String format = converter.getFormat();
         String secured = systemPrompt + "\n\n" + format + PromptSecurityConstants.ANTI_INJECTION_INSTRUCTION;
+        // 2. 重试
+        log.debug("结构化解析开始，type={}", type.getName());
 
         Exception lastError = null;
         int maxAttempts = config.maxAttempts();
@@ -90,6 +93,15 @@ public class StructuredOutputInvoker {
         return convertWithRepair(raw, converter);
     }
 
+    /**
+     * 调用 LLM 并把结果解析为 {@code type}。
+     * @param chatClient 聊天客户端
+     * @param systemPrompt 系统提示
+     * @param userPrompt 用户提示
+     * @param converter 转换器
+     * @return 解析结果
+     * @param <T>   解析后的类型
+     */
     private <T> T callStructured(
         ChatClient chatClient,
         String systemPrompt,
@@ -101,11 +113,20 @@ public class StructuredOutputInvoker {
             .user("<data-boundary>\n" + userPrompt + "\n</data-boundary>")
             .call();
         if (config.schemaValidationEnabled()) {
+            // 1. 模型输出直接带 schema，尝试直接解析
             return call.entity(converter, spec -> spec.validateSchema());
         }
+        // 2. 模型输出不带 schema，尝试修复 JSON 后解析
         return convertWithRepair(call.content(), converter);
     }
 
+    /**
+     * 尝试剥离 Markdown 代码块 / 未转义引号修复 / Bean 转换。
+     * @param content 原始内容
+     * @param converter 转换器
+     * @return 转换结果
+     * @param <T>   解析后的类型
+     */
     private <T> T convertWithRepair(String content, BeanOutputConverter<T> converter) {
         String stripped = JsonRepair.stripMarkdownFence(content);
         try {
@@ -125,6 +146,12 @@ public class StructuredOutputInvoker {
         }
     }
 
+    /**
+     * 重试时构建新的系统消息，追加上次失败原因与严格 JSON 指令。
+     * @param systemPrompt 原系统消息
+     * @param lastError 上次失败原因
+     * @return 新的系统消息
+     */
     private String buildRetrySystemPrompt(String systemPrompt, Exception lastError) {
         if (!config.retryUseRepairPrompt()) {
             return systemPrompt;
@@ -140,7 +167,13 @@ public class StructuredOutputInvoker {
         return prompt.toString();
     }
 
+    /**
+     * 对错误信息进行简单处理，避免过长或包含换行。
+     * @param message 错误信息
+     * @return 处理后的错误信息
+     */
     private String sanitize(String message) {
+        // 去除换行符并截断
         String oneLine = message.replace('\n', ' ').replace('\r', ' ').trim();
         int max = config.errorMessageMaxLength();
         if (oneLine.length() > max) {

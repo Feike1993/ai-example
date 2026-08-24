@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from 'react'
 import { describeError, postJson, streamChat, API_BASE, type ChatResponse } from '../api'
 import { JsonBlock } from '../components/JsonBlock'
 import { ResultBody } from '../components/ResultBody'
+import { SampleFrame } from '../components/SampleFrame'
 import { Workbench } from '../components/Workbench'
+import { chatGuide } from '../guides'
 
 type Mode = 'sync' | 'sse'
 
@@ -112,70 +114,72 @@ export function ChatPanel({ provider }: { provider: string }) {
   }
 
   return (
-    <Workbench
-      title="Chat"
-      hint="同步看完整回复；SSE 观察首 token 时间（TTFT）。"
-      streaming={streaming}
-      form={
-        <Stack gap="md">
-          <SegmentedControl
-            fullWidth
-            value={mode}
-            onChange={(value) => setMode(value as Mode)}
-            data={[
-              { value: 'sync', label: '同步 POST' },
-              { value: 'sse', label: 'SSE 流式' },
-            ]}
-          />
-          <Textarea
-            label="prompt"
-            minRows={8}
-            autosize
-            value={prompt}
-            onChange={(event) => setPrompt(event.currentTarget.value)}
-          />
-          {mode === 'sync' && (
-            <NumberInput
-              label="temperature"
-              description="留空则用后端默认"
-              min={0}
-              max={2}
-              step={0.1}
-              decimalScale={2}
-              value={temperature}
-              onChange={setTemperature}
+    <SampleFrame guide={chatGuide}>
+      <Workbench
+        title="Chat"
+        hint="同步看完整回复；SSE 观察首 token 时间（TTFT）。"
+        streaming={streaming}
+        form={
+          <Stack gap="md">
+            <SegmentedControl
+              fullWidth
+              value={mode}
+              onChange={(value) => setMode(value as Mode)}
+              data={[
+                { value: 'sync', label: '同步 POST' },
+                { value: 'sse', label: 'SSE 流式' },
+              ]}
             />
-          )}
-          <Button
-            loading={loading && !streaming}
-            disabled={!prompt.trim() || (loading && !streaming)}
-            onClick={onSubmit}
-          >
-            {streaming ? '停止' : '发送'}
-          </Button>
-        </Stack>
-      }
-      result={
-        <ResultBody error={error} emptyHint="发送后，回复和 TTFT 会出现在这里。">
-          {(streaming || streamText || result) && (
-            <Stack gap="sm">
-              {ttftMs !== null && (
-                <Text size="sm" c="dimmed">
-                  {mode === 'sse' ? 'TTFT' : '耗时'} {ttftMs} ms
-                </Text>
-              )}
-              {streaming ? (
-                <pre className="stream-text">
-                  {streamText}
-                  <span className="sse-caret" />
-                </pre>
-              ) : (
-                result && <JsonBlock value={result} />
-              )}
-            </Stack>
-          )}
-        </ResultBody>
-      }
-    />
+            <Textarea
+              label="prompt"
+              minRows={8}
+              autosize
+              value={prompt}
+              onChange={(event) => setPrompt(event.currentTarget.value)}
+            />
+            {mode === 'sync' && (
+              <NumberInput
+                label="temperature"
+                description="留空则用后端默认"
+                min={0}
+                max={2}
+                step={0.1}
+                decimalScale={2}
+                value={temperature}
+                onChange={setTemperature}
+              />
+            )}
+            <Button
+              loading={loading && !streaming}
+              disabled={!prompt.trim() || (loading && !streaming)}
+              onClick={onSubmit}
+            >
+              {streaming ? '停止' : '发送'}
+            </Button>
+          </Stack>
+        }
+        result={
+          <ResultBody error={error} emptyHint="发送后，回复和 TTFT 会出现在这里。">
+            {(streaming || streamText || result) && (
+              <Stack gap="sm">
+                {ttftMs !== null && (
+                  <Text size="sm" c="dimmed">
+                    {mode === 'sse' ? 'TTFT' : '耗时'} {ttftMs} ms
+                  </Text>
+                )}
+                {streaming ? (
+                  <pre className="stream-text">
+                    {streamText}
+                    <span className="sse-caret" />
+                  </pre>
+                ) : (
+                  result && <JsonBlock value={result} />
+                )}
+              </Stack>
+            )}
+          </ResultBody>
+        }
+      />
+    </SampleFrame>
   )
 }

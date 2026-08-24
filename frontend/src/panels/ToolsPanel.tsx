@@ -4,7 +4,9 @@ import { useState } from 'react'
 import { describeError, postJson, API_BASE, type ToolChatResponse } from '../api'
 import { JsonBlock } from '../components/JsonBlock'
 import { ResultBody } from '../components/ResultBody'
+import { SampleFrame } from '../components/SampleFrame'
 import { Workbench } from '../components/Workbench'
+import { toolsGuide } from '../guides'
 
 /**
  * Tool Calling 样例：模型可调天气与计算器演示工具。
@@ -32,28 +34,30 @@ export function ToolsPanel({ provider }: { provider: string }) {
   }
 
   return (
-    <Workbench
-      title="Tool Calling"
-      hint="POST /ai-example/tools，模型按需调用演示工具后再回答。"
-      form={
-        <Stack gap="md">
-          <Textarea
-            label="prompt"
-            minRows={10}
-            autosize
-            value={prompt}
-            onChange={(event) => setPrompt(event.currentTarget.value)}
-          />
-          <Button loading={loading} disabled={!prompt.trim() || loading} onClick={() => void run()}>
-            调用
-          </Button>
-        </Stack>
-      }
-      result={
-        <ResultBody error={error} emptyHint="调用后展示模型结合工具结果后的回复。">
-          {result && <JsonBlock value={result} />}
-        </ResultBody>
-      }
-    />
+    <SampleFrame guide={toolsGuide}>
+      <Workbench
+        title="Tool Calling"
+        hint="POST /ai-example/tools，模型按需调用演示工具后再回答。"
+        form={
+          <Stack gap="md">
+            <Textarea
+              label="prompt"
+              minRows={10}
+              autosize
+              value={prompt}
+              onChange={(event) => setPrompt(event.currentTarget.value)}
+            />
+            <Button loading={loading} disabled={!prompt.trim() || loading} onClick={() => void run()}>
+              调用
+            </Button>
+          </Stack>
+        }
+        result={
+          <ResultBody error={error} emptyHint="调用后展示模型结合工具结果后的回复。">
+            {result && <JsonBlock value={result} />}
+          </ResultBody>
+        }
+      />
+    </SampleFrame>
   )
 }

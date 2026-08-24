@@ -33,12 +33,30 @@ body::before {
 }
 
 .wordmark {
-  font-family: Syne, 'Noto Sans SC', sans-serif;
-  font-weight: 800;
-  font-size: 2.15rem;
-  letter-spacing: -0.05em;
-  line-height: 0.92;
+  display: flex;
+  align-items: baseline;
+  gap: 0.28em;
+  white-space: nowrap;
+  line-height: 1;
   color: #14241c;
+}
+
+.wordmark-mark,
+.wordmark-rest {
+  font-family: Syne, 'Noto Sans SC', sans-serif;
+}
+
+.wordmark-mark {
+  font-weight: 800;
+  font-size: 1.35rem;
+  letter-spacing: -0.03em;
+}
+
+.wordmark-rest {
+  font-weight: 700;
+  font-size: 1.15rem;
+  letter-spacing: -0.02em;
+  color: rgba(20, 36, 28, 0.78);
 }
 
 .app-navbar {

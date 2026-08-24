@@ -4,7 +4,9 @@ import { useState } from 'react'
 import { describeError, postJson, API_BASE, type Ticket } from '../api'
 import { JsonBlock } from '../components/JsonBlock'
 import { ResultBody } from '../components/ResultBody'
+import { SampleFrame } from '../components/SampleFrame'
 import { Workbench } from '../components/Workbench'
+import { structuredGuide } from '../guides'
 
 function priorityColor(priority: string): string {
   const key = priority.toUpperCase()
@@ -40,62 +42,64 @@ export function StructuredPanel({ provider }: { provider: string }) {
   }
 
   return (
-    <Workbench
-      title="结构化输出"
-      hint="把自然语言抽成 Ticket JSON（title / priority / labels / summary）。"
-      form={
-        <Stack gap="md">
-          <Textarea
-            label="text"
-            minRows={10}
-            autosize
-            value={text}
-            onChange={(event) => setText(event.currentTarget.value)}
-          />
-          <Button loading={loading} disabled={!text.trim() || loading} onClick={() => void run()}>
-            抽取工单
-          </Button>
-        </Stack>
-      }
-      result={
-        <ResultBody error={error} emptyHint="抽取后会先看到字段，再看到原始 JSON。">
-          {ticket && (
-            <Stack gap="lg">
-              <DataList orientation="vertical" withDivider>
-                <DataList.Item>
-                  <DataList.ItemLabel>title</DataList.ItemLabel>
-                  <DataList.ItemValue>{ticket.title}</DataList.ItemValue>
-                </DataList.Item>
-                <DataList.Item>
-                  <DataList.ItemLabel>priority</DataList.ItemLabel>
-                  <DataList.ItemValue>
-                    <Badge color={priorityColor(ticket.priority)} variant="light">
-                      {ticket.priority}
-                    </Badge>
-                  </DataList.ItemValue>
-                </DataList.Item>
-                <DataList.Item>
-                  <DataList.ItemLabel>labels</DataList.ItemLabel>
-                  <DataList.ItemValue>
-                    <Group gap={6}>
-                      {ticket.labels.map((label) => (
-                        <Badge key={label} variant="outline" color="seaweed">
-                          {label}
-                        </Badge>
-                      ))}
-                    </Group>
-                  </DataList.ItemValue>
-                </DataList.Item>
-                <DataList.Item>
-                  <DataList.ItemLabel>summary</DataList.ItemLabel>
-                  <DataList.ItemValue>{ticket.summary}</DataList.ItemValue>
-                </DataList.Item>
-              </DataList>
-              <JsonBlock value={ticket} />
-            </Stack>
-          )}
-        </ResultBody>
-      }
-    />
+    <SampleFrame guide={structuredGuide}>
+      <Workbench
+        title="结构化输出"
+        hint="把自然语言抽成 Ticket JSON（title / priority / labels / summary）。"
+        form={
+          <Stack gap="md">
+            <Textarea
+              label="text"
+              minRows={10}
+              autosize
+              value={text}
+              onChange={(event) => setText(event.currentTarget.value)}
+            />
+            <Button loading={loading} disabled={!text.trim() || loading} onClick={() => void run()}>
+              抽取工单
+            </Button>
+          </Stack>
+        }
+        result={
+          <ResultBody error={error} emptyHint="抽取后会先看到字段，再看到原始 JSON。">
+            {ticket && (
+              <Stack gap="lg">
+                <DataList orientation="vertical" withDivider>
+                  <DataList.Item>
+                    <DataList.ItemLabel>title</DataList.ItemLabel>
+                    <DataList.ItemValue>{ticket.title}</DataList.ItemValue>
+                  </DataList.Item>
+                  <DataList.Item>
+                    <DataList.ItemLabel>priority</DataList.ItemLabel>
+                    <DataList.ItemValue>
+                      <Badge color={priorityColor(ticket.priority)} variant="light">
+                        {ticket.priority}
+                      </Badge>
+                    </DataList.ItemValue>
+                  </DataList.Item>
+                  <DataList.Item>
+                    <DataList.ItemLabel>labels</DataList.ItemLabel>
+                    <DataList.ItemValue>
+                      <Group gap={6}>
+                        {ticket.labels.map((label) => (
+                          <Badge key={label} variant="outline" color="seaweed">
+                            {label}
+                          </Badge>
+                        ))}
+                      </Group>
+                    </DataList.ItemValue>
+                  </DataList.Item>
+                  <DataList.Item>
+                    <DataList.ItemLabel>summary</DataList.ItemLabel>
+                    <DataList.ItemValue>{ticket.summary}</DataList.ItemValue>
+                  </DataList.Item>
+                </DataList>
+                <JsonBlock value={ticket} />
+              </Stack>
+            )}
+          </ResultBody>
+        }
+      />
+    </SampleFrame>
   )
 }

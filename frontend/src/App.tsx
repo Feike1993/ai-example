@@ -56,13 +56,16 @@ function App() {
 
   return (
     <AppShell
-      navbar={{ width: 268, breakpoint: 'sm' }}
+      navbar={{ width: 280, breakpoint: 'sm' }}
       padding="lg"
       classNames={{ navbar: 'app-navbar', main: 'app-main' }}
     >
       <AppShell.Navbar p="lg">
         <Stack gap={4} mb="xl">
-          <div className="wordmark">ai-example</div>
+          <div className="wordmark">
+            <span className="wordmark-mark">AI</span>
+            <span className="wordmark-rest">Example</span>
+          </div>
           <Text size="sm" c="dimmed">
             接口 playground
           </Text>

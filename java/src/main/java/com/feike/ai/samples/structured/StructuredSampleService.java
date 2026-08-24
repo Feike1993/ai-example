@@ -25,9 +25,9 @@ public class StructuredSampleService {
      */
     public record Ticket(String title, String priority, List<String> labels, String summary) {}
 
-    private final LlmProviderRegistry registry;
-    private final StructuredOutputInvoker invoker;
-    private final String systemPrompt;
+    private final LlmProviderRegistry registry; // 提供商选择器
+    private final StructuredOutputInvoker invoker; // 结构化调用
+    private final String systemPrompt; //  系统提示词 作用：告诉模型如何生成 JSON 例如：把用户描述解析为工单 JSON
 
     /**
      * 启动时加载 {@code prompts/extract-ticket.st}，避免把长 prompt 写进业务方法。
