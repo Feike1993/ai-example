@@ -95,7 +95,7 @@ public class LlmProviderRegistry {
     /**
      * 把请求里的 provider 解析成已配置的 id。
      *
-     * @param providerId 请求传入值，可为空  例如： "default"、"openai"、"aliyun"
+     * @param providerId 请求传入值，可为空  例如： deepseek -> deepseek  dashscope-> dashscope  可配置可调整
      * @return 实际使用的 id
      * @throws ResponseStatusException 未知 id
      */
@@ -110,10 +110,20 @@ public class LlmProviderRegistry {
         return id;
     }
 
+    /**
+     * 创建不挂默认 Tools 的 ChatClient。
+     * @param providerId 配置文件中的 provider id
+     * @return ChatClient 实例
+     */
     private ChatClient createPlainClient(String providerId) {
         return ChatClient.builder(chatModelCache.computeIfAbsent(providerId, this::buildChatModel)).build();
     }
 
+    /**
+     * 创建底层 ChatModel。
+     * @param providerId 配置文件中的 provider id
+     * @return ChatModel 实例
+     */
     private OpenAiChatModel buildChatModel(String providerId) {
         AiProperties.Provider cfg = properties.providers().get(providerId);
         if (cfg == null) {
@@ -123,11 +133,14 @@ public class LlmProviderRegistry {
         if (apiKey.isBlank()) {
             log.warn("Provider '{}' 未配置 API Key，进程可继续，但真实调用会失败", providerId);
         }
+        // 创建 OpenAiClient 实例
         OpenAIClient openAiClient = ApiPathResolver.buildOpenAiClient(
             cfg.baseUrl(),
             apiKey.isBlank() ? "missing-key" : apiKey
         );
+        // temperature的作用 是控制生成结果的随机性，值越小结果越确定，值越大结果越随机
         Double temperature = cfg.temperature() != null ? cfg.temperature() : properties.temperature();
+        // 创建 OpenAiChatOptions 实例
         OpenAiChatOptions options = OpenAiChatOptions.builder()
             .model(cfg.model())
             .temperature(temperature)
@@ -135,7 +148,7 @@ public class LlmProviderRegistry {
         log.info("Building ChatModel provider={} baseUrl={} model={}", providerId, cfg.baseUrl(), cfg.model());
         return OpenAiChatModel.builder()
             .openAiClient(openAiClient)
-            .openAiClientAsync(openAiClient.async())
+            .openAiClientAsync(openAiClient.async()) // 添加 async 客户端
             .options(options)
             .build();
     }

@@ -31,7 +31,9 @@ public class ChatSampleService {
      */
     public String chat(String prompt, Double temperature, String provider) {
         ChatClient chatClient = registry.plainClient(provider);
+        // 1. 构建 Prompt
         var spec = chatClient.prompt().user(prompt);
+        // 2. 可选：设置温度参数
         if (temperature != null) {
             spec = spec.options(OpenAiChatOptions.builder().temperature(temperature));
         }
