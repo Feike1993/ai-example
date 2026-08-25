@@ -11,14 +11,16 @@ public class ToolSampleService {
 
     private final LlmProviderRegistry registry;
     private final DemoTools demoTools;
+    private final CpkTools cpkTools;
 
     /**
      * @param registry  按请求选择 Provider
      * @param demoTools 本请求可用的工具集
      */
-    public ToolSampleService(LlmProviderRegistry registry, DemoTools demoTools) {
+    public ToolSampleService(LlmProviderRegistry registry, DemoTools demoTools, CpkTools cpkTools) {
         this.registry = registry;
         this.demoTools = demoTools;
+        this.cpkTools = cpkTools;
     }
 
     /**
@@ -33,7 +35,7 @@ public class ToolSampleService {
             .prompt()
             .system("你是助手。需要天气或加法时必须调用工具，不要编造。")
             .user(prompt)
-            .tools(demoTools)
+            .tools(demoTools,cpkTools)
             .call()
             .content();
     }

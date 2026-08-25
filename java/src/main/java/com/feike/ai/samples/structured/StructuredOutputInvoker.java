@@ -114,7 +114,7 @@ public class StructuredOutputInvoker {
             .call();
         if (config.schemaValidationEnabled()) {
             // 1. 模型输出直接带 schema，尝试直接解析
-            return call.entity(converter, spec -> spec.validateSchema());
+            return call.entity(converter, ChatClient.EntityParamSpec::validateSchema);
         }
         // 2. 模型输出不带 schema，尝试修复 JSON 后解析
         return convertWithRepair(call.content(), converter);
