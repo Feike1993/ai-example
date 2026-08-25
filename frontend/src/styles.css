@@ -106,11 +106,14 @@ body::before {
 
 .stream-text {
   margin: 0;
+  padding: 0.15rem 0;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   word-break: break-word;
-  font-family: Figtree, 'Noto Sans SC', ui-monospace, monospace;
-  font-size: 0.95rem;
-  line-height: 1.6;
+  font-family: Figtree, 'Noto Sans SC', sans-serif;
+  font-size: 0.98rem;
+  line-height: 1.7;
+  color: #14241c;
 }
 
 .sse-caret {

@@ -1,6 +1,6 @@
 import type { SampleGuideData } from './types'
 
-/** Chat 样例讲解：Token / 采样 / SSE。 */
+/** Chat 样例讲解：Token / 采样 / SSE + 对话底层逻辑。 */
 export const chatGuide: SampleGuideData = {
   title: 'Chat',
   concepts: [
@@ -9,6 +9,41 @@ export const chatGuide: SampleGuideData = {
     'temperature 低更确定，高更发散；面试评分 / 结构化抽取用低温度。',
     '流式降低 TTFT（首 token 时间），总耗时不一定变短。',
   ],
+  logic: {
+    title: '对话底层逻辑',
+    steps: [
+      {
+        title: '消息是对话的原子单位',
+        detail:
+          '一轮对话由带角色的消息组成：system（人设/约束）、user（提问）、assistant（模型回复）。本样例多为单轮 user；多轮则把历史 assistant/user 依次堆叠进请求。',
+      },
+      {
+        title: '每次请求都是「整段上下文」',
+        detail:
+          '模型本身没有跨请求记忆。「记得上文」= 客户端把历史消息再塞进本次窗口。窗口大致 = system + 历史 + 本轮 user +（预留）输出；超窗会被截断或拒收。',
+      },
+      {
+        title: '补全 = 自回归预测下一个 Token',
+        detail:
+          '给定当前序列，模型产出下一 token 的概率分布，选出一个 token 拼回序列，再继续预测，直到遇到停止条件（结束符、长度上限等）。',
+      },
+      {
+        title: '采样决定「选哪个 next token」',
+        detail:
+          'temperature 等参数调节分布的尖锐或平坦：低温度更确定（评分、结构化抽取），高温度更发散（创意写作）。',
+      },
+      {
+        title: '同步与流式只是交付方式',
+        detail:
+          '生成仍是逐 token。同步等拼完再返回；流式边生成边推给前端，所以 TTFT（首 token 时间）变短，总生成时间通常差不多。',
+      },
+      {
+        title: '计费与截断都盯 Token',
+        detail:
+          '输入与输出一般按 token 计费；历史越长，窗口占用与费用越高，因此要主动控制对话历史长度。',
+      },
+    ],
+  },
   backend: [
     {
       label: '同步补全 — ChatSampleService.chat',

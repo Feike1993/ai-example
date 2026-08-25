@@ -6,7 +6,7 @@ import type { SampleGuideData } from '../guides/types'
 type Side = 'backend' | 'frontend'
 
 /**
- * 样例讲解页：概念要点 + 后端/前端核心代码切换。
+ * 样例讲解页：概念要点 + 可选底层逻辑 + 后端/前端核心代码切换。
  */
 export function SampleGuide({ guide }: { guide: SampleGuideData }) {
   const [side, setSide] = useState<Side>('backend')
@@ -19,7 +19,7 @@ export function SampleGuide({ guide }: { guide: SampleGuideData }) {
           {guide.title}
         </Title>
         <Text c="dimmed" size="sm" mt={4}>
-          核心概念与源码对照
+          核心概念、底层逻辑与源码对照
         </Text>
       </div>
 
@@ -33,6 +33,26 @@ export function SampleGuide({ guide }: { guide: SampleGuideData }) {
           ))}
         </List>
       </div>
+
+      {guide.logic ? (
+        <div className="pane" style={{ padding: '1.25rem', borderRadius: 6 }}>
+          <Text fw={600} mb="sm">
+            {guide.logic.title}
+          </Text>
+          <List type="ordered" size="sm" spacing="sm">
+            {guide.logic.steps.map((step) => (
+              <List.Item key={step.title}>
+                <Text span fw={600} size="sm">
+                  {step.title}
+                </Text>
+                <Text size="sm" c="dimmed" mt={2}>
+                  {step.detail}
+                </Text>
+              </List.Item>
+            ))}
+          </List>
+        </div>
+      ) : null}
 
       <SegmentedControl
         value={side}
