@@ -12,6 +12,15 @@ Agent = LLM + Planning + Memory + Tools。第一期 Memory 只用当轮消息列
 - 达到 `maxSteps`（防止无限循环）
 - 工具异常时返回错误文本，让模型降级，而不是死循环重试同一调用
 
+## Agent Loop 底层逻辑
+
+1. **Agent = 会多步决策的 Chat + Tools** — 相对单次 Tool Calling，Agent 在任务「未完成」时会继续 Reason → Act，直到给出最终答案或触达终止条件。
+2. **Perceive → Reason → Act → Observe** — 用户输入进消息列表；模型判断要不要工具；执行工具；观察结果写回消息，再进入下一轮推理。
+3. **Memory 第一期 = 当轮消息列表** — 无跨会话外存；每一步都基于不断变长的 messages，历史工具结果也在同一列表里。
+4. **终止条件要显式** — 无 tool_calls（任务完成）、达到 `maxSteps`（防死循环）、工具错误文本让模型降级，而不是无限重试同一调用。
+5. **显式 Loop vs Framework** — 手写 Loop（如 `ReactAgentLoop`）可审计每一步；`ChatClient.tools` 托管适合业务快速接入，轨迹不如显式清晰。
+6. **Agent ≠ 工作流** — 工作流路径预先写死；Agent 下一步由模型选择。开放任务用 Agent，确定性任务用工作流。
+
 **Agent vs 框架托管：**
 
 | 方式 | 入口 | 适合 |

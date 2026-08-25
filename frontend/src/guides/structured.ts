@@ -1,6 +1,6 @@
 import type { SampleGuideData } from './types'
 
-/** 结构化输出样例讲解：Bean 转换 + 修复重试。 */
+/** 结构化输出样例讲解：Bean 转换 + 修复重试 + 底层逻辑。 */
 export const structuredGuide: SampleGuideData = {
   title: '结构化输出',
   concepts: [
@@ -10,6 +10,41 @@ export const structuredGuide: SampleGuideData = {
     '本仓三层策略：本地修 JSON → 重试时追加严格指令和上次错误 → 仍失败再抛错。',
     '业务侧必须用不挂工具的 ChatClient，避免 tool 消息污染 JSON。',
   ],
+  logic: {
+    title: '结构化输出底层逻辑',
+    steps: [
+      {
+        title: '目标是「可解析的数据」',
+        detail:
+          '业务要的是字段齐全的对象（如工单 JSON），不是散文；自然语言回复无法直接进下游系统。',
+      },
+      {
+        title: 'Schema / Bean 约束输出形状',
+        detail:
+          '把目标类型（字段、类型）编进提示或转换器格式；模型仍在生成文本，但被引导成符合结构的 JSON。',
+      },
+      {
+        title: 'JSON Mode ≠ 字段正确',
+        detail:
+          '只保证返回的是 JSON，不保证键名或类型正确；真正落地靠 Schema 解析与校验。',
+      },
+      {
+        title: 'LLM 输出常「差一点」',
+        detail:
+          '常见瑕疵：Markdown 围栏、未转义引号、前后解释文字。先本地修 JSON，再交给 Bean 转换。',
+      },
+      {
+        title: '失败则带着错误重试',
+        detail:
+          '把上次解析错误写回 system、收紧指令；超过次数再抛错，避免静默脏数据进入业务。',
+      },
+      {
+        title: '必须用 plain ChatClient',
+        detail:
+          '挂工具会混入 tool 消息，污染「只要 JSON」的假设；结构化抽取场景用不挂工具的客户端。',
+      },
+    ],
+  },
   backend: [
     {
       label: '调用与重试 — StructuredOutputInvoker.invoke',
