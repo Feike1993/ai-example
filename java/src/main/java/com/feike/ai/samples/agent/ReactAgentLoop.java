@@ -7,18 +7,16 @@ import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
+ * 以 ReAct 框架为模板，自行实现显式循环，对比 {@code ChatClient.tools(...).call()} 的框架托管循环。
  * 显式 ReAct Loop：Perceive → Reason → Act → Observe。
  * <p>
  * Spring AI 2.0 的 {@code ChatModel.call()} 只返回 tool_calls，不自动执行工具；
@@ -65,13 +63,16 @@ public final class ReactAgentLoop {
         String userPrompt,
         int maxSteps
     ) {
+        // 准备工具回调
         ToolCallback[] callbacks = MethodToolCallbackProvider.builder()
             .toolObjects(toolObject)
             .build()
             .getToolCallbacks();
+        // 按名称索引工具回调
         Map<String, ToolCallback> byName = new LinkedHashMap<>();
         Arrays.stream(callbacks).forEach(cb -> byName.put(cb.getToolDefinition().name(), cb));
 
+        // 准备消息
         List<Message> messages = new ArrayList<>();
         messages.add(new SystemMessage(systemPrompt));
         messages.add(new UserMessage(userPrompt));
@@ -79,12 +80,13 @@ public final class ReactAgentLoop {
         List<Step> steps = new ArrayList<>();
         int limit = Math.max(1, maxSteps);
         for (int i = 1; i <= limit; i++) {
-            ChatResponse response = chatModel.call(new Prompt(messages, toolOptions(callbacks)));
-            AssistantMessage assistant = response.getResult().getOutput();
+            ChatResponse response = chatModel.call(new Prompt(messages, toolOptions(chatModel, callbacks)));
+            // 模型回复
+            AssistantMessage assistant = Objects.requireNonNull(response.getResult()).getOutput();
             messages.add(assistant);
 
             List<AssistantMessage.ToolCall> toolCalls = assistant.getToolCalls();
-            if (toolCalls == null || toolCalls.isEmpty()) {
+            if (toolCalls.isEmpty()) {
                 return new Trace(textOf(assistant), List.copyOf(steps), false);
             }
 
@@ -112,12 +114,32 @@ public final class ReactAgentLoop {
         }
     }
 
-    private static ToolCallingChatOptions toolOptions(ToolCallback[] callbacks) {
-        return ToolCallingChatOptions.builder()
-            .toolCallbacks(List.of(callbacks))
-            .build();
+    /**
+     * 为 {@code OpenAiChatModel.call()} 准备工具选项。
+     * <p>
+     * 必须使用 {@link OpenAiChatOptions}：Spring AI 2.0 的 {@code OpenAiChatModel#createRequest}
+     * 会把 Prompt options 强转为 {@code OpenAiChatOptions}；
+     * {@code ToolCallingChatOptions.builder()} 产出的是 {@code DefaultToolCallingChatOptions}，会触发 ClassCastException。
+     * 同时从 ChatModel 默认 options 复制 model/temperature，因 Prompt 带 options 时不会再与默认配置合并。
+     *
+     * @param chatModel 用于读取默认 OpenAiChatOptions
+     * @param callbacks 已注册的工具回调
+     * @return OpenAi 兼容的 ChatOptions
+     */
+    private static ChatOptions toolOptions(ChatModel chatModel, ToolCallback[] callbacks) {
+        List<ToolCallback> callbackList = Arrays.asList(callbacks);
+        ChatOptions defaults = chatModel.getOptions();
+        if (defaults instanceof OpenAiChatOptions openAiDefaults) {
+            return openAiDefaults.mutate().toolCallbacks(callbackList).build();
+        }
+        return OpenAiChatOptions.builder().toolCallbacks(callbackList).build();
     }
 
+    /**
+     * 从 AssistantMessage 中提取纯文本，可能为空。
+     * @param message 模型回复
+     * @return 文本内容
+     */
     private static String textOf(AssistantMessage message) {
         String text = message.getText();
         return text == null ? "" : text;
