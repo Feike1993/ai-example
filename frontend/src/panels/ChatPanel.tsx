@@ -1,8 +1,8 @@
-import { Accordion, Button, NumberInput, SegmentedControl, Stack, Text, Textarea } from '@mantine/core'
+import { Button, NumberInput, SegmentedControl, Stack, Text, Textarea } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useEffect, useRef, useState } from 'react'
 import { describeError, postJson, streamChat, API_BASE, type ChatResponse } from '../api'
-import { JsonBlock } from '../components/JsonBlock'
+import { RawJsonAccordion } from '../components/RawJsonAccordion'
 import { ResultBody } from '../components/ResultBody'
 import { SampleFrame } from '../components/SampleFrame'
 import { Workbench } from '../components/Workbench'
@@ -171,16 +171,7 @@ export function ChatPanel({ provider }: { provider: string }) {
                   {streaming ? streamText : (result?.content ?? streamText)}
                   {streaming && <span className="sse-caret" />}
                 </pre>
-                {!streaming && result && (
-                  <Accordion variant="contained" radius="md">
-                    <Accordion.Item value="raw">
-                      <Accordion.Control>原始 JSON</Accordion.Control>
-                      <Accordion.Panel>
-                        <JsonBlock value={result} />
-                      </Accordion.Panel>
-                    </Accordion.Item>
-                  </Accordion>
-                )}
+                {!streaming && result && <RawJsonAccordion value={result} />}
               </Stack>
             )}
           </ResultBody>

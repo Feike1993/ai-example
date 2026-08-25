@@ -2,7 +2,7 @@ import { Button, Stack, Textarea } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useState } from 'react'
 import { describeError, postJson, API_BASE, type ToolChatResponse } from '../api'
-import { JsonBlock } from '../components/JsonBlock'
+import { RawJsonAccordion } from '../components/RawJsonAccordion'
 import { ResultBody } from '../components/ResultBody'
 import { SampleFrame } from '../components/SampleFrame'
 import { Workbench } from '../components/Workbench'
@@ -54,7 +54,12 @@ export function ToolsPanel({ provider }: { provider: string }) {
         }
         result={
           <ResultBody error={error} emptyHint="调用后展示模型结合工具结果后的回复。">
-            {result && <JsonBlock value={result} />}
+            {result && (
+              <Stack gap="sm">
+                <pre className="stream-text">{result.content}</pre>
+                <RawJsonAccordion value={result} />
+              </Stack>
+            )}
           </ResultBody>
         }
       />

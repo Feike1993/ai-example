@@ -2,7 +2,7 @@ import { Badge, Button, DataList, Group, Stack, Textarea } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useState } from 'react'
 import { describeError, postJson, API_BASE, type Ticket } from '../api'
-import { JsonBlock } from '../components/JsonBlock'
+import { RawJsonAccordion } from '../components/RawJsonAccordion'
 import { ResultBody } from '../components/ResultBody'
 import { SampleFrame } from '../components/SampleFrame'
 import { Workbench } from '../components/Workbench'
@@ -61,7 +61,7 @@ export function StructuredPanel({ provider }: { provider: string }) {
           </Stack>
         }
         result={
-          <ResultBody error={error} emptyHint="抽取后会先看到字段，再看到原始 JSON。">
+          <ResultBody error={error} emptyHint="抽取后会先看到字段，再可展开原始 JSON。">
             {ticket && (
               <Stack gap="lg">
                 <DataList orientation="vertical" withDivider>
@@ -94,7 +94,7 @@ export function StructuredPanel({ provider }: { provider: string }) {
                     <DataList.ItemValue>{ticket.summary}</DataList.ItemValue>
                   </DataList.Item>
                 </DataList>
-                <JsonBlock value={ticket} />
+                <RawJsonAccordion value={ticket} />
               </Stack>
             )}
           </ResultBody>

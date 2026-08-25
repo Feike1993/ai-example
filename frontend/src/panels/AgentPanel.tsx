@@ -8,7 +8,7 @@ import {
   type AgentTrace,
   type FrameworkResponse,
 } from '../api'
-import { JsonBlock } from '../components/JsonBlock'
+import { RawJsonAccordion } from '../components/RawJsonAccordion'
 import { ResultBody } from '../components/ResultBody'
 import { SampleFrame } from '../components/SampleFrame'
 import { Workbench } from '../components/Workbench'
@@ -99,7 +99,7 @@ export function AgentPanel({ provider }: { provider: string }) {
                   <Text size="sm" c="dimmed">
                     finalAnswer
                   </Text>
-                  <Text>{trace.finalAnswer}</Text>
+                  <pre className="stream-text">{trace.finalAnswer}</pre>
                   {trace.reachedMaxSteps && (
                     <Badge color="orange" variant="light" w="fit-content">
                       reachedMaxSteps
@@ -123,10 +123,15 @@ export function AgentPanel({ provider }: { provider: string }) {
                     ))}
                   </Timeline>
                 )}
-                <JsonBlock value={trace} />
+                <RawJsonAccordion value={trace} />
               </Stack>
             )}
-            {framework && <JsonBlock value={framework} />}
+            {framework && (
+              <Stack gap="sm">
+                <pre className="stream-text">{framework.content}</pre>
+                <RawJsonAccordion value={framework} />
+              </Stack>
+            )}
           </ResultBody>
         }
       />
