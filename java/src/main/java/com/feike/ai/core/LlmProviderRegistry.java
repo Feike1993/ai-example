@@ -5,8 +5,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.openai.OpenAiEmbeddingModel;
+import org.springframework.ai.openai.OpenAiEmbeddingOptions;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
@@ -17,10 +20,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 按 provider id 创建并缓存 OpenAI 兼容的 {@link ChatClient} / {@link ChatModel}。
+ * 按 provider id 创建并缓存 OpenAI 兼容的 {@link ChatClient} / {@link ChatModel} / {@link EmbeddingModel}。
  * <p>
- * 对齐 interview-guide 的注册中心，但不接 DB：配置只来自 {@code app.ai.providers}。
- * {@link #plainClient(String)} 不挂默认工具：结构化输出若混入 tool 消息会污染 JSON。
+ * 配置只来自 {@code app.ai.providers}。{@link #plainClient(String)} 不挂默认工具：
+ * 结构化输出若混入 tool 消息会污染 JSON。Embedding 与 Chat 分离，见 {@link #embeddingModel()}。
  */
 @Component
 public class LlmProviderRegistry {
@@ -30,6 +33,7 @@ public class LlmProviderRegistry {
     private final AiProperties properties;
     private final Map<String, OpenAiChatModel> chatModelCache = new ConcurrentHashMap<>();
     private final Map<String, ChatClient> plainClientCache = new ConcurrentHashMap<>();
+    private volatile EmbeddingModel embeddingModelCache;
 
     /**
      * @param properties {@code app.ai}；缺 key 时仍允许启动，便于跑单测
@@ -93,6 +97,33 @@ public class LlmProviderRegistry {
     }
 
     /**
+     * 返回 Embedding 模型（固定使用 {@code app.ai.embedding-provider}，默认 DashScope）。
+     * <p>
+     * DeepSeek 等聊天网关往往无 Embedding；RAG 不要跟 Chat Provider 混用同一个 model 字段。
+     *
+     * @return OpenAI 兼容 EmbeddingModel
+     */
+    public EmbeddingModel embeddingModel() {
+        EmbeddingModel cached = embeddingModelCache;
+        if (cached != null) {
+            return cached;
+        }
+        synchronized (this) {
+            if (embeddingModelCache == null) {
+                embeddingModelCache = buildEmbeddingModel(properties.embeddingProvider());
+            }
+            return embeddingModelCache;
+        }
+    }
+
+    /**
+     * @return 配置的 Embedding Provider id
+     */
+    public String embeddingProviderId() {
+        return properties.embeddingProvider();
+    }
+
+    /**
      * 把请求里的 provider 解析成已配置的 id。
      *
      * @param providerId 请求传入值，可为空  例如： deepseek -> deepseek  dashscope-> dashscope  可配置可调整
@@ -149,6 +180,46 @@ public class LlmProviderRegistry {
         return OpenAiChatModel.builder()
             .openAiClient(openAiClient)
             .openAiClientAsync(openAiClient.async()) // 添加 async 客户端 作用：提高请求处理效率
+            .options(options)
+            .build();
+    }
+
+    /**
+     * 按 Embedding Provider 创建 EmbeddingModel（模型名取自 {@code app.ai.embedding}，非 Chat model）。
+     *
+     * @param providerId 通常为 dashscope
+     * @return EmbeddingModel
+     */
+    private EmbeddingModel buildEmbeddingModel(String providerId) {
+        AiProperties.Provider cfg = properties.providers().get(providerId);
+        if (cfg == null) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "未知 Embedding Provider: " + providerId + "（请在 app.ai.providers 中配置）"
+            );
+        }
+        String apiKey = cfg.apiKey() == null ? "" : cfg.apiKey();
+        if (apiKey.isBlank()) {
+            log.warn("Embedding Provider '{}' 未配置 API Key，RAG ingest/query 会失败", providerId);
+        }
+        OpenAIClient openAiClient = ApiPathResolver.buildOpenAiClient(
+            cfg.baseUrl(),
+            apiKey.isBlank() ? "missing-key" : apiKey
+        );
+        AiProperties.Embedding emb = properties.embedding();
+        OpenAiEmbeddingOptions options = OpenAiEmbeddingOptions.builder()
+            .model(emb.model())
+            .dimensions(emb.dimensions())
+            .build();
+        log.info(
+            "Building EmbeddingModel provider={} baseUrl={} model={} dimensions={}",
+            providerId,
+            cfg.baseUrl(),
+            emb.model(),
+            emb.dimensions()
+        );
+        return OpenAiEmbeddingModel.builder()
+            .openAiClient(openAiClient)
             .options(options)
             .build();
     }

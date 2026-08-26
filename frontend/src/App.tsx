@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react'
 import { listProviders, type ProviderView } from './api'
 import { AgentPanel } from './panels/AgentPanel'
 import { ChatPanel } from './panels/ChatPanel'
+import { McpPanel } from './panels/McpPanel'
+import { RagPanel } from './panels/RagPanel'
 import { StructuredPanel } from './panels/StructuredPanel'
 import { ToolsPanel } from './panels/ToolsPanel'
 
@@ -11,6 +13,8 @@ const samples = [
   { id: 'structured', label: '结构化输出', description: '工单 JSON' },
   { id: 'tools', label: 'Tool Calling', description: '天气 + 计算器' },
   { id: 'agent', label: 'Agent Loop', description: 'ReAct / Framework' },
+  { id: 'mcp', label: 'MCP', description: '工具协议标准化' },
+  { id: 'rag', label: 'RAG', description: 'pgvector 检索增强' },
 ] as const
 
 type SampleId = (typeof samples)[number]['id']
@@ -18,7 +22,7 @@ type SampleId = (typeof samples)[number]['id']
 const PROVIDER_STORAGE_KEY = 'ai-example.provider'
 
 /**
- * 样例 playground 壳：侧栏品牌、模型选择、四个接口面板。
+ * 样例 playground 壳：侧栏品牌、模型选择、各期接口面板。
  */
 function App() {
   const [sample, setSample] = useState<SampleId>('chat')
@@ -99,6 +103,8 @@ function App() {
         {sample === 'structured' && <StructuredPanel provider={provider} />}
         {sample === 'tools' && <ToolsPanel provider={provider} />}
         {sample === 'agent' && <AgentPanel provider={provider} />}
+        {sample === 'mcp' && <McpPanel provider={provider} />}
+        {sample === 'rag' && <RagPanel provider={provider} />}
       </AppShell.Main>
     </AppShell>
   )

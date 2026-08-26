@@ -8,13 +8,16 @@ import java.util.Map;
 /**
  * LLM 接入与样例行为配置，绑定 {@code app.ai.*}。
  * <p>
- * 多 Provider 对齐 interview-guide：按 id 选网关，默认 DeepSeek。
+ * 多 Provider：按 id 选 OpenAI 兼容网关，默认 DeepSeek。Embedding 与 Chat 分离。
  *
- * @param defaultProvider 未传 provider 时使用的 id
- * @param temperature     全局默认采样温度；Provider 未单独配置时用此值
- * @param providers       OpenAI 兼容网关列表，key 为 provider id
- * @param structured      结构化输出重试策略
- * @param agent           Agent Loop 步数上限
+ * @param defaultProvider     未传 provider 时使用的 id
+ * @param temperature         全局默认采样温度；Provider 未单独配置时用此值
+ * @param providers           OpenAI 兼容网关列表，key 为 provider id
+ * @param structured          结构化输出重试策略
+ * @param agent               Agent Loop 步数上限
+ * @param embeddingProvider   Embedding 用的 Provider id（本仓固定 dashscope）
+ * @param embedding           Embedding 模型与维度
+ * @param rag                 RAG 分块 / topK / 开关
  */
 @ConfigurationProperties(prefix = "app.ai")
 public record AiProperties(
@@ -22,7 +25,10 @@ public record AiProperties(
     Double temperature,
     Map<String, Provider> providers,
     Structured structured,
-    Agent agent
+    Agent agent,
+    String embeddingProvider,
+    Embedding embedding,
+    Rag rag
 ) {
     public AiProperties {
         if (defaultProvider == null || defaultProvider.isBlank()) {
@@ -39,6 +45,15 @@ public record AiProperties(
         }
         if (agent == null) {
             agent = new Agent(8);
+        }
+        if (embeddingProvider == null || embeddingProvider.isBlank()) {
+            embeddingProvider = "dashscope";
+        }
+        if (embedding == null) {
+            embedding = new Embedding("text-embedding-v3", 1024);
+        }
+        if (rag == null) {
+            rag = new Rag(true, 4, 400);
         }
     }
 
@@ -96,6 +111,41 @@ public record AiProperties(
         public Agent {
             if (maxSteps < 1) {
                 maxSteps = 1;
+            }
+        }
+    }
+
+    /**
+     * Embedding 模型配置（与 Chat Provider 的 model 字段独立）。
+     *
+     * @param model      如 text-embedding-v3
+     * @param dimensions 向量维度，须与 pgvector 表一致
+     */
+    public record Embedding(String model, int dimensions) {
+        public Embedding {
+            if (model == null || model.isBlank()) {
+                model = "text-embedding-v3";
+            }
+            if (dimensions < 1) {
+                dimensions = 1024;
+            }
+        }
+    }
+
+    /**
+     * RAG 样例开关与检索参数。
+     *
+     * @param enabled   为 false 时不注册 Embedding / VectorStore 相关 Bean（仍可跑 MCP）
+     * @param topK      在线检索返回条数
+     * @param chunkSize Token 分块目标大小
+     */
+    public record Rag(boolean enabled, int topK, int chunkSize) {
+        public Rag {
+            if (topK < 1) {
+                topK = 1;
+            }
+            if (chunkSize < 50) {
+                chunkSize = 50;
             }
         }
     }

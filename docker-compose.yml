@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ai_example
+      POSTGRES_USER: ai
+      POSTGRES_PASSWORD: ai
+    volumes:
+      - ai_example_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ai -d ai_example"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  ai_example_pg:

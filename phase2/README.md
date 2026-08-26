@@ -1,3 +1,5 @@
-# 第二期占位
+# 第二期占位目录
 
-本目录第一期不写代码。规划见 [docs/phase2.md](../docs/phase2.md)。
+实现代码在 `java/.../samples/mcp`、`java/.../samples/rag` 与 `python/.../samples/`。
+
+学习路径见 [docs/phase2.md](../docs/phase2.md)。

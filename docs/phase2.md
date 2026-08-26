@@ -1,25 +1,34 @@
-# 第二期预告（未实现）
+# 第二期学习路径：MCP + RAG
 
-第一期刻意不引入数据库、向量库和 MCP，避免样例变成又一个业务系统。下面是下一期要学的方向。
+第一期覆盖 Chat / 结构化输出 / Tool Calling / Agent Loop。第二期在此之上加两块：**MCP**（工具标准化接入）与 **RAG**（检索增强）。
 
-## MCP
+上下文工程 / 多 Agent 见 [第三期占位](phase3.md)。
 
-- Spring AI 2.0 官方 MCP Java SDK（Streamable HTTP 为默认传输）
-- Python MCP SDK 对照
-- MCP vs Function Calling vs Agent；stdio vs 远程
+## 建议顺序
 
-## RAG
+1. **MCP**（[samples/05-mcp.md](samples/05-mcp.md)）
+   - MCP vs Function Calling vs Agent
+   - Host / Client / Server；Streamable HTTP vs stdio
+   - Java：同进程 MCP Server 暴露工具；样例聊天复用其 ToolCallbackProvider（关闭自连 Client 避免启动鸡生蛋）
+   - Python：stdio Server + Client 对照
+2. **RAG**（[samples/06-rag.md](samples/06-rag.md)）
+   - 离线索引（分块 → Embedding → pgvector）与在线检索生成
+   - Embedding 与 Chat Provider 分离（本仓 Embedding 固定 DashScope）
+   - Java：ingest / query / SSE；Python：内存向量对照
 
-- pgvector + 文本分块 + Embedding
-- 查询改写、自适应 topK、SSE 流式回答
+## 怎么跑（摘要）
 
-## 上下文工程
+```bash
+# 仅 RAG 需要
+docker compose up -d
 
-- 窗口裁剪 vs 增量摘要
-- Token 预算、Lost in the Middle
+cd java && ./gradlew bootRun
+cd frontend && pnpm install && pnpm dev
 
-## 多 Agent
+# Python 对照
+cd python && uv sync --group dev
+uv run python -m ai_example.samples.mcp_client
+uv run python -m ai_example.samples.rag
+```
 
-- Orchestrator-Subagent
-- LangGraph 多节点图
-- 评价 / 可观测（轨迹、步数、工具失败率）
+前端侧栏新增 **MCP**、**RAG** 两个 Tab。

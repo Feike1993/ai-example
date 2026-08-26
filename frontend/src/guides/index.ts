@@ -1,5 +1,7 @@
 export { agentGuide } from './agent'
 export { chatGuide } from './chat'
+export { mcpGuide } from './mcp'
+export { ragGuide } from './rag'
 export { structuredGuide } from './structured'
 export { toolsGuide } from './tools'
 export type { CodeSnippet, SampleGuideData } from './types'

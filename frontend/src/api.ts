@@ -41,6 +41,32 @@ export type AgentTrace = {
 
 export type FrameworkResponse = { content: string }
 
+export type McpChatResponse = {
+  content: string
+  toolNames: string[]
+}
+
+export type McpToolsResponse = {
+  toolNames: string[]
+}
+
+export type RagSource = {
+  id: string
+  source: string
+  excerpt: string
+  metadata?: Record<string, unknown>
+}
+
+export type RagQueryResponse = {
+  answer: string
+  sources: RagSource[]
+}
+
+export type RagIngestResponse = {
+  chunkCount: number
+  sources: string[]
+}
+
 export type ProviderView = {
   id: string
   label: string
@@ -172,6 +198,68 @@ export function streamChat(
       return
     }
     finish(new Error('无法连接后端或流式中断，请确认 Java 服务已在 8080 启动'))
+  }
+
+  return () => finish()
+}
+
+/**
+ * 订阅 RAG SSE。先处理 event:sources，再追加文本增量。
+ */
+export function streamRag(
+  question: string,
+  provider: string,
+  onSources: (sources: RagSource[]) => void,
+  onChunk: (text: string) => void,
+  onDone: () => void,
+  onError: (error: Error) => void,
+): () => void {
+  const params = new URLSearchParams({ question })
+  if (provider) {
+    params.set('provider', provider)
+  }
+  const url = `${API_BASE}/rag/query/stream?${params.toString()}`
+  const source = new EventSource(url)
+  let received = false
+  let closed = false
+
+  const finish = (error?: Error) => {
+    if (closed) {
+      return
+    }
+    closed = true
+    source.close()
+    if (error) {
+      onError(error)
+    } else {
+      onDone()
+    }
+  }
+
+  source.addEventListener('sources', (event) => {
+    received = true
+    try {
+      const payload = JSON.parse((event as MessageEvent).data) as { sources?: RagSource[] }
+      onSources(payload.sources ?? [])
+    } catch {
+      onSources([])
+    }
+  })
+
+  source.onmessage = (event) => {
+    if (event.data === '' || event.data === '[DONE]') {
+      return
+    }
+    received = true
+    onChunk(decodeSseData(event.data))
+  }
+
+  source.onerror = () => {
+    if (received) {
+      finish()
+      return
+    }
+    finish(new Error('无法连接后端或流式中断，请确认 Java 服务已在 8080 启动，且已 ingest'))
   }
 
   return () => finish()

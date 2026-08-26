@@ -9,6 +9,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    /** 启动 dev 时用系统默认浏览器打开（非 IDE 内嵌预览） */
+    open: true,
     proxy: {
       '/ai-example': {
         target: 'http://localhost:8080',

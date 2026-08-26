@@ -44,7 +44,10 @@ class StructuredOutputInvokerTest {
             0.2,
             java.util.Map.of(),
             new AiProperties.Structured(2, true, true, true, 200, false),
-            new AiProperties.Agent(8)
+            new AiProperties.Agent(8),
+            "dashscope",
+            new AiProperties.Embedding("text-embedding-v3", 1024),
+            new AiProperties.Rag(true, 4, 400)
         );
     }
 }

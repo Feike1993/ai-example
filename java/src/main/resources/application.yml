@@ -14,6 +14,13 @@ spring:
   threads:
     virtual:
       enabled: true
+  datasource:
+    url: jdbc:postgresql://${PG_HOST:localhost}:${PG_PORT:5432}/${PG_DB:ai_example}
+    username: ${PG_USER:ai}
+    password: ${PG_PASSWORD:ai}
+    hikari:
+      # 无 Docker 时允许进程起来；真正 ingest/query 仍会因连不上库失败
+      initialization-fail-timeout: -1
   ai:
     openai:
       # 仅占位：真正的 ChatClient 由 LlmProviderRegistry 按 app.ai.providers 手动创建，避免双模型
@@ -22,12 +29,37 @@ spring:
     retry:
       max-attempts: 1
       on-client-errors: false
+    mcp:
+      server:
+        name: ai-example-mcp
+        version: 0.1.0
+        protocol: STREAMABLE
+        streamable-http:
+          mcp-endpoint: /mcp
+      client:
+        # 同进程学习样例不连远端；生产请启用并配置 streamable-http.connections
+        enabled: false
+    vectorstore:
+      type: ${SPRING_AI_VECTORSTORE_TYPE:pgvector}
+      pgvector:
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
+        dimensions: 1024
+        initialize-schema: true
 
 app:
   ai:
     default-provider: ${AI_PROVIDER:deepseek}
     # 调度器参数；各 Provider 可单独覆盖
     temperature: ${AI_TEMPERATURE:0.2}
+    embedding-provider: dashscope
+    embedding:
+      model: text-embedding-v3
+      dimensions: 1024
+    rag:
+      enabled: ${RAG_ENABLED:true}
+      top-k: 4
+      chunk-size: 400
     providers:
       deepseek:
         label: DeepSeek
