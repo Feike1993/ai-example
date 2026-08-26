@@ -96,6 +96,22 @@ app:
       error-message-max-length: 200
       # 模式验证是否启用
       schema-validation-enabled: false
+    # 代理相关配置
     agent:
       # 最大步骤数
       max-steps: 8
+    # 上下文相关配置
+    context:
+      # 最大消息数
+      max-messages: 24
+      # 令牌预算
+      token-budget: 2000
+      # 保持最近消息数
+      keep-recent-messages: 6
+    # 多代理相关配置
+    multiagent:
+      # 最大 Orchestrator 步骤数，作用：限制 Orchestrator 的递归调用深度，防止无限递归
+      # Orchestrator是：一个代理，负责协调多个代理
+      max-orchestrator-steps: 4
+      # 最大 Worker 步骤数，作用：限制 Worker 的递归调用深度，防止无限递归
+      max-worker-steps: 6

@@ -41,4 +41,18 @@
 - **Embedding 与 Chat Provider 分离**：很多聊天网关没有 Embedding；本仓用 `app.ai.embedding-provider=dashscope`
 - 先保证 ingest 幂等与 `sources` 回传，再考虑混合检索 / 查询改写
 
+## 第三期
+
+### 上下文工程
+
+- 拷 `samples.context`：进程内会话 + trim / summarize
+- 生产换 Redis/DB 持久化；精确 tokenizer 与向量长期记忆见 [backlog](backlog.md)
+
+### 多 Agent
+
+- 拷 `samples.multiagent`：Orchestrator + 专员（工具 / 执笔）
+- 分布式与评测平台见 [backlog](backlog.md)；不要一上来上独立工作流引擎
+
 Python 对照用于理解协议；JVM 业务优先集成 Java 代码。
+
+刻意不做总表：[backlog.md](backlog.md)。

@@ -21,7 +21,7 @@ public class IndexController {
     public Map<String, Object> index() {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("name", "ai-example");
-        body.put("phase", 2);
+        body.put("phase", 3);
         body.put("providers", "GET /ai-example/providers");
         body.put("samples", Map.of(
             "chat", "POST /ai-example/chat  GET /ai-example/chat/stream?prompt=",
@@ -30,7 +30,9 @@ public class IndexController {
             "agentReact", "POST /ai-example/agent/react",
             "agentFramework", "POST /ai-example/agent/framework",
             "mcp", "GET /ai-example/mcp/tools  POST /ai-example/mcp/chat",
-            "rag", "POST /ai-example/rag/ingest  POST /ai-example/rag/query  GET /ai-example/rag/query/stream"
+            "rag", "POST /ai-example/rag/ingest  POST /ai-example/rag/query  GET /ai-example/rag/query/stream",
+            "context", "POST /ai-example/context/chat  GET|DELETE /ai-example/context/session/{id}",
+            "multiagent", "POST /ai-example/multiagent/run"
         ));
         return body;
     }

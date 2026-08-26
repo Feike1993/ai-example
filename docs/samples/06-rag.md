@@ -41,8 +41,8 @@ uv run python -m ai_example.samples.rag
 - Java：`samples.rag` + `docker-compose.yml` 的 pgvector
 - Embedding：`LlmProviderRegistry.embeddingModel()`（DashScope）；Chat 仍可切换
 - Python：`samples.rag` 内存向量 + 余弦相似度
-- 生产可加混合检索（向量 + BM25 + RRF）、查询改写；本仓刻意不做
-- Embedding Provider 与 Chat Provider **分开配置**，不要假设同一网关两者都有
+- Embedding Provider 与 Chat Provider **分开配置**
+- 详见 [backlog](../backlog.md)
 
 ## 测试
 

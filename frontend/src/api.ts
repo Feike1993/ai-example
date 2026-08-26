@@ -67,6 +67,38 @@ export type RagIngestResponse = {
   sources: string[]
 }
 
+export type ContextChatResponse = {
+  sessionId: string
+  strategy: string
+  content: string
+  rawMessageCount: number
+  sentMessageCount: number
+  approxTokens: number
+  droppedCount: number
+  summary: string | null
+}
+
+export type MultiAgentStep = {
+  index: number
+  assistantText: string
+  toolName: string
+  toolArgs: string
+  toolResult: string
+}
+
+export type MultiAgentTrace = {
+  name: string
+  role: string
+  steps: MultiAgentStep[]
+  error: string | null
+}
+
+export type MultiAgentResult = {
+  finalAnswer: string
+  agents: MultiAgentTrace[]
+  reachedMaxSteps: boolean
+}
+
 export type ProviderView = {
   id: string
   label: string

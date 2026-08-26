@@ -12,6 +12,12 @@
 
 5. [MCP](samples/05-mcp.md) → 6. [RAG](samples/06-rag.md)
 
-## 第三期（占位）
+## 第三期：上下文工程 + 多 Agent
 
-见 [phase3.md](phase3.md)：上下文工程、多 Agent。
+见 [phase3.md](phase3.md)：
+
+7. [上下文工程](samples/07-context.md) → 8. [多 Agent](samples/08-multi-agent.md)
+
+## 刻意不做 / 后续候选
+
+见 [backlog.md](backlog.md)。

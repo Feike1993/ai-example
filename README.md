@@ -4,6 +4,7 @@
 
 - **第一期**：Chat → 结构化输出 → Tool Calling → ReAct Agent Loop
 - **第二期**：MCP → RAG（pgvector）
+- **第三期**：上下文工程 → 多 Agent
 
 Java：**Spring Boot 4.1 + Spring AI 2.0 + Gradle**；Python：**LangGraph / MCP SDK**；前端：**Vite + React playground**。
 
@@ -17,8 +18,10 @@ Java：**Spring Boot 4.1 + Spring AI 2.0 + Gradle**；Python：**LangGraph / MCP
 | 1 | Agent Loop | ReAct / maxSteps | `POST /ai-example/agent/react` | `samples.react_agent` |
 | 2 | MCP | 工具协议标准化 | `POST /ai-example/mcp/chat` | `samples.mcp_client` |
 | 2 | RAG | 分块 / Embedding / 检索 | `POST /ai-example/rag/query` | `samples.rag` |
+| 3 | 上下文工程 | trim / summarize | `POST /ai-example/context/chat` | `samples.context_memory` |
+| 3 | 多 Agent | Orchestrator–Subagent | `POST /ai-example/multiagent/run` | `samples.multi_agent` |
 
-文档：[学习路径](docs/learning-path.md) · [集成说明](docs/integration.md) · [第二期](docs/phase2.md) · [第三期占位](docs/phase3.md)
+文档：[学习路径](docs/learning-path.md) · [集成说明](docs/integration.md) · [第二期](docs/phase2.md) · [第三期](docs/phase3.md) · [刻意不做 backlog](docs/backlog.md)
 
 ## 环境
 
@@ -46,13 +49,12 @@ cd java
 
 ```bash
 curl http://localhost:8080/ai-example/
-curl -s http://localhost:8080/ai-example/mcp/chat \
+curl -s http://localhost:8080/ai-example/context/chat \
   -H 'Content-Type: application/json' \
-  -d '{"prompt":"北京天气怎么样？再算 3+5"}'
-curl -s -X POST http://localhost:8080/ai-example/rag/ingest
-curl -s http://localhost:8080/ai-example/rag/query \
+  -d '{"sessionId":"demo-1","prompt":"我叫小明","strategy":"trim"}'
+curl -s http://localhost:8080/ai-example/multiagent/run \
   -H 'Content-Type: application/json' \
-  -d '{"question":"本项目第一期学了什么？"}'
+  -d '{"prompt":"查一下北京天气，再写一句出行建议"}'
 ```
 
 测试：
@@ -71,7 +73,7 @@ pnpm install
 pnpm dev
 ```
 
-打开 http://localhost:5173 。侧栏含第一期四个样例 + **MCP**、**RAG**。
+打开 http://localhost:5173 。侧栏含各期样例（含 **上下文**、**多 Agent**）。
 （请在 `frontend/` 下执行；仓库根目录没有 `package.json`，不要跑 `pnpm start`。）
 
 ## 跑 Python 对照
@@ -79,7 +81,7 @@ pnpm dev
 ```bash
 cd python
 uv sync --group dev
-uv run python -m ai_example.samples.mcp_client
-uv run python -m ai_example.samples.rag
+uv run python -m ai_example.samples.context_memory
+uv run python -m ai_example.samples.multi_agent
 uv run pytest
 ```

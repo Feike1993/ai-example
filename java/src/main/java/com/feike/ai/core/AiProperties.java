@@ -18,6 +18,8 @@ import java.util.Map;
  * @param embeddingProvider   Embedding 用的 Provider id（本仓固定 dashscope）
  * @param embedding           Embedding 模型与维度
  * @param rag                 RAG 分块 / topK / 开关
+ * @param context             上下文工程：消息条数与近似 token 预算
+ * @param multiagent          多 Agent 步数上限
  */
 @ConfigurationProperties(prefix = "app.ai")
 public record AiProperties(
@@ -28,7 +30,9 @@ public record AiProperties(
     Agent agent,
     String embeddingProvider,
     Embedding embedding,
-    Rag rag
+    Rag rag,
+    ContextSettings context,
+    MultiAgent multiagent
 ) {
     public AiProperties {
         if (defaultProvider == null || defaultProvider.isBlank()) {
@@ -54,6 +58,12 @@ public record AiProperties(
         }
         if (rag == null) {
             rag = new Rag(true, 4, 400);
+        }
+        if (context == null) {
+            context = new ContextSettings(24, 2000, 6);
+        }
+        if (multiagent == null) {
+            multiagent = new MultiAgent(4, 6);
         }
     }
 
@@ -146,6 +156,44 @@ public record AiProperties(
             }
             if (chunkSize < 50) {
                 chunkSize = 50;
+            }
+        }
+    }
+
+    /**
+     * 上下文工程预算。
+     *
+     * @param maxMessages        送入模型的最大消息条数（含 system）
+     * @param tokenBudget        近似 token 上限（字符数/4）
+     * @param keepRecentMessages summarize 时保留的最近 user/assistant 条数
+     */
+    public record ContextSettings(int maxMessages, int tokenBudget, int keepRecentMessages) {
+        public ContextSettings {
+            if (maxMessages < 4) {
+                maxMessages = 4;
+            }
+            if (tokenBudget < 100) {
+                tokenBudget = 100;
+            }
+            if (keepRecentMessages < 2) {
+                keepRecentMessages = 2;
+            }
+        }
+    }
+
+    /**
+     * 多 Agent 熔断。
+     *
+     * @param maxOrchestratorSteps Orchestrator 最大交接轮次
+     * @param maxWorkerSteps       专员 ReAct 最大步数
+     */
+    public record MultiAgent(int maxOrchestratorSteps, int maxWorkerSteps) {
+        public MultiAgent {
+            if (maxOrchestratorSteps < 1) {
+                maxOrchestratorSteps = 1;
+            }
+            if (maxWorkerSteps < 1) {
+                maxWorkerSteps = 1;
             }
         }
     }
