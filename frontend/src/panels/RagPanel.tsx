@@ -11,6 +11,7 @@ import {
   type RagSource,
 } from '../api'
 import { RawJsonAccordion } from '../components/RawJsonAccordion'
+import { RequestMeta } from '../components/RequestMeta'
 import { ResultBody } from '../components/ResultBody'
 import { SampleFrame } from '../components/SampleFrame'
 import { Workbench } from '../components/Workbench'
@@ -32,6 +33,9 @@ export function RagPanel({ provider }: { provider: string }) {
   const [result, setResult] = useState<RagQueryResponse | null>(null)
   const [streamText, setStreamText] = useState('')
   const [sources, setSources] = useState<RagSource[]>([])
+  const [retrievalEmpty, setRetrievalEmpty] = useState(false)
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null)
+  const [ttftMs, setTtftMs] = useState<number | null>(null)
   const stopRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
@@ -65,14 +69,20 @@ export function RagPanel({ provider }: { provider: string }) {
     setResult(null)
     setStreamText('')
     setSources([])
+    setRetrievalEmpty(false)
+    setElapsedMs(null)
+    setTtftMs(null)
     setLoading(true)
+    const started = performance.now()
     try {
       const data = await postJson<RagQueryResponse>(`${API_BASE}/rag/query`, {
         question,
         provider,
       })
+      setElapsedMs(Math.round(performance.now() - started))
       setResult(data)
       setSources(data.sources ?? [])
+      setRetrievalEmpty(data.retrievalEmpty === true)
     } catch (err) {
       const message = describeError(err)
       setError(message)
@@ -87,19 +97,31 @@ export function RagPanel({ provider }: { provider: string }) {
     setResult(null)
     setStreamText('')
     setSources([])
+    setRetrievalEmpty(false)
+    setElapsedMs(null)
+    setTtftMs(null)
     setLoading(true)
     setStreaming(true)
+    const started = performance.now()
+    let first = true
     let acc = ''
     let latestSources: RagSource[] = []
+    let latestEmpty = false
 
     stopRef.current = streamRag(
       question,
       provider,
-      (nextSources) => {
+      (nextSources, empty) => {
         latestSources = nextSources
+        latestEmpty = empty
         setSources(nextSources)
+        setRetrievalEmpty(empty)
       },
       (chunk) => {
+        if (first) {
+          first = false
+          setTtftMs(Math.round(performance.now() - started))
+        }
         acc += chunk
         setStreamText(acc)
       },
@@ -107,7 +129,12 @@ export function RagPanel({ provider }: { provider: string }) {
         stopRef.current = null
         setStreaming(false)
         setLoading(false)
-        setResult({ answer: acc, sources: latestSources })
+        setResult({
+          answer: acc,
+          sources: latestSources,
+          retrievalEmpty: latestEmpty,
+          usage: null,
+        })
       },
       (err) => {
         stopRef.current = null
@@ -177,8 +204,18 @@ export function RagPanel({ provider }: { provider: string }) {
         }
         result={
           <ResultBody error={error} emptyHint="ingest 后提问，答案与 sources 会出现在这里。">
-            {(streaming || streamText || result || sources.length > 0) && (
+            {(streaming || streamText || result || sources.length > 0 || retrievalEmpty) && (
               <Stack gap="sm">
+                {mode === 'sync' ? (
+                  <RequestMeta elapsedMs={elapsedMs} usage={result?.usage} />
+                ) : (
+                  <RequestMeta elapsedMs={ttftMs} elapsedLabel="TTFT" />
+                )}
+                {retrievalEmpty && (
+                  <Badge color="orange" variant="light">
+                    retrievalEmpty：无足够命中，已拒答
+                  </Badge>
+                )}
                 {sources.length > 0 && (
                   <div>
                     <Text size="sm" mb={6}>

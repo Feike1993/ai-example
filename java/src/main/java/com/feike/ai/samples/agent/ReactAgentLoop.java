@@ -44,6 +44,24 @@ public final class ReactAgentLoop {
      */
     public record Trace(String finalAnswer, List<Step> steps, boolean reachedMaxSteps) {}
 
+    /**
+     * 流式终答前的准备结果（工具轮已同步完成）。
+     * <p>
+     * {@code finalAnswer} 非空：首轮即终答或触达 maxSteps，直接 SSE 推送。
+     * {@code messages} 非空：至少完成一轮工具，由调用方不挂 tools 地 stream 终答。
+     *
+     * @param steps            已执行的工具步骤
+     * @param reachedMaxSteps  是否因 maxSteps 强制结束
+     * @param finalAnswer      可直接推送的终答；与 {@code messages} 互斥
+     * @param messages         待流式补全的消息；与 {@code finalAnswer} 互斥
+     */
+    public record StreamPrep(
+        List<Step> steps,
+        boolean reachedMaxSteps,
+        String finalAnswer,
+        List<Message> messages
+    ) {}
+
     private ReactAgentLoop() {}
 
     /**
@@ -63,16 +81,13 @@ public final class ReactAgentLoop {
         String userPrompt,
         int maxSteps
     ) {
-        // 准备工具回调
         ToolCallback[] callbacks = MethodToolCallbackProvider.builder()
             .toolObjects(toolObject)
             .build()
             .getToolCallbacks();
-        // 按名称索引工具回调
         Map<String, ToolCallback> byName = new LinkedHashMap<>();
         Arrays.stream(callbacks).forEach(cb -> byName.put(cb.getToolDefinition().name(), cb));
 
-        // 准备消息
         List<Message> messages = new ArrayList<>();
         messages.add(new SystemMessage(systemPrompt));
         messages.add(new UserMessage(userPrompt));
@@ -81,7 +96,6 @@ public final class ReactAgentLoop {
         int limit = Math.max(1, maxSteps);
         for (int i = 1; i <= limit; i++) {
             ChatResponse response = chatModel.call(new Prompt(messages, toolOptions(chatModel, callbacks)));
-            // 模型回复
             AssistantMessage assistant = Objects.requireNonNull(response.getResult()).getOutput();
             messages.add(assistant);
 
@@ -99,6 +113,78 @@ public final class ReactAgentLoop {
             messages.add(ToolResponseMessage.builder().responses(toolResponses).build());
         }
         return new Trace("已达到最大步数 " + limit + "，已停止以防无限循环。", List.copyOf(steps), true);
+    }
+
+    /**
+     * 为 SSE 准备：同步跑工具轮；有工具观察且仍有步数额度时把终答交给调用方 stream。
+     * <p>
+     * 与 {@link #run} 的差异：完成一轮 tool 执行后不再同步 call 终答，而是返回 {@code messages}
+     * 供不挂 tools 的流式补全（演示终答 TTFT）。并行 tool_calls（一轮内多个工具）完全覆盖；
+     * 需要「工具→再工具」多轮时请用同步 {@code /react}。
+     *
+     * @param chatModel    底层聊天模型
+     * @param toolObject   带 {@code @Tool} 的实例
+     * @param systemPrompt 角色与工具使用约束
+     * @param userPrompt   用户任务
+     * @param maxSteps     熔断步数，至少为 1
+     * @return 流式准备结果
+     */
+    public static StreamPrep prepareStream(
+        ChatModel chatModel,
+        Object toolObject,
+        String systemPrompt,
+        String userPrompt,
+        int maxSteps
+    ) {
+        // 准备工具回调
+        ToolCallback[] callbacks = MethodToolCallbackProvider.builder()
+            .toolObjects(toolObject)
+            .build()
+            .getToolCallbacks();
+        Map<String, ToolCallback> byName = new LinkedHashMap<>();
+        Arrays.stream(callbacks).forEach(cb -> byName.put(cb.getToolDefinition().name(), cb));
+
+        List<Message> messages = new ArrayList<>();
+        messages.add(new SystemMessage(systemPrompt));
+        messages.add(new UserMessage(userPrompt));
+
+        // 准备工具执行轮次
+        List<Step> steps = new ArrayList<>();
+        // 准备最大步数
+        int limit = Math.max(1, maxSteps);
+        // 循环执行工具
+        for (int i = 1; i <= limit; i++) {
+            // 调用模型
+            ChatResponse response = chatModel.call(new Prompt(messages, toolOptions(chatModel, callbacks)));
+            // 获取模型回复
+            AssistantMessage assistant = Objects.requireNonNull(response.getResult()).getOutput();
+            List<AssistantMessage.ToolCall> toolCalls = assistant.getToolCalls();
+
+            if (toolCalls.isEmpty()) {
+                return new StreamPrep(List.copyOf(steps), false, textOf(assistant), null);
+            }
+
+            messages.add(assistant);
+            // 准备本轮工具调用
+            List<ToolResponseMessage.ToolResponse> toolResponses = new ArrayList<>();
+            for (AssistantMessage.ToolCall call : toolCalls) {
+                String result = executeTool(byName, call);
+                steps.add(new Step(i, textOf(assistant), call.name(), call.arguments(), result));
+                toolResponses.add(new ToolResponseMessage.ToolResponse(call.id(), call.name(), result));
+            }
+            // 准备本轮工具调用结果
+            messages.add(ToolResponseMessage.builder().responses(toolResponses).build());
+            // 如果还有工具调用则返回本轮消息供 SSE 流式补全
+            if (i < limit) {
+                return new StreamPrep(List.copyOf(steps), false, null, List.copyOf(messages));
+            }
+        }
+        return new StreamPrep(
+            List.copyOf(steps),
+            true,
+            "已达到最大步数 " + limit + "，已停止以防无限循环。",
+            null
+        );
     }
 
     /** 工具失败返回错误文本而不是抛出，让模型有机会换工具或直接回答。 */

@@ -2,7 +2,7 @@
 
 第一期覆盖 Chat / 结构化输出 / Tool Calling / Agent Loop。第二期在此之上加两块：**MCP**（工具标准化接入）与 **RAG**（检索增强）。
 
-上下文工程 / 多 Agent 见 [第三期占位](phase3.md)。
+上下文工程 / 多 Agent 见 [第三期](phase3.md)。刻意不做清单见 [backlog](backlog.md)。
 
 ## 建议顺序
 

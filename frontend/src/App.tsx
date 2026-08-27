@@ -3,7 +3,9 @@ import { useEffect, useState } from 'react'
 import { listProviders, type ProviderView } from './api'
 import { AgentPanel } from './panels/AgentPanel'
 import { ChatPanel } from './panels/ChatPanel'
+import { ContextPanel } from './panels/ContextPanel'
 import { McpPanel } from './panels/McpPanel'
+import { MultiAgentPanel } from './panels/MultiAgentPanel'
 import { RagPanel } from './panels/RagPanel'
 import { StructuredPanel } from './panels/StructuredPanel'
 import { ToolsPanel } from './panels/ToolsPanel'
@@ -15,6 +17,8 @@ const samples = [
   { id: 'agent', label: 'Agent Loop', description: 'ReAct / Framework' },
   { id: 'mcp', label: 'MCP', description: '工具协议标准化' },
   { id: 'rag', label: 'RAG', description: 'pgvector 检索增强' },
+  { id: 'context', label: '上下文', description: 'trim / summarize' },
+  { id: 'multiagent', label: '多 Agent', description: 'Orchestrator' },
 ] as const
 
 type SampleId = (typeof samples)[number]['id']
@@ -105,6 +109,8 @@ function App() {
         {sample === 'agent' && <AgentPanel provider={provider} />}
         {sample === 'mcp' && <McpPanel provider={provider} />}
         {sample === 'rag' && <RagPanel provider={provider} />}
+        {sample === 'context' && <ContextPanel provider={provider} />}
+        {sample === 'multiagent' && <MultiAgentPanel provider={provider} />}
       </AppShell.Main>
     </AppShell>
   )

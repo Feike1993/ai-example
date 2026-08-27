@@ -12,12 +12,14 @@ uv run python -m ai_example.samples.tools
 uv run python -m ai_example.samples.react_agent
 
 # 第二期
-uv run python -m ai_example.samples.mcp_client   # stdio MCP Server + Client
-uv run python -m ai_example.samples.rag          # 内存向量 RAG（需 DashScope Embedding Key）
+uv run python -m ai_example.samples.mcp_client
+uv run python -m ai_example.samples.rag
+
+# 第三期
+uv run python -m ai_example.samples.context_memory
+uv run python -m ai_example.samples.multi_agent
 
 uv run pytest
 ```
 
-- LangGraph 的 `create_react_agent` 对应 Java 的 `ReactAgentLoop` / Spring AI 自动 tool-calling
-- MCP：`mcp_server`（stdio）+ `mcp_client`（发现工具后交给 OpenAI）
-- RAG：内存余弦相似度讲清算法；生产用 Java 侧 pgvector
+刻意不做清单见仓库 [`docs/backlog.md`](../docs/backlog.md)。

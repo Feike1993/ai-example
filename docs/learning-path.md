@@ -12,6 +12,56 @@
 
 5. [MCP](samples/05-mcp.md) → 6. [RAG](samples/06-rag.md)
 
-## 第三期（占位）
+## 第三期：上下文工程 + 多 Agent
 
-见 [phase3.md](phase3.md)：上下文工程、多 Agent。
+见 [phase3.md](phase3.md)：
+
+7. [上下文工程](samples/07-context.md) → 8. [多 Agent](samples/08-multi-agent.md)
+
+## 基础补丁（发版前）
+
+一至三期主干完成后，按 [baseline-patches.md](baseline-patches.md) 补齐横切缺口：
+
+- A1 Prompt 模板化
+- A2 同步接口 Token 用量
+- A3 RAG 空检索拒答
+- A4 Agent ReAct 流式（最小）
+- A5 文档与自测
+
+全部通过后发版 **v0.2.0 baseline**。
+
+## 基础阶段完成标准
+
+下列项全部达成，即视为「基础闭环」完成（对应 tag `v0.2.0`）：
+
+| 类别 | 标准 |
+| --- | --- |
+| 样例闭环 | 01–08 样例均可跑通（Java + 前端 Tab + Python 对照可选） |
+| Prompt | Chat / Agent / Structured 的 system prompt 外置到 `resources/prompts/`，经 `PromptLoader` 加载 |
+| Token 用量 | 同步 Chat / Tools / Structured 响应含 `usage`（`TokenUsage`，提取失败为 null） |
+| RAG 拒答 | 空检索时 `retrievalEmpty=true`，不编造语料外内容 |
+| Agent 流式 | `GET /agent/react/stream` 可流式输出最终答案 |
+| 测试 | `./gradlew test` 通过；`frontend` `tsc` 无错 |
+| 文档 | [baseline-patches.md](baseline-patches.md) 验收 curl 可复现 |
+
+未纳入基础阶段（见 [backlog](backlog.md)）：Hybrid 检索、golden 评测、Redis 持久会话、逐步 tool SSE、流式 token 累加等。
+
+## 进阶入口
+
+**v0.2.0 发版之后**进入第四期，只做 backlog 标注的两项进阶：
+
+1. **Hybrid RAG** — 向量 + PostgreSQL 全文 + RRF；`POST /rag/query/compare`；样例 `09-hybrid-rag.md`
+2. **Agent 评测** — `classpath:eval/golden/*.json` + `POST /eval/run`；样例 `10-eval.md`
+
+第五期占位（仅文档）：Redis / DB 持久会话、长期记忆向量库、MCP 独立进程、语义分块 / HyDE 等。详见规划中的 `phase4.md` / `phase5.md`。
+
+基础 vs 进阶分层：
+
+| 层次 | 范围 | 状态 |
+| --- | --- | --- |
+| **基础** | 最小 Agent 闭环 + MCP/RAG 入门 + 进程内上下文 + 同进程多 Agent + 基础补丁 A1–A5 | **已完成**（tag `v0.2.0`） |
+| **进阶** | Hybrid 检索、golden 评测、持久会话、HyDE、分布式 Agent 等 | **第四期起** |
+
+## 刻意不做 / 后续候选
+
+见 [backlog.md](backlog.md)。

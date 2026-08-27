@@ -43,6 +43,7 @@ uv run python -m ai_example.samples.mcp_client
 - Java：`samples.mcp`（`McpToolConfiguration` 注册 Tools；`McpSampleService` 挂工具聊天）
 - 业务里通常 **MCP Server 独立部署**，业务应用只做 Client；本仓为了学习把 Server 暴露 + 样例聊天放同一进程（并关闭 `spring.ai.mcp.client`，避免启动期连自己）
 - 不要把 MCP 工具和结构化输出混在同一个 ChatClient 上
+- 详见 [backlog](../backlog.md)
 
 ## 测试
 

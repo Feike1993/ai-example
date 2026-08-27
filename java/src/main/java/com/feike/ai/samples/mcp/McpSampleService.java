@@ -1,6 +1,8 @@
 package com.feike.ai.samples.mcp;
 
 import com.feike.ai.core.LlmProviderRegistry;
+import com.feike.ai.core.TokenUsage;
+import com.feike.ai.core.TokenUsageExtractor;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -54,19 +56,19 @@ public class McpSampleService {
      */
     public McpChatResult chat(String prompt, String provider) {
         List<String> toolNames = listToolNames();
-        String content = registry.plainClient(provider)
+        var call = registry.plainClient(provider)
             .prompt()
             .system("你是助手。需要天气、加法或 CPK 相关能力时必须调用工具，不要编造。工具经 MCP Server 注册。")
             .user(prompt)
             .tools(mcpTools)
-            .call()
-            .content();
-        return new McpChatResult(content, toolNames);
+            .call();
+        return new McpChatResult(call.content(), toolNames, TokenUsageExtractor.from(call.chatResponse()));
     }
 
     /**
      * @param content   模型最终回复
      * @param toolNames MCP 已发现 / 已注册的工具名
+     * @param usage     token 用量，网关未返回时为 {@code null}
      */
-    public record McpChatResult(String content, List<String> toolNames) {}
+    public record McpChatResult(String content, List<String> toolNames, TokenUsage usage) {}
 }

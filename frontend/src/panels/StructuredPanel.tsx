@@ -1,8 +1,15 @@
 import { Badge, Button, DataList, Group, Stack, Textarea } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useState } from 'react'
-import { describeError, postJson, API_BASE, type Ticket } from '../api'
+import {
+  describeError,
+  postJson,
+  API_BASE,
+  type Ticket,
+  type TicketResponse,
+} from '../api'
 import { RawJsonAccordion } from '../components/RawJsonAccordion'
+import { RequestMeta } from '../components/RequestMeta'
 import { ResultBody } from '../components/ResultBody'
 import { SampleFrame } from '../components/SampleFrame'
 import { Workbench } from '../components/Workbench'
@@ -24,14 +31,21 @@ export function StructuredPanel({ provider }: { provider: string }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [ticket, setTicket] = useState<Ticket | null>(null)
+  const [rawResponse, setRawResponse] = useState<TicketResponse | null>(null)
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null)
 
   const run = async () => {
     setError(null)
     setTicket(null)
+    setRawResponse(null)
+    setElapsedMs(null)
     setLoading(true)
+    const started = performance.now()
     try {
-      const data = await postJson<Ticket>(`${API_BASE}/structured/ticket`, { text, provider })
-      setTicket(data)
+      const data = await postJson<TicketResponse>(`${API_BASE}/structured/ticket`, { text, provider })
+      setElapsedMs(Math.round(performance.now() - started))
+      setRawResponse(data)
+      setTicket(data.ticket)
     } catch (err) {
       const message = describeError(err)
       setError(message)
@@ -64,6 +78,7 @@ export function StructuredPanel({ provider }: { provider: string }) {
           <ResultBody error={error} emptyHint="抽取后会先看到字段，再可展开原始 JSON。">
             {ticket && (
               <Stack gap="lg">
+                <RequestMeta elapsedMs={elapsedMs} usage={rawResponse?.usage} />
                 <DataList orientation="vertical" withDivider>
                   <DataList.Item>
                     <DataList.ItemLabel>title</DataList.ItemLabel>
@@ -94,7 +109,7 @@ export function StructuredPanel({ provider }: { provider: string }) {
                     <DataList.ItemValue>{ticket.summary}</DataList.ItemValue>
                   </DataList.Item>
                 </DataList>
-                <RawJsonAccordion value={ticket} />
+                <RawJsonAccordion value={rawResponse ?? ticket} />
               </Stack>
             )}
           </ResultBody>

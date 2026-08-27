@@ -8,6 +8,7 @@ export const agentGuide: SampleGuideData = {
     '循环：Perceive（用户输入）→ Reason（是否调工具）→ Act（执行）→ Observe（结果回消息）。',
     '终止：模型不再返回 tool_calls、达到 maxSteps，或工具异常返回错误文本让模型降级。',
     '显式 Loop 适合审计每一步；Framework（ChatClient.tools）适合业务快速接入。',
+    'SSE 终答：工具轮同步完成后先推 steps，再推 finalAnswer；Reactor 里「一次准备结果」用 Mono，「多个 token」用 Flux。',
   ],
   logic: {
     title: 'Agent Loop 底层逻辑',
@@ -42,6 +43,21 @@ export const agentGuide: SampleGuideData = {
         detail:
           '工作流路径预先写死；Agent 下一步由模型选择。开放任务用 Agent，确定性任务用工作流。',
       },
+      {
+        title: 'Mono = 0～1 个结果的 Publisher',
+        detail:
+          'Reactor 里 Mono 表示「最多发出一个元素就结束」（成功一个值、空、或错误）。底层仍是订阅驱动：没有人 subscribe，流水线不会跑。SSE 接口返回的是 Flux（多个 SSE 事件），但「工具轮准备」这一步只产出一份 StreamPrep，所以用 Mono 建模更贴切。',
+      },
+      {
+        title: '为什么选 Mono，而不是直接阻塞或 Flux',
+        detail:
+          'prepareStream 里有多次同步 LLM call + 本地执行工具，可能耗时数秒。若在处理 SSE 的线程上直接跑，会占住事件循环/请求线程。用 Mono 把「算出那一份 StreamPrep」声明成异步步骤后，Controller 再 flatMapMany 拼出 steps 事件 + 终答 Flux。不用 Flux.fromCallable：工具准备结果只有一份，不是一串元素；Reactor 3.8 也已去掉 Flux.fromCallable，习惯上阻塞型单次计算用 Mono.fromCallable。',
+      },
+      {
+        title: 'Mono.fromCallable + subscribeOn 在做什么',
+        detail:
+          'fromCallable：把一段同步代码包成「被订阅时才执行」的延迟计算（懒执行），算完把返回值作为 Mono 的唯一元素发出。subscribeOn(boundedElastic)：指定这段 callable 跑在弹性线程池，避免阻塞 Netty/Web 事件循环。订阅发生后：elastic 线程跑 prepareStream → 发出 StreamPrep → flatMapMany 转成 SSE Flux（先 steps，再 answer token）。',
+      },
     ],
   },
   backend: [
@@ -69,6 +85,23 @@ export const agentGuide: SampleGuideData = {
 return new Trace("已达到最大步数 " + limit + "，已停止以防无限循环。",
     List.copyOf(steps), true);`,
     },
+    {
+      label: 'SSE 准备 — Mono.fromCallable',
+      language: 'java',
+      code: `/** 工具轮可能阻塞数秒：包成 Mono，订阅时再跑，并丢到弹性线程池。 */
+public Mono<ReactAgentLoop.StreamPrep> prepareReactStream(...) {
+    return Mono.fromCallable(() ->
+            ReactAgentLoop.prepareStream(chatModel, demoTools, systemPrompt, prompt, steps))
+        .subscribeOn(Schedulers.boundedElastic());
+}
+
+// Controller：一份 StreamPrep → 多个 SSE 事件
+return prepareReactStream(...)
+    .flatMapMany(prep -> Flux.concat(
+        Flux.just(stepsEvent),   // event:steps
+        answerEvents             // finalAnswer 增量（Flux）
+    ));`,
+    },
   ],
   frontend: [
     {
@@ -76,7 +109,9 @@ return new Trace("已达到最大步数 " + limit + "，已停止以防无限循
       language: 'tsx',
       code: `const body = { prompt, provider, ...(mode === 'react' ? { maxSteps } : {}) }
 
-if (mode === 'react') {
+if (mode === 'react' && transport === 'sse') {
+  streamAgentReact(prompt, provider, maxSteps, onSteps, onChunk, onDone, onError)
+} else if (mode === 'react') {
   const data = await postJson<AgentTrace>(\`\${API_BASE}/agent/react\`, body)
   setTrace(data) // 含 finalAnswer、steps[]、reachedMaxSteps
 } else {

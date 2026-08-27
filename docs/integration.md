@@ -6,7 +6,18 @@
 
 1. 依赖：Spring AI BOM `2.0.0` + `spring-ai-starter-model-openai`
 2. 配置：`app.ai.providers` 多网关 + `default-provider`；RAG 另配 Embedding（本仓用 DashScope）
-3. Prompt 放 `resources/prompts/`，不要把长 prompt 写进 Service
+3. Prompt 放 `resources/prompts/`，经 `PromptLoader` 加载；不要把长 prompt 写进 Service
+
+### PromptLoader
+
+拷 `core/PromptLoader.java` 与 `resources/prompts/*.st`。启动时在 Service 构造器里 `promptLoader.load("chat-assistant.st")`；需要动态片段时用 `load("xxx.st", Map.of("key", value))` 替换 `{key}` 占位符。
+
+| 模板 | 用途 |
+| --- | --- |
+| `chat-assistant.st` | Chat 同步 / 流式 |
+| `agent-react.st` | Agent ReAct / framework |
+| `extract-ticket.st` | 结构化工单 |
+| `multiagent-*.st` | 多 Agent 编排 / 调研 / 执笔 |
 
 ## 第一期
 
@@ -41,4 +52,18 @@
 - **Embedding 与 Chat Provider 分离**：很多聊天网关没有 Embedding；本仓用 `app.ai.embedding-provider=dashscope`
 - 先保证 ingest 幂等与 `sources` 回传，再考虑混合检索 / 查询改写
 
+## 第三期
+
+### 上下文工程
+
+- 拷 `samples.context`：进程内会话 + trim / summarize
+- 生产换 Redis/DB 持久化；精确 tokenizer 与向量长期记忆见 [backlog](backlog.md)
+
+### 多 Agent
+
+- 拷 `samples.multiagent`：Orchestrator + 专员（工具 / 执笔）
+- 分布式与评测平台见 [backlog](backlog.md)；不要一上来上独立工作流引擎
+
 Python 对照用于理解协议；JVM 业务优先集成 Java 代码。
+
+刻意不做总表：[backlog.md](backlog.md)。

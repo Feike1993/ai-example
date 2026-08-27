@@ -14,7 +14,13 @@ export class ApiError extends Error {
   }
 }
 
-export type ChatResponse = { content: string }
+export type TokenUsage = {
+  prompt: number | null
+  completion: number | null
+  total: number | null
+}
+
+export type ChatResponse = { content: string; usage: TokenUsage | null }
 
 export type Ticket = {
   title: string
@@ -23,7 +29,9 @@ export type Ticket = {
   summary: string
 }
 
-export type ToolChatResponse = { content: string }
+export type TicketResponse = { ticket: Ticket; usage: TokenUsage | null }
+
+export type ToolChatResponse = { content: string; usage: TokenUsage | null }
 
 export type AgentStep = {
   index: number
@@ -39,11 +47,12 @@ export type AgentTrace = {
   reachedMaxSteps: boolean
 }
 
-export type FrameworkResponse = { content: string }
+export type FrameworkResponse = { content: string; usage: TokenUsage | null }
 
 export type McpChatResponse = {
   content: string
   toolNames: string[]
+  usage: TokenUsage | null
 }
 
 export type McpToolsResponse = {
@@ -60,11 +69,46 @@ export type RagSource = {
 export type RagQueryResponse = {
   answer: string
   sources: RagSource[]
+  retrievalEmpty: boolean
+  usage: TokenUsage | null
 }
 
 export type RagIngestResponse = {
   chunkCount: number
   sources: string[]
+}
+
+export type ContextChatResponse = {
+  sessionId: string
+  strategy: string
+  content: string
+  rawMessageCount: number
+  sentMessageCount: number
+  approxTokens: number
+  droppedCount: number
+  summary: string | null
+  usage: TokenUsage | null
+}
+
+export type MultiAgentStep = {
+  index: number
+  assistantText: string
+  toolName: string
+  toolArgs: string
+  toolResult: string
+}
+
+export type MultiAgentTrace = {
+  name: string
+  role: string
+  steps: MultiAgentStep[]
+  error: string | null
+}
+
+export type MultiAgentResult = {
+  finalAnswer: string
+  agents: MultiAgentTrace[]
+  reachedMaxSteps: boolean
 }
 
 export type ProviderView = {
@@ -77,6 +121,26 @@ export type ProviderView = {
 export type ProviderListResponse = {
   defaultProvider: string
   providers: ProviderView[]
+}
+
+/**
+ * 把 token 用量格式化为可读文案；无数据时返回 null。
+ */
+export function formatTokenUsage(usage: TokenUsage | null | undefined): string | null {
+  if (!usage) {
+    return null
+  }
+  const parts: string[] = []
+  if (usage.prompt != null) {
+    parts.push(`prompt ${usage.prompt}`)
+  }
+  if (usage.completion != null) {
+    parts.push(`completion ${usage.completion}`)
+  }
+  if (usage.total != null) {
+    parts.push(`total ${usage.total}`)
+  }
+  return parts.length > 0 ? parts.join(' · ') : null
 }
 
 /**
@@ -204,12 +268,81 @@ export function streamChat(
 }
 
 /**
+ * 订阅 Agent ReAct SSE。先处理 event:steps，再追加终答增量。
+ */
+export function streamAgentReact(
+  prompt: string,
+  provider: string,
+  maxSteps: number | undefined,
+  onSteps: (steps: AgentStep[], reachedMaxSteps: boolean) => void,
+  onChunk: (text: string) => void,
+  onDone: () => void,
+  onError: (error: Error) => void,
+): () => void {
+  const params = new URLSearchParams({ prompt })
+  if (provider) {
+    params.set('provider', provider)
+  }
+  if (typeof maxSteps === 'number') {
+    params.set('maxSteps', String(maxSteps))
+  }
+  const url = `${API_BASE}/agent/react/stream?${params.toString()}`
+  const source = new EventSource(url)
+  let received = false
+  let closed = false
+
+  const finish = (error?: Error) => {
+    if (closed) {
+      return
+    }
+    closed = true
+    source.close()
+    if (error) {
+      onError(error)
+    } else {
+      onDone()
+    }
+  }
+
+  source.addEventListener('steps', (event) => {
+    received = true
+    try {
+      const payload = JSON.parse((event as MessageEvent).data) as {
+        steps?: AgentStep[]
+        reachedMaxSteps?: boolean
+      }
+      onSteps(payload.steps ?? [], payload.reachedMaxSteps === true)
+    } catch {
+      onSteps([], false)
+    }
+  })
+
+  source.onmessage = (event) => {
+    if (event.data === '' || event.data === '[DONE]') {
+      return
+    }
+    received = true
+    onChunk(decodeSseData(event.data))
+  }
+
+  source.onerror = () => {
+    if (received) {
+      finish()
+      return
+    }
+    finish(new Error('无法连接后端或流式中断，请确认 Java 服务已在 8080 启动'))
+  }
+
+  return () => finish()
+}
+
+/**
  * 订阅 RAG SSE。先处理 event:sources，再追加文本增量。
  */
 export function streamRag(
   question: string,
   provider: string,
-  onSources: (sources: RagSource[]) => void,
+  onSources: (sources: RagSource[], retrievalEmpty: boolean) => void,
   onChunk: (text: string) => void,
   onDone: () => void,
   onError: (error: Error) => void,
@@ -239,10 +372,13 @@ export function streamRag(
   source.addEventListener('sources', (event) => {
     received = true
     try {
-      const payload = JSON.parse((event as MessageEvent).data) as { sources?: RagSource[] }
-      onSources(payload.sources ?? [])
+      const payload = JSON.parse((event as MessageEvent).data) as {
+        sources?: RagSource[]
+        retrievalEmpty?: boolean
+      }
+      onSources(payload.sources ?? [], payload.retrievalEmpty === true)
     } catch {
-      onSources([])
+      onSources([], false)
     }
   })
 
