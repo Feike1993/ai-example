@@ -2,6 +2,8 @@ package com.feike.ai.samples.rag;
 
 import com.feike.ai.core.AiProperties;
 import com.feike.ai.core.LlmProviderRegistry;
+import com.feike.ai.core.TokenUsage;
+import com.feike.ai.core.TokenUsageExtractor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
@@ -100,16 +102,15 @@ public class RagSampleService {
     public RagQueryResult query(String question, String provider, Integer topK) {
         List<Document> hits = retrieve(question, topK);
         String context = buildContext(hits);
-        String answer = registry.plainClient(provider)
+        var call = registry.plainClient(provider)
             .prompt()
             .system("""
                 你是助手。只根据「检索上下文」回答用户问题；上下文不足时明确说不知道，不要编造。
                 回答用简体中文。
                 """)
             .user("检索上下文：\n" + context + "\n\n用户问题：" + question)
-            .call()
-            .content();
-        return new RagQueryResult(answer, toSources(hits));
+            .call();
+        return new RagQueryResult(call.content(), toSources(hits), TokenUsageExtractor.from(call.chatResponse()));
     }
 
     /**
@@ -245,8 +246,9 @@ public class RagSampleService {
     /**
      * @param answer  模型回答
      * @param sources 检索来源摘要
+     * @param usage   token 用量，网关未返回时为 {@code null}
      */
-    public record RagQueryResult(String answer, List<SourceView> sources) {}
+    public record RagQueryResult(String answer, List<SourceView> sources, TokenUsage usage) {}
 
     /**
      * @param id       chunk id

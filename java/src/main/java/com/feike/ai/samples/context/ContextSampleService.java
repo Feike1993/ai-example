@@ -2,6 +2,8 @@ package com.feike.ai.samples.context;
 
 import com.feike.ai.core.AiProperties;
 import com.feike.ai.core.LlmProviderRegistry;
+import com.feike.ai.core.TokenUsage;
+import com.feike.ai.core.TokenUsageExtractor;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.stereotype.Service;
@@ -98,11 +100,12 @@ public class ContextSampleService {
         window.add(new UserMessage(prompt));
         approx = ContextBudget.approxTokens(window);
 
-        String answer = registry.plainClient(provider)
+        var call = registry.plainClient(provider)
             .prompt()
             .messages(window)
-            .call()
-            .content();
+            .call();
+        String answer = call.content();
+        TokenUsage usage = TokenUsageExtractor.from(call.chatResponse());
 
         store.appendTurn(id, prompt, answer == null ? "" : answer);
 
@@ -115,7 +118,8 @@ public class ContextSampleService {
             window.size(),
             approx,
             dropped,
-            summary
+            summary,
+            usage
         );
     }
 
@@ -171,6 +175,7 @@ public class ContextSampleService {
      * @param approxTokens     近似 token
      * @param droppedCount     trim 丢掉条数
      * @param summary          summarize 时的摘要；trim 时为 null
+     * @param usage            本轮主聊天的 token 用量（不含 summarize 调用）
      */
     public record ContextChatResult(
         String sessionId,
@@ -180,6 +185,7 @@ public class ContextSampleService {
         int sentMessageCount,
         int approxTokens,
         int droppedCount,
-        String summary
+        String summary,
+        TokenUsage usage
     ) {}
 }

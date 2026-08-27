@@ -8,6 +8,7 @@ import {
   type ContextChatResponse,
 } from '../api'
 import { RawJsonAccordion } from '../components/RawJsonAccordion'
+import { RequestMeta } from '../components/RequestMeta'
 import { ResultBody } from '../components/ResultBody'
 import { SampleFrame } from '../components/SampleFrame'
 import { Workbench } from '../components/Workbench'
@@ -26,10 +27,13 @@ export function ContextPanel({ provider }: { provider: string }) {
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<ContextChatResponse | null>(null)
   const [history, setHistory] = useState<{ role: string; content: string }[]>([])
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null)
 
   const run = async () => {
     setError(null)
+    setElapsedMs(null)
     setLoading(true)
+    const started = performance.now()
     try {
       const data = await postJson<ContextChatResponse>(`${API_BASE}/context/chat`, {
         sessionId,
@@ -37,6 +41,7 @@ export function ContextPanel({ provider }: { provider: string }) {
         provider,
         strategy,
       })
+      setElapsedMs(Math.round(performance.now() - started))
       setResult(data)
       setSessionId(data.sessionId)
       setHistory((prev) => [
@@ -61,6 +66,7 @@ export function ContextPanel({ provider }: { provider: string }) {
       })
       setHistory([])
       setResult(null)
+      setElapsedMs(null)
       notifications.show({ color: 'teal', title: '已清空会话', message: sessionId })
     } catch (err) {
       notifications.show({ color: 'red', title: '清空失败', message: describeError(err) })
@@ -127,6 +133,7 @@ export function ContextPanel({ provider }: { provider: string }) {
                 )}
                 {result && (
                   <>
+                    <RequestMeta elapsedMs={elapsedMs} usage={result.usage} />
                     <Group gap="xs">
                       <Badge variant="light">{result.strategy}</Badge>
                       <Badge variant="outline">raw {result.rawMessageCount}</Badge>

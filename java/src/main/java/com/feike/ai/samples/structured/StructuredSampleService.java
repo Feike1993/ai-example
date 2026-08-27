@@ -2,6 +2,7 @@ package com.feike.ai.samples.structured;
 
 import com.feike.ai.core.LlmProviderRegistry;
 import com.feike.ai.core.PromptLoader;
+import com.feike.ai.core.TokenUsage;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -46,13 +47,23 @@ public class StructuredSampleService {
     }
 
     /**
+     * 工单抽取结果。
+     *
+     * @param ticket 解析后的工单
+     * @param usage  token 用量，网关未返回时为 {@code null}
+     */
+    public record ExtractResult(Ticket ticket, TokenUsage usage) {}
+
+    /**
      * 把用户描述解析为 {@link Ticket}。
      *
      * @param userText 工单自然语言
      * @param provider Provider id，空则用默认 DeepSeek
-     * @return 解析后的工单
+     * @return 解析后的工单与 token 用量
      */
-    public Ticket extract(String userText, String provider) {
-        return invoker.invoke(registry.plainClient(provider), systemPrompt, userText, Ticket.class);
+    public ExtractResult extract(String userText, String provider) {
+        StructuredOutputInvoker.InvokeResult<Ticket> result =
+            invoker.invoke(registry.plainClient(provider), systemPrompt, userText, Ticket.class);
+        return new ExtractResult(result.value(), result.usage());
     }
 }

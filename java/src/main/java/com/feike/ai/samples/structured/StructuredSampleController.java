@@ -1,5 +1,6 @@
 package com.feike.ai.samples.structured;
 
+import com.feike.ai.core.TokenUsage;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -21,6 +22,12 @@ public class StructuredSampleController {
      */
     public record ExtractRequest(@NotBlank String text, String provider) {}
 
+    /**
+     * @param ticket 结构化工单
+     * @param usage  token 用量，网关未返回时为 {@code null}
+     */
+    public record TicketResponse(StructuredSampleService.Ticket ticket, TokenUsage usage) {}
+
     private final StructuredSampleService structuredSampleService;
 
     /**
@@ -37,7 +44,9 @@ public class StructuredSampleController {
      * @return 结构化工单
      */
     @PostMapping("/ticket")
-    public StructuredSampleService.Ticket extract(@RequestBody @Validated ExtractRequest request) {
-        return structuredSampleService.extract(request.text(), request.provider());
+    public TicketResponse extract(@RequestBody @Validated ExtractRequest request) {
+        StructuredSampleService.ExtractResult result =
+            structuredSampleService.extract(request.text(), request.provider());
+        return new TicketResponse(result.ticket(), result.usage());
     }
 }

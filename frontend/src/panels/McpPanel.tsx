@@ -10,6 +10,7 @@ import {
   type McpToolsResponse,
 } from '../api'
 import { RawJsonAccordion } from '../components/RawJsonAccordion'
+import { RequestMeta } from '../components/RequestMeta'
 import { ResultBody } from '../components/ResultBody'
 import { SampleFrame } from '../components/SampleFrame'
 import { Workbench } from '../components/Workbench'
@@ -24,6 +25,7 @@ export function McpPanel({ provider }: { provider: string }) {
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<McpChatResponse | null>(null)
   const [toolNames, setToolNames] = useState<string[]>([])
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null)
 
   useEffect(() => {
     void getJson<McpToolsResponse>(`${API_BASE}/mcp/tools`)
@@ -34,9 +36,12 @@ export function McpPanel({ provider }: { provider: string }) {
   const run = async () => {
     setError(null)
     setResult(null)
+    setElapsedMs(null)
     setLoading(true)
+    const started = performance.now()
     try {
       const data = await postJson<McpChatResponse>(`${API_BASE}/mcp/chat`, { prompt, provider })
+      setElapsedMs(Math.round(performance.now() - started))
       setResult(data)
       if (data.toolNames?.length) {
         setToolNames(data.toolNames)
@@ -90,6 +95,7 @@ export function McpPanel({ provider }: { provider: string }) {
           <ResultBody error={error} emptyHint="调用后展示回复与 MCP 工具名列表。">
             {result && (
               <Stack gap="sm">
+                <RequestMeta elapsedMs={elapsedMs} usage={result.usage} />
                 <pre className="stream-text">{result.content}</pre>
                 <RawJsonAccordion value={result} />
               </Stack>

@@ -3,6 +3,7 @@ import { notifications } from '@mantine/notifications'
 import { useState } from 'react'
 import { describeError, postJson, API_BASE, type ToolChatResponse } from '../api'
 import { RawJsonAccordion } from '../components/RawJsonAccordion'
+import { RequestMeta } from '../components/RequestMeta'
 import { ResultBody } from '../components/ResultBody'
 import { SampleFrame } from '../components/SampleFrame'
 import { Workbench } from '../components/Workbench'
@@ -16,13 +17,17 @@ export function ToolsPanel({ provider }: { provider: string }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<ToolChatResponse | null>(null)
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null)
 
   const run = async () => {
     setError(null)
     setResult(null)
+    setElapsedMs(null)
     setLoading(true)
+    const started = performance.now()
     try {
       const data = await postJson<ToolChatResponse>(`${API_BASE}/tools`, { prompt, provider })
+      setElapsedMs(Math.round(performance.now() - started))
       setResult(data)
     } catch (err) {
       const message = describeError(err)
@@ -56,6 +61,7 @@ export function ToolsPanel({ provider }: { provider: string }) {
           <ResultBody error={error} emptyHint="调用后展示模型结合工具结果后的回复。">
             {result && (
               <Stack gap="sm">
+                <RequestMeta elapsedMs={elapsedMs} usage={result.usage} />
                 <pre className="stream-text">{result.content}</pre>
                 <RawJsonAccordion value={result} />
               </Stack>

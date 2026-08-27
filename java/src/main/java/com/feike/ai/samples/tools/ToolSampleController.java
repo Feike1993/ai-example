@@ -1,5 +1,6 @@
 package com.feike.ai.samples.tools;
 
+import com.feike.ai.core.TokenUsage;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,8 +24,9 @@ public class ToolSampleController {
 
     /**
      * @param content 结合工具结果后的回复
+     * @param usage   token 用量，网关未返回时为 {@code null}
      */
-    public record ToolChatResponse(String content) {}
+    public record ToolChatResponse(String content, TokenUsage usage) {}
 
     private final ToolSampleService toolSampleService;
 
@@ -43,6 +45,8 @@ public class ToolSampleController {
      */
     @PostMapping
     public ToolChatResponse chat(@RequestBody @Validated ToolChatRequest request) {
-        return new ToolChatResponse(toolSampleService.chatWithTools(request.prompt(), request.provider()));
+        ToolSampleService.ToolChatResult result =
+            toolSampleService.chatWithTools(request.prompt(), request.provider());
+        return new ToolChatResponse(result.content(), result.usage());
     }
 }

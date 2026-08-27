@@ -3,6 +3,8 @@ package com.feike.ai.samples.structured;
 import com.feike.ai.core.AiProperties;
 import com.feike.ai.core.JsonRepair;
 import com.feike.ai.core.PromptSecurityConstants;
+import com.feike.ai.core.TokenUsage;
+import com.feike.ai.core.TokenUsageExtractor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -16,6 +18,15 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class StructuredOutputInvoker {
+
+    /**
+     * 结构化调用结果：解析值与最后一次成功调用的 token 用量。
+     *
+     * @param value 解析后的对象
+     * @param usage token 用量，网关未返回时为 {@code null}
+     * @param <T>   目标类型
+     */
+    public record InvokeResult<T>(T value, TokenUsage usage) {}
 
     private static final Logger log = LoggerFactory.getLogger(StructuredOutputInvoker.class);
 
@@ -43,10 +54,10 @@ public class StructuredOutputInvoker {
      * @param userPrompt   用户原文，会包进 {@code <data-boundary>}
      * @param type         目标 Java 类型
      * @param <T>          解析后的类型
-     * @return 解析成功的对象
+     * @return 解析成功的对象与 token 用量
      * @throws IllegalStateException 达到最大重试次数仍无法解析
      */
-    public <T> T invoke(
+    public <T> InvokeResult<T> invoke(
         ChatClient chatClient,
         String systemPrompt,
         String userPrompt,
@@ -102,7 +113,7 @@ public class StructuredOutputInvoker {
      * @return 解析结果
      * @param <T>   解析后的类型
      */
-    private <T> T callStructured(
+    private <T> InvokeResult<T> callStructured(
         ChatClient chatClient,
         String systemPrompt,
         String userPrompt,
@@ -112,12 +123,16 @@ public class StructuredOutputInvoker {
             .system(systemPrompt)
             .user("<data-boundary>\n" + userPrompt + "\n</data-boundary>")
             .call();
+        TokenUsage usage = TokenUsageExtractor.from(call.chatResponse());
         if (config.schemaValidationEnabled()) {
             // 1. 模型输出直接带 schema，尝试直接解析
-            return call.entity(converter, ChatClient.EntityParamSpec::validateSchema);
+            return new InvokeResult<>(
+                call.entity(converter, ChatClient.EntityParamSpec::validateSchema),
+                usage
+            );
         }
         // 2. 模型输出不带 schema，尝试修复 JSON 后解析
-        return convertWithRepair(call.content(), converter);
+        return new InvokeResult<>(convertWithRepair(call.content(), converter), usage);
     }
 
     /**

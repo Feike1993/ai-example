@@ -1,8 +1,9 @@
-import { Button, NumberInput, SegmentedControl, Stack, Text, Textarea } from '@mantine/core'
+import { Button, NumberInput, SegmentedControl, Stack, Textarea } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useEffect, useRef, useState } from 'react'
 import { describeError, postJson, streamChat, API_BASE, type ChatResponse } from '../api'
 import { RawJsonAccordion } from '../components/RawJsonAccordion'
+import { RequestMeta } from '../components/RequestMeta'
 import { ResultBody } from '../components/ResultBody'
 import { SampleFrame } from '../components/SampleFrame'
 import { Workbench } from '../components/Workbench'
@@ -89,7 +90,7 @@ export function ChatPanel({ provider }: { provider: string }) {
         stopRef.current = null
         setStreaming(false)
         setLoading(false)
-        setResult({ content: acc })
+        setResult({ content: acc, usage: null })
       },
       (err) => {
         stopRef.current = null
@@ -162,11 +163,11 @@ export function ChatPanel({ provider }: { provider: string }) {
           <ResultBody error={error} emptyHint="发送后，回复和 TTFT 会出现在这里。">
             {(streaming || streamText || result) && (
               <Stack gap="sm">
-                {ttftMs !== null && (
-                  <Text size="sm" c="dimmed">
-                    {mode === 'sse' ? 'TTFT' : '耗时'} {ttftMs} ms
-                  </Text>
-                )}
+                <RequestMeta
+                  elapsedMs={ttftMs}
+                  elapsedLabel={mode === 'sse' ? 'TTFT' : '耗时'}
+                  usage={mode === 'sync' ? result?.usage : null}
+                />
                 <pre className="stream-text">
                   {streaming ? streamText : (result?.content ?? streamText)}
                   {streaming && <span className="sse-caret" />}

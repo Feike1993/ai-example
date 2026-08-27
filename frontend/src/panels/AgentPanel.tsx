@@ -9,6 +9,7 @@ import {
   type FrameworkResponse,
 } from '../api'
 import { RawJsonAccordion } from '../components/RawJsonAccordion'
+import { RequestMeta } from '../components/RequestMeta'
 import { ResultBody } from '../components/ResultBody'
 import { SampleFrame } from '../components/SampleFrame'
 import { Workbench } from '../components/Workbench'
@@ -27,12 +28,15 @@ export function AgentPanel({ provider }: { provider: string }) {
   const [error, setError] = useState<string | null>(null)
   const [trace, setTrace] = useState<AgentTrace | null>(null)
   const [framework, setFramework] = useState<FrameworkResponse | null>(null)
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null)
 
   const run = async () => {
     setError(null)
     setTrace(null)
     setFramework(null)
+    setElapsedMs(null)
     setLoading(true)
+    const started = performance.now()
     try {
       const body: { prompt: string; maxSteps?: number; provider: string } = { prompt, provider }
       if (mode === 'react' && typeof maxSteps === 'number') {
@@ -40,9 +44,11 @@ export function AgentPanel({ provider }: { provider: string }) {
       }
       if (mode === 'react') {
         const data = await postJson<AgentTrace>(`${API_BASE}/agent/react`, body)
+        setElapsedMs(Math.round(performance.now() - started))
         setTrace(data)
       } else {
         const data = await postJson<FrameworkResponse>(`${API_BASE}/agent/framework`, body)
+        setElapsedMs(Math.round(performance.now() - started))
         setFramework(data)
       }
     } catch (err) {
@@ -95,6 +101,7 @@ export function AgentPanel({ provider }: { provider: string }) {
           <ResultBody error={error} emptyHint="运行后，ReAct 会列出每一步工具调用。">
             {trace && (
               <Stack gap="lg">
+                <RequestMeta elapsedMs={elapsedMs} />
                 <Stack gap={6}>
                   <Text size="sm" c="dimmed">
                     finalAnswer
@@ -128,6 +135,7 @@ export function AgentPanel({ provider }: { provider: string }) {
             )}
             {framework && (
               <Stack gap="sm">
+                <RequestMeta elapsedMs={elapsedMs} usage={framework.usage} />
                 <pre className="stream-text">{framework.content}</pre>
                 <RawJsonAccordion value={framework} />
               </Stack>

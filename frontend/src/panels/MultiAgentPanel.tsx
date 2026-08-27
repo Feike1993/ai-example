@@ -8,6 +8,7 @@ import {
   type MultiAgentResult,
 } from '../api'
 import { RawJsonAccordion } from '../components/RawJsonAccordion'
+import { RequestMeta } from '../components/RequestMeta'
 import { ResultBody } from '../components/ResultBody'
 import { SampleFrame } from '../components/SampleFrame'
 import { Workbench } from '../components/Workbench'
@@ -21,16 +22,20 @@ export function MultiAgentPanel({ provider }: { provider: string }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<MultiAgentResult | null>(null)
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null)
 
   const run = async () => {
     setError(null)
     setResult(null)
+    setElapsedMs(null)
     setLoading(true)
+    const started = performance.now()
     try {
       const data = await postJson<MultiAgentResult>(`${API_BASE}/multiagent/run`, {
         prompt,
         provider,
       })
+      setElapsedMs(Math.round(performance.now() - started))
       setResult(data)
     } catch (err) {
       const message = describeError(err)
@@ -64,6 +69,7 @@ export function MultiAgentPanel({ provider }: { provider: string }) {
           <ResultBody error={error} emptyHint="运行后按 orchestrator / researcher / writer 分段展示。">
             {result && (
               <Stack gap="lg">
+                <RequestMeta elapsedMs={elapsedMs} />
                 <Stack gap={6}>
                   <Text size="sm" c="dimmed">
                     finalAnswer

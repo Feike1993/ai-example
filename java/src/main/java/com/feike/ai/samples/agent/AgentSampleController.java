@@ -1,5 +1,6 @@
 package com.feike.ai.samples.agent;
 
+import com.feike.ai.core.TokenUsage;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -24,8 +25,9 @@ public class AgentSampleController {
 
     /**
      * @param content 框架托管循环的最终回复
+     * @param usage   token 用量，网关未返回时为 {@code null}
      */
-    public record FrameworkResponse(String content) {}
+    public record FrameworkResponse(String content, TokenUsage usage) {}
 
     private final AgentSampleService agentSampleService;
 
@@ -55,6 +57,8 @@ public class AgentSampleController {
      */
     @PostMapping("/framework")
     public FrameworkResponse framework(@RequestBody @Validated AgentRequest request) {
-        return new FrameworkResponse(agentSampleService.framework(request.prompt(), request.provider()));
+        AgentSampleService.FrameworkResult result =
+            agentSampleService.framework(request.prompt(), request.provider());
+        return new FrameworkResponse(result.content(), result.usage());
     }
 }

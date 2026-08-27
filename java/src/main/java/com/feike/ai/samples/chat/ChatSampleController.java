@@ -1,5 +1,6 @@
 package com.feike.ai.samples.chat;
 
+import com.feike.ai.core.TokenUsage;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.MediaType;
 import org.springframework.validation.annotation.Validated;
@@ -28,8 +29,9 @@ public class ChatSampleController {
 
     /**
      * @param content 模型完整回复
+     * @param usage   token 用量，网关未返回时为 {@code null}
      */
-    public record ChatResponse(String content) {}
+    public record ChatResponse(String content, TokenUsage usage) {}
 
     private final ChatSampleService chatSampleService;
 
@@ -48,7 +50,9 @@ public class ChatSampleController {
      */
     @PostMapping
     public ChatResponse chat(@RequestBody @Validated ChatRequest request) {
-        return new ChatResponse(chatSampleService.chat(request.prompt(), request.temperature(), request.provider()));
+        ChatSampleService.ChatResult result =
+            chatSampleService.chat(request.prompt(), request.temperature(), request.provider());
+        return new ChatResponse(result.content(), result.usage());
     }
 
     /**

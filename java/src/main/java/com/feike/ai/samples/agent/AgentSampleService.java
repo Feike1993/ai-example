@@ -3,6 +3,8 @@ package com.feike.ai.samples.agent;
 import com.feike.ai.core.AiProperties;
 import com.feike.ai.core.LlmProviderRegistry;
 import com.feike.ai.core.PromptLoader;
+import com.feike.ai.core.TokenUsage;
+import com.feike.ai.core.TokenUsageExtractor;
 import com.feike.ai.samples.tools.DemoTools;
 import org.springframework.stereotype.Service;
 
@@ -51,19 +53,27 @@ public class AgentSampleService {
     }
 
     /**
+     * 框架托管结果。
+     *
+     * @param content 最终文本
+     * @param usage   token 用量，网关未返回时为 {@code null}
+     */
+    public record FrameworkResult(String content, TokenUsage usage) {}
+
+    /**
      * 框架托管的 tool-calling 循环，对照 {@link ReactAgentLoop}。
      *
      * @param prompt   用户任务
      * @param provider Provider id，空则用默认 DeepSeek
-     * @return 仅最终文本，不含逐步轨迹
+     * @return 最终文本与 token 用量（不含逐步轨迹）
      */
-    public String framework(String prompt, String provider) {
-        return registry.plainClient(provider)
+    public FrameworkResult framework(String prompt, String provider) {
+        var call = registry.plainClient(provider)
             .prompt()
             .system(systemPrompt)
             .user(prompt)
             .tools(demoTools)
-            .call()
-            .content();
+            .call();
+        return new FrameworkResult(call.content(), TokenUsageExtractor.from(call.chatResponse()));
     }
 }

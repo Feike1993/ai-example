@@ -2,6 +2,8 @@ package com.feike.ai.samples.chat;
 
 import com.feike.ai.core.LlmProviderRegistry;
 import com.feike.ai.core.PromptLoader;
+import com.feike.ai.core.TokenUsage;
+import com.feike.ai.core.TokenUsageExtractor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.stereotype.Service;
@@ -28,14 +30,22 @@ public class ChatSampleService {
     }
 
     /**
+     * 同步聊天结果：正文与可选 token 用量。
+     *
+     * @param content 模型完整回复
+     * @param usage   网关返回的用量，未上报时为 {@code null}
+     */
+    public record ChatResult(String content, TokenUsage usage) {}
+
+    /**
      * 一次性返回完整回复。
      *
      * @param prompt      用户输入
      * @param temperature 为空则用工厂默认温度；Spring AI 2.0 的 {@code options()} 要传 Builder 而非已 build 的 Options
      * @param provider    Provider id，空则用默认 DeepSeek
-     * @return 模型文本
+     * @return 回复正文与 token 用量
      */
-    public String chat(String prompt, Double temperature, String provider) {
+    public ChatResult chat(String prompt, Double temperature, String provider) {
         ChatClient chatClient = registry.plainClient(provider);
         // 1. 构建 Prompt
         var spec = chatClient.prompt().system(systemPrompt).user(prompt);
@@ -43,7 +53,8 @@ public class ChatSampleService {
         if (temperature != null) {
             spec = spec.options(OpenAiChatOptions.builder().temperature(temperature));
         }
-        return spec.call().content();
+        var call = spec.call();
+        return new ChatResult(call.content(), TokenUsageExtractor.from(call.chatResponse()));
     }
 
     /**

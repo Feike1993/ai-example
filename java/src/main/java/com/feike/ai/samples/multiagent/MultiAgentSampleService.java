@@ -132,7 +132,7 @@ public class MultiAgentSampleService {
             orchestratorPrompt,
             "用户任务：\n" + prompt + "\n\n已有材料：\n" + materialBlock,
             OrchestratorDecision.class
-        );
+        ).value();
     }
 
     private String writeFinal(String prompt, List<String> materials, String provider) {

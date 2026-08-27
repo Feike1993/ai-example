@@ -14,7 +14,13 @@ export class ApiError extends Error {
   }
 }
 
-export type ChatResponse = { content: string }
+export type TokenUsage = {
+  prompt: number | null
+  completion: number | null
+  total: number | null
+}
+
+export type ChatResponse = { content: string; usage: TokenUsage | null }
 
 export type Ticket = {
   title: string
@@ -23,7 +29,9 @@ export type Ticket = {
   summary: string
 }
 
-export type ToolChatResponse = { content: string }
+export type TicketResponse = { ticket: Ticket; usage: TokenUsage | null }
+
+export type ToolChatResponse = { content: string; usage: TokenUsage | null }
 
 export type AgentStep = {
   index: number
@@ -39,11 +47,12 @@ export type AgentTrace = {
   reachedMaxSteps: boolean
 }
 
-export type FrameworkResponse = { content: string }
+export type FrameworkResponse = { content: string; usage: TokenUsage | null }
 
 export type McpChatResponse = {
   content: string
   toolNames: string[]
+  usage: TokenUsage | null
 }
 
 export type McpToolsResponse = {
@@ -60,6 +69,7 @@ export type RagSource = {
 export type RagQueryResponse = {
   answer: string
   sources: RagSource[]
+  usage: TokenUsage | null
 }
 
 export type RagIngestResponse = {
@@ -76,6 +86,7 @@ export type ContextChatResponse = {
   approxTokens: number
   droppedCount: number
   summary: string | null
+  usage: TokenUsage | null
 }
 
 export type MultiAgentStep = {
@@ -109,6 +120,26 @@ export type ProviderView = {
 export type ProviderListResponse = {
   defaultProvider: string
   providers: ProviderView[]
+}
+
+/**
+ * 把 token 用量格式化为可读文案；无数据时返回 null。
+ */
+export function formatTokenUsage(usage: TokenUsage | null | undefined): string | null {
+  if (!usage) {
+    return null
+  }
+  const parts: string[] = []
+  if (usage.prompt != null) {
+    parts.push(`prompt ${usage.prompt}`)
+  }
+  if (usage.completion != null) {
+    parts.push(`completion ${usage.completion}`)
+  }
+  if (usage.total != null) {
+    parts.push(`total ${usage.total}`)
+  }
+  return parts.length > 0 ? parts.join(' · ') : null
 }
 
 /**
