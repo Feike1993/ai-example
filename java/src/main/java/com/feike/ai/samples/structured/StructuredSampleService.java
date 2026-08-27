@@ -1,12 +1,10 @@
 package com.feike.ai.samples.structured;
 
 import com.feike.ai.core.LlmProviderRegistry;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.Resource;
+import com.feike.ai.core.PromptLoader;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
@@ -34,17 +32,17 @@ public class StructuredSampleService {
      *
      * @param registry        按请求选择 Provider
      * @param invoker         带重试的结构化调用
-     * @param promptResource  classpath 上的提示词模板
+     * @param promptLoader    加载 {@code prompts/extract-ticket.st}
      * @throws IOException 模板读失败
      */
     public StructuredSampleService(
         LlmProviderRegistry registry,
         StructuredOutputInvoker invoker,
-        @Value("classpath:prompts/extract-ticket.st") Resource promptResource
+        PromptLoader promptLoader
     ) throws IOException {
         this.registry = registry;
         this.invoker = invoker;
-        this.systemPrompt = promptResource.getContentAsString(StandardCharsets.UTF_8);
+        this.systemPrompt = promptLoader.load("extract-ticket.st");
     }
 
     /**

@@ -2,11 +2,13 @@ package com.feike.ai.samples.multiagent;
 
 import com.feike.ai.core.AiProperties;
 import com.feike.ai.core.LlmProviderRegistry;
+import com.feike.ai.core.PromptLoader;
 import com.feike.ai.samples.agent.ReactAgentLoop;
 import com.feike.ai.samples.structured.StructuredOutputInvoker;
 import com.feike.ai.samples.tools.DemoTools;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,23 +22,31 @@ public class MultiAgentSampleService {
     private final DemoTools demoTools;
     private final StructuredOutputInvoker structuredOutputInvoker;
     private final AiProperties.MultiAgent multiAgentSettings;
+    private final String orchestratorPrompt;
+    private final String researcherPrompt;
+    private final String writerPrompt;
 
     /**
      * @param registry                 LLM
      * @param demoTools                WorkerA 工具
      * @param structuredOutputInvoker  Orchestrator 结构化决策
      * @param properties               步数配置
+     * @param promptLoader             加载 multiagent 角色模板
      */
     public MultiAgentSampleService(
         LlmProviderRegistry registry,
         DemoTools demoTools,
         StructuredOutputInvoker structuredOutputInvoker,
-        AiProperties properties
-    ) {
+        AiProperties properties,
+        PromptLoader promptLoader
+    ) throws IOException {
         this.registry = registry;
         this.demoTools = demoTools;
         this.structuredOutputInvoker = structuredOutputInvoker;
         this.multiAgentSettings = properties.multiagent();
+        this.orchestratorPrompt = promptLoader.load("multiagent-orchestrator.st");
+        this.researcherPrompt = promptLoader.load("multiagent-researcher.st");
+        this.writerPrompt = promptLoader.load("multiagent-writer.st");
     }
 
     /**
@@ -89,10 +99,7 @@ public class MultiAgentSampleService {
                 ReactAgentLoop.Trace trace = ReactAgentLoop.run(
                     registry.chatModel(provider),
                     demoTools,
-                    """
-                        你是调研专员。需要天气或加法时必须调用工具，不要编造。
-                        用中文简要汇报工具结果与结论。
-                        """,
+                    researcherPrompt,
                     task,
                     workerSteps
                 );
@@ -122,13 +129,7 @@ public class MultiAgentSampleService {
         String materialBlock = materials.isEmpty() ? "（尚无专员产出）" : String.join("\n\n", materials);
         return structuredOutputInvoker.invoke(
             registry.plainClient(provider),
-            """
-                你是编排者。根据用户任务与已有材料，决定下一步：
-                - next=researcher：需要查天气或做计算等工具能力
-                - next=writer：材料已够，交给执笔写最终答复
-                - next=finish：等同 writer
-                task 填写给专员的简短子任务；reason 用中文说明为何这样选。
-                """,
+            orchestratorPrompt,
             "用户任务：\n" + prompt + "\n\n已有材料：\n" + materialBlock,
             OrchestratorDecision.class
         );
@@ -138,10 +139,7 @@ public class MultiAgentSampleService {
         String materialBlock = materials.isEmpty() ? "（无调研材料）" : String.join("\n\n", materials);
         String content = registry.plainClient(provider)
             .prompt()
-            .system("""
-                你是执笔专员。只根据「材料」回答用户任务，不要编造工具结果。
-                用简体中文写出完整、可读的最终答复。
-                """)
+            .system(writerPrompt)
             .user("用户任务：\n" + prompt + "\n\n材料：\n" + materialBlock)
             .call()
             .content();

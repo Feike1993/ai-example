@@ -1,10 +1,13 @@
 package com.feike.ai.samples.chat;
 
 import com.feike.ai.core.LlmProviderRegistry;
+import com.feike.ai.core.PromptLoader;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+
+import java.io.IOException;
 
 /**
  * Chat 样例：同步补全与 token 流，对应学习路径里的 Token / 采样参数 / TTFT。
@@ -13,12 +16,15 @@ import reactor.core.publisher.Flux;
 public class ChatSampleService {
 
     private final LlmProviderRegistry registry;
+    private final String systemPrompt;
 
     /**
-     * @param registry 按请求选择 Provider
+     * @param registry     按请求选择 Provider
+     * @param promptLoader 加载 {@code prompts/chat-assistant.st}
      */
-    public ChatSampleService(LlmProviderRegistry registry) {
+    public ChatSampleService(LlmProviderRegistry registry, PromptLoader promptLoader) throws IOException {
         this.registry = registry;
+        this.systemPrompt = promptLoader.load("chat-assistant.st");
     }
 
     /**
@@ -32,7 +38,7 @@ public class ChatSampleService {
     public String chat(String prompt, Double temperature, String provider) {
         ChatClient chatClient = registry.plainClient(provider);
         // 1. 构建 Prompt
-        var spec = chatClient.prompt().user(prompt);
+        var spec = chatClient.prompt().system(systemPrompt).user(prompt);
         // 2. 可选：设置温度参数
         if (temperature != null) {
             spec = spec.options(OpenAiChatOptions.builder().temperature(temperature));
@@ -50,6 +56,7 @@ public class ChatSampleService {
     public Flux<String> stream(String prompt, String provider) {
         return registry.plainClient(provider)
             .prompt()
+            .system(systemPrompt)
             .user(prompt)
             .stream()
             .content();

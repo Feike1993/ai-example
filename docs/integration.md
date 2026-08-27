@@ -6,7 +6,18 @@
 
 1. 依赖：Spring AI BOM `2.0.0` + `spring-ai-starter-model-openai`
 2. 配置：`app.ai.providers` 多网关 + `default-provider`；RAG 另配 Embedding（本仓用 DashScope）
-3. Prompt 放 `resources/prompts/`，不要把长 prompt 写进 Service
+3. Prompt 放 `resources/prompts/`，经 `PromptLoader` 加载；不要把长 prompt 写进 Service
+
+### PromptLoader
+
+拷 `core/PromptLoader.java` 与 `resources/prompts/*.st`。启动时在 Service 构造器里 `promptLoader.load("chat-assistant.st")`；需要动态片段时用 `load("xxx.st", Map.of("key", value))` 替换 `{key}` 占位符。
+
+| 模板 | 用途 |
+| --- | --- |
+| `chat-assistant.st` | Chat 同步 / 流式 |
+| `agent-react.st` | Agent ReAct / framework |
+| `extract-ticket.st` | 结构化工单 |
+| `multiagent-*.st` | 多 Agent 编排 / 调研 / 执笔 |
 
 ## 第一期
 

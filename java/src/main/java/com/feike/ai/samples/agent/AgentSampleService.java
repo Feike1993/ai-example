@@ -2,8 +2,11 @@ package com.feike.ai.samples.agent;
 
 import com.feike.ai.core.AiProperties;
 import com.feike.ai.core.LlmProviderRegistry;
+import com.feike.ai.core.PromptLoader;
 import com.feike.ai.samples.tools.DemoTools;
 import org.springframework.stereotype.Service;
+
+import java.io.IOException;
 
 /**
  * Agent 样例：同一任务分别走显式 Loop 与 Spring AI 自动 tool-calling，便于对照。
@@ -11,24 +14,27 @@ import org.springframework.stereotype.Service;
 @Service
 public class AgentSampleService {
 
-    private static final String SYSTEM = """
-        你是会使用工具的助手。需要天气或加法时调用工具，不要编造数字。
-        得到工具结果后，用中文给出最终答案。
-        """;
-
     private final LlmProviderRegistry registry;
     private final DemoTools demoTools;
     private final AiProperties properties;
+    private final String systemPrompt;
 
     /**
-     * @param registry   同时提供 ChatModel 与 ChatClient
-     * @param demoTools  演示工具
-     * @param properties 读取默认 maxSteps
+     * @param registry     同时提供 ChatModel 与 ChatClient
+     * @param demoTools    演示工具
+     * @param properties   读取默认 maxSteps
+     * @param promptLoader 加载 {@code prompts/agent-react.st}
      */
-    public AgentSampleService(LlmProviderRegistry registry, DemoTools demoTools, AiProperties properties) {
+    public AgentSampleService(
+        LlmProviderRegistry registry,
+        DemoTools demoTools,
+        AiProperties properties,
+        PromptLoader promptLoader
+    ) throws IOException {
         this.registry = registry;
         this.demoTools = demoTools;
         this.properties = properties;
+        this.systemPrompt = promptLoader.load("agent-react.st");
     }
 
     /**
@@ -41,7 +47,7 @@ public class AgentSampleService {
      */
     public ReactAgentLoop.Trace react(String prompt, Integer maxSteps, String provider) {
         int steps = maxSteps != null ? maxSteps : properties.agent().maxSteps();
-        return ReactAgentLoop.run(registry.chatModel(provider), demoTools, SYSTEM, prompt, steps);
+        return ReactAgentLoop.run(registry.chatModel(provider), demoTools, systemPrompt, prompt, steps);
     }
 
     /**
@@ -54,7 +60,7 @@ public class AgentSampleService {
     public String framework(String prompt, String provider) {
         return registry.plainClient(provider)
             .prompt()
-            .system(SYSTEM)
+            .system(systemPrompt)
             .user(prompt)
             .tools(demoTools)
             .call()
