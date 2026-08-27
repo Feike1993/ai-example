@@ -82,7 +82,8 @@ public class MultiAgentSampleService {
                 agents.add(new AgentTraceView("writer", "执笔", List.of(), null));
                 return new MultiAgentResult(finalAnswer, agents, reachedMax);
             }
-
+            // worker_a 出现在判断里，是因为路由层把旧名字当别名兼容（Python 版也一样：{"researcher", "worker_a"}）。
+            // 类注释里写的 “WorkerA / WorkerB” 是角色昵称，真正约定给模型的 token 是 researcher / writer。
             if ("researcher".equalsIgnoreCase(decision.next()) || "worker_a".equalsIgnoreCase(decision.next())) {
                 String task = decision.task() == null || decision.task().isBlank() ? prompt : decision.task();
                 ReactAgentLoop.Trace trace = ReactAgentLoop.run(
