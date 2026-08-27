@@ -268,6 +268,75 @@ export function streamChat(
 }
 
 /**
+ * 订阅 Agent ReAct SSE。先处理 event:steps，再追加终答增量。
+ */
+export function streamAgentReact(
+  prompt: string,
+  provider: string,
+  maxSteps: number | undefined,
+  onSteps: (steps: AgentStep[], reachedMaxSteps: boolean) => void,
+  onChunk: (text: string) => void,
+  onDone: () => void,
+  onError: (error: Error) => void,
+): () => void {
+  const params = new URLSearchParams({ prompt })
+  if (provider) {
+    params.set('provider', provider)
+  }
+  if (typeof maxSteps === 'number') {
+    params.set('maxSteps', String(maxSteps))
+  }
+  const url = `${API_BASE}/agent/react/stream?${params.toString()}`
+  const source = new EventSource(url)
+  let received = false
+  let closed = false
+
+  const finish = (error?: Error) => {
+    if (closed) {
+      return
+    }
+    closed = true
+    source.close()
+    if (error) {
+      onError(error)
+    } else {
+      onDone()
+    }
+  }
+
+  source.addEventListener('steps', (event) => {
+    received = true
+    try {
+      const payload = JSON.parse((event as MessageEvent).data) as {
+        steps?: AgentStep[]
+        reachedMaxSteps?: boolean
+      }
+      onSteps(payload.steps ?? [], payload.reachedMaxSteps === true)
+    } catch {
+      onSteps([], false)
+    }
+  })
+
+  source.onmessage = (event) => {
+    if (event.data === '' || event.data === '[DONE]') {
+      return
+    }
+    received = true
+    onChunk(decodeSseData(event.data))
+  }
+
+  source.onerror = () => {
+    if (received) {
+      finish()
+      return
+    }
+    finish(new Error('无法连接后端或流式中断，请确认 Java 服务已在 8080 启动'))
+  }
+
+  return () => finish()
+}
+
+/**
  * 订阅 RAG SSE。先处理 event:sources，再追加文本增量。
  */
 export function streamRag(

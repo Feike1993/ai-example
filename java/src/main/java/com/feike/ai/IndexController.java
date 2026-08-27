@@ -27,7 +27,7 @@ public class IndexController {
             "chat", "POST /ai-example/chat  GET /ai-example/chat/stream?prompt=",
             "structured", "POST /ai-example/structured/ticket",
             "tools", "POST /ai-example/tools",
-            "agentReact", "POST /ai-example/agent/react",
+            "agentReact", "POST /ai-example/agent/react  GET /ai-example/agent/react/stream?prompt=",
             "agentFramework", "POST /ai-example/agent/framework",
             "mcp", "GET /ai-example/mcp/tools  POST /ai-example/mcp/chat",
             "rag", "POST /ai-example/rag/ingest  POST /ai-example/rag/query  GET /ai-example/rag/query/stream",

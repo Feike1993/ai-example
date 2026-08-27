@@ -6,9 +6,14 @@ import com.feike.ai.core.PromptLoader;
 import com.feike.ai.core.TokenUsage;
 import com.feike.ai.core.TokenUsageExtractor;
 import com.feike.ai.samples.tools.DemoTools;
+import org.springframework.ai.chat.messages.Message;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.io.IOException;
+import java.util.List;
 
 /**
  * Agent 样例：同一任务分别走显式 Loop 与 Spring AI 自动 tool-calling，便于对照。
@@ -50,6 +55,41 @@ public class AgentSampleService {
     public ReactAgentLoop.Trace react(String prompt, Integer maxSteps, String provider) {
         int steps = maxSteps != null ? maxSteps : properties.agent().maxSteps();
         return ReactAgentLoop.run(registry.chatModel(provider), demoTools, systemPrompt, prompt, steps);
+    }
+
+    /**
+     * ReAct 流式准备：工具轮在弹性线程同步执行，避免阻塞事件循环。
+     * <p>
+     * 用 {@link Mono} 而不是直接调用：准备结果只有一份（0～1 个元素），
+     * {@code fromCallable} 在订阅时才执行阻塞的 {@code prepareStream}，
+     * {@code subscribeOn(boundedElastic)} 把它放到弹性线程池。
+     *
+     * @param prompt   用户任务
+     * @param maxSteps 为空则用配置默认值
+     * @param provider Provider id，空则用默认 DeepSeek
+     * @return 含 steps 与终答路径的准备结果
+     */
+    public Mono<ReactAgentLoop.StreamPrep> prepareReactStream(String prompt, Integer maxSteps, String provider) {
+        int steps = maxSteps != null ? maxSteps : properties.agent().maxSteps();
+        return Mono.fromCallable(() ->
+                ReactAgentLoop.prepareStream(
+                    registry.chatModel(provider), demoTools, systemPrompt, prompt, steps))
+            .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    /**
+     * 在已有消息（含 tool 观察）上不挂 tools 地流式生成终答。
+     *
+     * @param messages 完整消息列表
+     * @param provider Provider id
+     * @return 增量文本
+     */
+    public Flux<String> streamFinalAnswer(List<Message> messages, String provider) {
+        return registry.plainClient(provider)
+            .prompt()
+            .messages(messages)
+            .stream()
+            .content();
     }
 
     /**

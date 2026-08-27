@@ -13,6 +13,8 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -68,6 +70,35 @@ class ReactAgentLoopTest {
         assertTrue(trace.reachedMaxSteps());
         assertEquals(2, trace.steps().size());
         verify(chatModel, times(2)).call(any(Prompt.class));
+    }
+
+    @Test
+    void prepareStreamShouldImmediateWhenPlainText() {
+        ChatModel chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(textResponse("直接回答"));
+
+        ReactAgentLoop.StreamPrep prep = ReactAgentLoop.prepareStream(
+            chatModel, new DemoTools(), "sys", "hi", 8);
+
+        assertEquals("直接回答", prep.finalAnswer());
+        assertTrue(prep.steps().isEmpty());
+        assertNull(prep.messages());
+    }
+
+    @Test
+    void prepareStreamShouldPendingAfterTools() {
+        ChatModel chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(toolResponse("add", "{\"a\":3,\"b\":5}"));
+
+        ReactAgentLoop.StreamPrep prep = ReactAgentLoop.prepareStream(
+            chatModel, new DemoTools(), "sys", "3+5", 8);
+
+        assertNull(prep.finalAnswer());
+        assertEquals(1, prep.steps().size());
+        assertEquals("add", prep.steps().getFirst().toolName());
+        assertNotNull(prep.messages());
+        assertTrue(prep.messages().size() >= 3);
+        verify(chatModel, times(1)).call(any(Prompt.class));
     }
 
     private static ChatResponse textResponse(String text) {

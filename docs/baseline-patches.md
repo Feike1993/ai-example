@@ -119,9 +119,9 @@ curl -s http://localhost:8080/ai-example/rag/query \
 # 同步对照
 curl -s http://localhost:8080/ai-example/agent/react \
   -H 'Content-Type: application/json' \
-  -d '{"prompt":"查一下北京天气"}' | jq '.steps, .answer'
+  -d '{"prompt":"查一下北京天气"}' | jq '.steps, .finalAnswer'
 
-# 流式：首段含 steps，后续为 answer token
+# 流式：首段 event:steps，后续为 answer token
 curl -N 'http://localhost:8080/ai-example/agent/react/stream?prompt=查一下北京天气'
 ```
 
