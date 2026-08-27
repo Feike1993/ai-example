@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -85,11 +86,15 @@ public class RagSampleController {
     ) {
         List<Document> hits = ragSampleService.retrieve(question, topK);
         List<RagSampleService.SourceView> sources = ragSampleService.toSources(hits);
+        boolean retrievalEmpty = ragSampleService.isRetrievalEmpty(hits);
         String sourcesJson;
         try {
-            sourcesJson = jsonMapper.writeValueAsString(Map.of("sources", sources));
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("sources", sources);
+            payload.put("retrievalEmpty", retrievalEmpty);
+            sourcesJson = jsonMapper.writeValueAsString(payload);
         } catch (Exception ex) {
-            sourcesJson = "{\"sources\":[]}";
+            sourcesJson = "{\"sources\":[],\"retrievalEmpty\":true}";
         }
         ServerSentEvent<String> sourcesEvent = ServerSentEvent.<String>builder()
             .event("sources")

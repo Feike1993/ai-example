@@ -57,7 +57,7 @@ public record AiProperties(
             embedding = new Embedding("text-embedding-v3", 1024);
         }
         if (rag == null) {
-            rag = new Rag(true, 4, 400);
+            rag = new Rag(true, 4, 400, 1, true);
         }
         if (context == null) {
             context = new ContextSettings(24, 2000, 6);
@@ -145,17 +145,22 @@ public record AiProperties(
     /**
      * RAG 样例开关与检索参数。
      *
-     * @param enabled   为 false 时不注册 Embedding / VectorStore 相关 Bean（仍可跑 MCP）
-     * @param topK      在线检索返回条数
-     * @param chunkSize Token 分块目标大小
+     * @param enabled           为 false 时不注册 Embedding / VectorStore 相关 Bean（仍可跑 MCP）
+     * @param topK              在线检索返回条数
+     * @param chunkSize         Token 分块目标大小
+     * @param minSources        命中条数低于此值视为空检索（默认 1，即 hits 为空）
+     * @param skipLlmWhenEmpty  空检索时是否跳过 LLM、直接返回固定拒答（默认 true）
      */
-    public record Rag(boolean enabled, int topK, int chunkSize) {
+    public record Rag(boolean enabled, int topK, int chunkSize, int minSources, boolean skipLlmWhenEmpty) {
         public Rag {
             if (topK < 1) {
                 topK = 1;
             }
             if (chunkSize < 50) {
                 chunkSize = 50;
+            }
+            if (minSources < 1) {
+                minSources = 1;
             }
         }
     }

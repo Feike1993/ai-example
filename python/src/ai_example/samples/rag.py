@@ -23,6 +23,12 @@ RAG = 检索 + 生成。离线分块 Embedding 入库；在线相似度检索后
 """,
 }
 
+# 与 Java RagSampleService.EMPTY_REFUSAL 对齐
+EMPTY_REFUSAL = (
+    "根据当前知识库的检索结果，没有找到与问题相关的内容，因此无法回答。"
+    "请换个问法，或先确认已 ingest 相关文档。"
+)
+
 
 @dataclass
 class Chunk:
@@ -31,6 +37,15 @@ class Chunk:
     source: str
     text: str
     embedding: list[float]
+
+
+@dataclass
+class RagAnswer:
+    """对照 Java RagQueryResult 的回答结构。"""
+
+    answer: str
+    sources: list[str]
+    retrieval_empty: bool
 
 
 def _dashscope_client() -> OpenAI:
@@ -107,8 +122,24 @@ def retrieve(store: list[Chunk], question: str, top_k: int = 3, client: OpenAI |
     return ranked[:top_k]
 
 
-def answer(question: str, hits: list[Chunk]) -> str:
-    """用当前 Chat Provider 基于检索上下文生成回答。"""
+def is_retrieval_empty(hits: list[Chunk], min_sources: int = 1) -> bool:
+    """命中条数是否低于 min_sources（与 Java 对齐）。"""
+    return len(hits) < min_sources
+
+
+def answer(
+    question: str,
+    hits: list[Chunk],
+    *,
+    min_sources: int = 1,
+    skip_llm_when_empty: bool = True,
+) -> RagAnswer:
+    """用当前 Chat Provider 基于检索上下文生成回答；空检索可短路拒答。"""
+    empty = is_retrieval_empty(hits, min_sources)
+    sources = [h.source for h in hits]
+    if empty and skip_llm_when_empty:
+        return RagAnswer(answer=EMPTY_REFUSAL, sources=sources, retrieval_empty=True)
+
     from ai_example.core.client import openai_client, default_model
 
     context = "\n\n".join(f"[{i+1}] source={h.source}\n{h.text}" for i, h in enumerate(hits)) or "（无检索结果）"
@@ -118,12 +149,13 @@ def answer(question: str, hits: list[Chunk]) -> str:
         messages=[
             {
                 "role": "system",
-                "content": "只根据检索上下文回答；不足时说不知道。用简体中文。",
+                "content": "只根据检索上下文回答；不足或为空时明确说不知道，不要编造。用简体中文。",
             },
             {"role": "user", "content": f"检索上下文：\n{context}\n\n用户问题：{question}"},
         ],
     )
-    return response.choices[0].message.content or ""
+    text = response.choices[0].message.content or ""
+    return RagAnswer(answer=text, sources=sources, retrieval_empty=empty)
 
 
 def main() -> None:
@@ -134,7 +166,14 @@ def main() -> None:
     question = "本项目第一期学了什么？RAG 是什么？"
     hits = retrieve(store, question)
     print("sources:", [h.source for h in hits])
-    print(answer(question, hits))
+    result = answer(question, hits)
+    print(f"retrieval_empty={result.retrieval_empty}")
+    print(result.answer)
+
+    empty_demo = answer("无关问题", [], skip_llm_when_empty=True)
+    print("--- 空检索演示 ---")
+    print(f"retrieval_empty={empty_demo.retrieval_empty}")
+    print(empty_demo.answer)
 
 
 if __name__ == "__main__":

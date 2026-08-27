@@ -94,10 +94,10 @@ curl -s http://localhost:8080/ai-example/rag/query \
   -H 'Content-Type: application/json' \
   -d '{"question":"什么是 RAG"}' | jq '.retrievalEmpty, .sources'
 
-# 故意低召回：应 retrievalEmpty=true，且不编造语料外内容
+# 故意低召回 / 空命中：未 ingest 或索引无相关 chunk 时应 retrievalEmpty=true
 curl -s http://localhost:8080/ai-example/rag/query \
   -H 'Content-Type: application/json' \
-  -d '{"question":"完全不存在的虚构关键词 xyz123"}' | jq '.retrievalEmpty, .content'
+  -d '{"question":"完全不存在的虚构关键词 xyz123"}' | jq '.retrievalEmpty, .answer, .sources'
 ```
 
 ---

@@ -60,6 +60,9 @@ app:
       enabled: ${RAG_ENABLED:true}
       top-k: 4
       chunk-size: 400
+      # 命中条数 < min-sources 视为空检索；空检索默认跳过 LLM 直接拒答
+      min-sources: ${RAG_MIN_SOURCES:1}
+      skip-llm-when-empty: ${RAG_SKIP_LLM_WHEN_EMPTY:true}
     providers:
       deepseek:
         label: DeepSeek

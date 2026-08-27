@@ -27,6 +27,9 @@ import java.util.Map;
 
 /**
  * RAG 样例：内置 Markdown → 分块 Embedding 写入 pgvector，再检索拼上下文生成。
+ * <p>
+ * 命中条数低于 {@code app.ai.rag.min-sources} 时标记 {@code retrievalEmpty}；
+ * 若开启 {@code skip-llm-when-empty} 则直接固定拒答，避免模型编造。
  */
 @Service
 @ConditionalOnProperty(prefix = "app.ai.rag", name = "enabled", havingValue = "true", matchIfMissing = true)
@@ -38,6 +41,16 @@ public class RagSampleService {
     public static final String META_CORPUS = "corpus";
     public static final String CORPUS_DEMO = "ai-example-demo";
 
+    /** 空检索且跳过 LLM 时的固定拒答文案。 */
+    public static final String EMPTY_REFUSAL =
+        "根据当前知识库的检索结果，没有找到与问题相关的内容，因此无法回答。"
+            + "请换个问法，或先确认已 ingest 相关文档。";
+
+    private static final String SYSTEM_GROUNDED = """
+        你是助手。只根据「检索上下文」回答用户问题；上下文不足或为空时明确说不知道，不要编造。
+        回答用简体中文。
+        """;
+
     private final VectorStore vectorStore;
     private final LlmProviderRegistry registry;
     private final AiProperties.Rag ragSettings;
@@ -46,7 +59,7 @@ public class RagSampleService {
     /**
      * @param vectorStore  pgvector
      * @param registry     Chat / Embedding
-     * @param ragSettings  topK / chunkSize
+     * @param ragSettings  topK / chunkSize / 空检索策略
      */
     public RagSampleService(VectorStore vectorStore, LlmProviderRegistry registry, AiProperties.Rag ragSettings) {
         this.vectorStore = vectorStore;
@@ -92,7 +105,7 @@ public class RagSampleService {
     }
 
     /**
-     * 检索 topK + 拼上下文 + 同步生成，并回传 sources。
+     * 检索 topK + 拼上下文 + 同步生成，并回传 sources / retrievalEmpty。
      *
      * @param question 用户问题
      * @param provider Chat Provider
@@ -101,16 +114,23 @@ public class RagSampleService {
      */
     public RagQueryResult query(String question, String provider, Integer topK) {
         List<Document> hits = retrieve(question, topK);
+        boolean empty = isRetrievalEmpty(hits);
+        if (empty && ragSettings.skipLlmWhenEmpty()) {
+            log.info("RAG 空检索短路拒答: question={}, hits={}", question, hits.size());
+            return new RagQueryResult(EMPTY_REFUSAL, toSources(hits), true, null);
+        }
         String context = buildContext(hits);
         var call = registry.plainClient(provider)
             .prompt()
-            .system("""
-                你是助手。只根据「检索上下文」回答用户问题；上下文不足时明确说不知道，不要编造。
-                回答用简体中文。
-                """)
+            .system(SYSTEM_GROUNDED)
             .user("检索上下文：\n" + context + "\n\n用户问题：" + question)
             .call();
-        return new RagQueryResult(call.content(), toSources(hits), TokenUsageExtractor.from(call.chatResponse()));
+        return new RagQueryResult(
+            call.content(),
+            toSources(hits),
+            empty,
+            TokenUsageExtractor.from(call.chatResponse())
+        );
     }
 
     /**
@@ -127,6 +147,8 @@ public class RagSampleService {
 
     /**
      * 在已检索结果上做流式生成，避免 Controller 重复检索。
+     * <p>
+     * 空检索且 {@code skipLlmWhenEmpty} 时直接推送固定拒答，不调 LLM。
      *
      * @param question 用户问题
      * @param provider Chat Provider
@@ -134,13 +156,14 @@ public class RagSampleService {
      * @return 增量文本
      */
     public Flux<String> streamAnswer(String question, String provider, List<Document> hits) {
+        if (isRetrievalEmpty(hits) && ragSettings.skipLlmWhenEmpty()) {
+            log.info("RAG 流式空检索短路拒答: question={}, hits={}", question, hits.size());
+            return Flux.just(EMPTY_REFUSAL);
+        }
         String context = buildContext(hits);
         return registry.plainClient(provider)
             .prompt()
-            .system("""
-                你是助手。只根据「检索上下文」回答用户问题；上下文不足时明确说不知道，不要编造。
-                回答用简体中文。
-                """)
+            .system(SYSTEM_GROUNDED)
             .user("检索上下文：\n" + context + "\n\n用户问题：" + question)
             .stream()
             .content();
@@ -166,6 +189,17 @@ public class RagSampleService {
     }
 
     /**
+     * 命中条数是否低于 {@code min-sources}（含完全无命中）。
+     *
+     * @param hits 检索结果
+     * @return true 表示空 / 低召回
+     */
+    public boolean isRetrievalEmpty(List<Document> hits) {
+        int size = hits == null ? 0 : hits.size();
+        return size < ragSettings.minSources();
+    }
+
+    /**
      * 把命中文档转成前端可展示的摘要。
      *
      * @param hits 检索结果
@@ -173,6 +207,9 @@ public class RagSampleService {
      */
     public List<SourceView> toSources(List<Document> hits) {
         List<SourceView> views = new ArrayList<>();
+        if (hits == null) {
+            return views;
+        }
         for (Document doc : hits) {
             String text = doc.getText() == null ? "" : doc.getText();
             String excerpt = text.length() > 160 ? text.substring(0, 160) + "…" : text;
@@ -193,7 +230,7 @@ public class RagSampleService {
      * @return 拼接的文本
      */
     private static String buildContext(List<Document> hits) {
-        if (hits.isEmpty()) {
+        if (hits == null || hits.isEmpty()) {
             return "（无检索结果）";
         }
         StringBuilder sb = new StringBuilder();
@@ -244,11 +281,17 @@ public class RagSampleService {
     public record IngestResult(int chunkCount, List<String> sources) {}
 
     /**
-     * @param answer  模型回答
-     * @param sources 检索来源摘要
-     * @param usage   token 用量，网关未返回时为 {@code null}
+     * @param answer          模型回答或空检索固定拒答
+     * @param sources         检索来源摘要（空检索时通常为空列表）
+     * @param retrievalEmpty  命中是否低于 min-sources
+     * @param usage           token 用量；短路拒答或网关未返回时为 {@code null}
      */
-    public record RagQueryResult(String answer, List<SourceView> sources, TokenUsage usage) {}
+    public record RagQueryResult(
+        String answer,
+        List<SourceView> sources,
+        boolean retrievalEmpty,
+        TokenUsage usage
+    ) {}
 
     /**
      * @param id       chunk id

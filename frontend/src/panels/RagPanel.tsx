@@ -33,6 +33,7 @@ export function RagPanel({ provider }: { provider: string }) {
   const [result, setResult] = useState<RagQueryResponse | null>(null)
   const [streamText, setStreamText] = useState('')
   const [sources, setSources] = useState<RagSource[]>([])
+  const [retrievalEmpty, setRetrievalEmpty] = useState(false)
   const [elapsedMs, setElapsedMs] = useState<number | null>(null)
   const [ttftMs, setTtftMs] = useState<number | null>(null)
   const stopRef = useRef<(() => void) | null>(null)
@@ -68,6 +69,7 @@ export function RagPanel({ provider }: { provider: string }) {
     setResult(null)
     setStreamText('')
     setSources([])
+    setRetrievalEmpty(false)
     setElapsedMs(null)
     setTtftMs(null)
     setLoading(true)
@@ -80,6 +82,7 @@ export function RagPanel({ provider }: { provider: string }) {
       setElapsedMs(Math.round(performance.now() - started))
       setResult(data)
       setSources(data.sources ?? [])
+      setRetrievalEmpty(data.retrievalEmpty === true)
     } catch (err) {
       const message = describeError(err)
       setError(message)
@@ -94,6 +97,7 @@ export function RagPanel({ provider }: { provider: string }) {
     setResult(null)
     setStreamText('')
     setSources([])
+    setRetrievalEmpty(false)
     setElapsedMs(null)
     setTtftMs(null)
     setLoading(true)
@@ -102,13 +106,16 @@ export function RagPanel({ provider }: { provider: string }) {
     let first = true
     let acc = ''
     let latestSources: RagSource[] = []
+    let latestEmpty = false
 
     stopRef.current = streamRag(
       question,
       provider,
-      (nextSources) => {
+      (nextSources, empty) => {
         latestSources = nextSources
+        latestEmpty = empty
         setSources(nextSources)
+        setRetrievalEmpty(empty)
       },
       (chunk) => {
         if (first) {
@@ -122,7 +129,12 @@ export function RagPanel({ provider }: { provider: string }) {
         stopRef.current = null
         setStreaming(false)
         setLoading(false)
-        setResult({ answer: acc, sources: latestSources, usage: null })
+        setResult({
+          answer: acc,
+          sources: latestSources,
+          retrievalEmpty: latestEmpty,
+          usage: null,
+        })
       },
       (err) => {
         stopRef.current = null
@@ -192,12 +204,17 @@ export function RagPanel({ provider }: { provider: string }) {
         }
         result={
           <ResultBody error={error} emptyHint="ingest 后提问，答案与 sources 会出现在这里。">
-            {(streaming || streamText || result || sources.length > 0) && (
+            {(streaming || streamText || result || sources.length > 0 || retrievalEmpty) && (
               <Stack gap="sm">
                 {mode === 'sync' ? (
                   <RequestMeta elapsedMs={elapsedMs} usage={result?.usage} />
                 ) : (
                   <RequestMeta elapsedMs={ttftMs} elapsedLabel="TTFT" />
+                )}
+                {retrievalEmpty && (
+                  <Badge color="orange" variant="light">
+                    retrievalEmpty：无足够命中，已拒答
+                  </Badge>
                 )}
                 {sources.length > 0 && (
                   <div>

@@ -69,6 +69,7 @@ export type RagSource = {
 export type RagQueryResponse = {
   answer: string
   sources: RagSource[]
+  retrievalEmpty: boolean
   usage: TokenUsage | null
 }
 
@@ -272,7 +273,7 @@ export function streamChat(
 export function streamRag(
   question: string,
   provider: string,
-  onSources: (sources: RagSource[]) => void,
+  onSources: (sources: RagSource[], retrievalEmpty: boolean) => void,
   onChunk: (text: string) => void,
   onDone: () => void,
   onError: (error: Error) => void,
@@ -302,10 +303,13 @@ export function streamRag(
   source.addEventListener('sources', (event) => {
     received = true
     try {
-      const payload = JSON.parse((event as MessageEvent).data) as { sources?: RagSource[] }
-      onSources(payload.sources ?? [])
+      const payload = JSON.parse((event as MessageEvent).data) as {
+        sources?: RagSource[]
+        retrievalEmpty?: boolean
+      }
+      onSources(payload.sources ?? [], payload.retrievalEmpty === true)
     } catch {
-      onSources([])
+      onSources([], false)
     }
   })
 
