@@ -7,6 +7,19 @@
 - **现状**：`已覆盖` / `候选` / `明确不做（本仓）`
 - **若要做**：建议挂到第几期或「业务项目自行实现」
 
+## v0.2.0 Baseline 覆盖范围
+
+**发版节点**：一至三期样例（01–08）+ [基础补丁 A1–A5](baseline-patches.md) 全部合并并通过自测后，打 tag `v0.2.0`。
+
+| 范围 | 包含 | 不包含（见下文候选 / 第四期） |
+| --- | --- | --- |
+| 样例 | Chat、结构化、Tools、ReAct、MCP、RAG、上下文、多 Agent | Hybrid RAG、golden 评测 |
+| 横切补丁 | Prompt 外置（A1）、同步 `TokenUsage`（A2）、RAG 空检索拒答（A3）、Agent 答案流式（A4） | SSE token 累加、逐步 tool SSE |
+| 基础设施 | 进程内会话、同进程 MCP、pgvector 演示 | Redis、持久会话、MCP 第二进程 |
+| 产品面 | Vite playground | 知识库后台、评测看板、鉴权限流 |
+
+第四期在 `v0.2.0` 之后于分支 `cursor/phase4-hybrid-eval` 开发；进阶入口见 [learning-path.md](learning-path.md)。
+
 ## 已在后续期覆盖（履历）
 
 | 主题 | 首次提出 | 现状 | 覆盖于 | 备注 |
@@ -16,6 +29,10 @@
 | MCP Server / Client | 第一期不做 | 已覆盖（学习形态） | 第二期 | 同进程暴露 `/mcp`；生产拆分仍为候选 |
 | 跨会话记忆 / 上下文压缩 | 一期 Agent 仅当轮消息；二期占位 | 已覆盖（进程内） | 第三期 | trim / summarize；非 Redis 持久化 |
 | 多 Agent | 二期刻意不做 | 已覆盖（同进程） | 第三期 | Orchestrator–Subagent + 响应内轨迹 |
+| HTTP 响应返回 token 用量（同步接口） | 维护期候选 | 已覆盖 | v0.2.0 补丁 A2 | `TokenUsage` DTO；Chat / Tools / Structured 至少三项 |
+| Chat / Agent system prompt 外置 | integration 约定 | 已覆盖 | v0.2.0 补丁 A1 | `PromptLoader` + `chat-assistant.st` / `agent-react.st` |
+| RAG 空检索拒答 | 第二期 RAG 入门 | 已覆盖 | v0.2.0 补丁 A3 | `retrievalEmpty` + 短路；混合检索仍属第四期 |
+| Agent ReAct 最终答案流式 | 第二期后横切 | 已覆盖（最小） | v0.2.0 补丁 A4 | 仅 answer SSE；逐步 tool SSE 仍为候选 |
 
 ## 仍刻意不做（候选）
 
@@ -61,7 +78,8 @@
 
 | 主题 | 首次提出 | 现状 | 为何当时不做 | 若要做 |
 | --- | --- | --- | --- | --- |
-| HTTP 响应返回 token 用量（prompt / completion / total） | 维护期 | 候选 | 现状仅 `.content()`；流式与多轮 Agent 累加需额外约定，暂未定是否做 | 待定：同步接口统一 `TokenUsage` DTO，再考虑 SSE 收尾与前端展示 |
+| SSE / 流式 token 累加、Agent 逐步 usage | v0.2.0 补丁 A2 后 | 候选 | 同步 `TokenUsage` 已够建立计费直觉；流式收尾与多轮累加需额外约定 | 业务项目或进阶 backlog |
+| Agent 逐步 tool_call 实时 SSE | v0.2.0 补丁 A4 后 | 候选 | 仅最终答案流式即可演示 TTFT；逐步 SSE 复杂度高 | 业务项目 |
 | 鉴权、限流、审计落库 | 全程 | 明确不做（本仓） | 学习样例无安全产品面 | 业务项目 |
 | 有副作用的真实外部工具 | 第一期 | 明确不做（本仓） | 演示工具保持幂等、可离线 | 业务项目 |
 | 仓库根目录 `package.json` / `pnpm start` | 前端引入后 | 明确不做（本仓） | 避免与 Vite 工程混淆 | — |
