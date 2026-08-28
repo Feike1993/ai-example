@@ -77,16 +77,16 @@ body::before {
 }
 
 .promo-entry {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
+  display: block;
   flex-shrink: 0;
-  margin-top: 0.75rem;
-  padding: 0.75rem 0.85rem;
+  margin-top: 0.5rem;
+  padding: 0.55rem 0.65rem;
   border-radius: 8px;
   border-top: 1px solid rgba(20, 36, 28, 0.1);
   text-decoration: none;
   color: #2a6f5f;
+  font-size: 0.78rem;
+  font-weight: 600;
   transition: background 0.15s;
 }
 
@@ -109,8 +109,40 @@ body::before {
 }
 
 .nav-item {
-  border-radius: 8px;
-  margin-bottom: 4px;
+  border-radius: 6px;
+}
+
+.nav-item-compact {
+  --nl-padding: 6px 8px;
+}
+
+.nav-item-compact .mantine-NavLink-root {
+  padding: 6px 8px;
+  min-height: unset;
+}
+
+.nav-item-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.nav-item-index {
+  flex-shrink: 0;
+  width: 1.35rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: rgba(20, 36, 28, 0.45);
+}
+
+.nav-item-label {
+  font-size: 0.84rem;
+  font-weight: 500;
+}
+
+.nav-item[data-active] .nav-item-index {
+  color: rgba(243, 248, 245, 0.72);
 }
 
 .nav-item[data-active] {
@@ -122,18 +154,12 @@ body::before {
   color: rgba(243, 248, 245, 0.72);
 }
 
-.nav-section-label {
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgba(20, 36, 28, 0.55);
+.nav-stage-switch {
   margin-bottom: 0.35rem;
 }
 
-.nav-section-label--advanced {
-  margin-top: 0.75rem;
-  color: #1e4d42;
+.nav-stage-hint {
+  line-height: 1.2;
 }
 
 .nav-item--advanced[data-active] {

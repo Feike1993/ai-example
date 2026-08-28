@@ -1,5 +1,5 @@
-import { AppShell, NavLink, Select, Stack, Text } from '@mantine/core'
-import { useEffect, useState } from 'react'
+import { AppShell, NavLink, SegmentedControl, Select, Stack, Text } from '@mantine/core'
+import { useEffect, useMemo, useState } from 'react'
 import { listProviders, type ProviderView } from './api'
 import { EvalPanel } from './panels/EvalPanel'
 import { HybridRagPanel } from './panels/HybridRagPanel'
@@ -11,10 +11,20 @@ import { MultiAgentPanel } from './panels/MultiAgentPanel'
 import { RagPanel } from './panels/RagPanel'
 import { StructuredPanel } from './panels/StructuredPanel'
 import { ToolsPanel } from './panels/ToolsPanel'
-import { stageLabels } from './shared/brand'
-import { advancedSamples, baselineSamples, type PlaygroundSampleId } from './shared/samples'
+import { stageHints, stageLabels, type LearningStage } from './shared/brand'
+import {
+  advancedSamples,
+  baselineSamples,
+  type AdvancedSampleMeta,
+  type BaselineSampleMeta,
+  type PlaygroundSampleId,
+} from './shared/samples'
 
 const PROVIDER_STORAGE_KEY = 'ai-example.provider'
+
+function sampleStage(id: PlaygroundSampleId): LearningStage {
+  return advancedSamples.some((item) => item.id === id) ? 'advanced' : 'baseline'
+}
 
 /**
  * 样例 playground 壳：侧栏品牌、模型选择、各期接口面板。
@@ -23,6 +33,12 @@ function App() {
   const [sample, setSample] = useState<PlaygroundSampleId>('chat')
   const [provider, setProvider] = useState('deepseek')
   const [providers, setProviders] = useState<ProviderView[]>([])
+
+  const stage = sampleStage(sample)
+  const visibleSamples = useMemo(
+    () => (stage === 'baseline' ? baselineSamples : advancedSamples),
+    [stage],
+  )
 
   useEffect(() => {
     void listProviders()
@@ -43,6 +59,15 @@ function App() {
       })
   }, [])
 
+  const onStageChange = (value: string) => {
+    const next = value as LearningStage
+    if (next === stage) {
+      return
+    }
+    const list = next === 'baseline' ? baselineSamples : advancedSamples
+    setSample(list[0].id)
+  }
+
   const onProviderChange = (value: string | null) => {
     if (!value) {
       return
@@ -55,49 +80,49 @@ function App() {
 
   return (
     <AppShell
-      navbar={{ width: 280, breakpoint: 'sm' }}
+      navbar={{ width: 248, breakpoint: 'sm' }}
       padding="lg"
       classNames={{ navbar: 'app-navbar', main: 'app-main' }}
     >
-      <AppShell.Navbar p="lg" className="app-navbar-inner">
+      <AppShell.Navbar p="md" className="app-navbar-inner">
         <div className="app-navbar-body">
-          <Stack gap={4} mb="xl">
+          <Stack gap={2} mb="md">
             <div className="wordmark">
               <span className="wordmark-mark">AI</span>
               <span className="wordmark-rest">Example</span>
             </div>
-            <Text size="sm" c="dimmed">
+            <Text size="xs" c="dimmed">
               接口 playground
             </Text>
           </Stack>
-          <Text className="nav-section-label">{stageLabels.baseline}</Text>
-          <Stack gap={4} mb="md">
-            {baselineSamples.map((item) => (
-              <NavLink
+          <SegmentedControl
+            className="nav-stage-switch"
+            fullWidth
+            size="xs"
+            value={stage}
+            onChange={onStageChange}
+            data={[
+              { value: 'baseline', label: stageLabels.baseline },
+              { value: 'advanced', label: stageLabels.advanced },
+            ]}
+          />
+          <Text size="xs" c="dimmed" mb="xs" className="nav-stage-hint">
+            {stageHints[stage]}
+          </Text>
+          <Stack gap={2} mb="md">
+            {visibleSamples.map((item) => (
+              <CompactNavItem
                 key={item.id}
-                className="nav-item"
-                label={item.label}
-                description={item.description}
+                item={item}
                 active={sample === item.id}
-                onClick={() => setSample(item.id)}
-              />
-            ))}
-          </Stack>
-          <Text className="nav-section-label nav-section-label--advanced">{stageLabels.advanced}</Text>
-          <Stack gap={4} mb="lg">
-            {advancedSamples.map((item) => (
-              <NavLink
-                key={item.id}
-                className="nav-item nav-item--advanced"
-                label={item.label}
-                description={item.description}
-                active={sample === item.id}
-                onClick={() => setSample(item.id)}
+                advanced={stage === 'advanced'}
+                onSelect={() => setSample(item.id)}
               />
             ))}
           </Stack>
           <Select
             label="模型"
+            size="xs"
             description={selected ? selected.model : '默认 DeepSeek'}
             data={providers.map((item) => ({
               value: item.id,
@@ -109,8 +134,7 @@ function App() {
           />
         </div>
         <a className="promo-entry" href="/promo.html">
-          <span className="promo-entry-label">基础闭环宣传页</span>
-          <span className="promo-entry-desc">8 样例学习路径</span>
+          宣传页 · 8 样例路径 →
         </a>
       </AppShell.Navbar>
       <AppShell.Main>
@@ -126,6 +150,32 @@ function App() {
         {sample === 'eval' && <EvalPanel provider={provider} />}
       </AppShell.Main>
     </AppShell>
+  )
+}
+
+function CompactNavItem({
+  item,
+  active,
+  advanced,
+  onSelect,
+}: {
+  item: BaselineSampleMeta | AdvancedSampleMeta
+  active: boolean
+  advanced: boolean
+  onSelect: () => void
+}) {
+  return (
+    <NavLink
+      className={`nav-item nav-item-compact${advanced ? ' nav-item--advanced' : ''}`}
+      label={
+        <span className="nav-item-row">
+          <span className="nav-item-index">{String(item.index).padStart(2, '0')}</span>
+          <span className="nav-item-label">{item.label}</span>
+        </span>
+      }
+      active={active}
+      onClick={onSelect}
+    />
   )
 }
 

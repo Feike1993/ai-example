@@ -27,8 +27,14 @@ export const phaseLabels: Record<PhaseId, string> = {
   3: '第三期 · 上下文 + 多 Agent',
 }
 
-/** Playground 侧栏分组标题。 */
+/** Playground 侧栏阶段切换短标签。 */
 export const stageLabels: Record<LearningStage, string> = {
-  baseline: '基础闭环 · v0.2.0',
-  advanced: '进阶 · 第四期',
+  baseline: '基础',
+  advanced: '进阶',
+}
+
+/** Playground 阶段切换副标题（一行提示）。 */
+export const stageHints: Record<LearningStage, string> = {
+  baseline: 'v0.2.0 · 8 样例',
+  advanced: '第四期 · 2 样例',
 }
