@@ -9,19 +9,7 @@ import { MultiAgentPanel } from './panels/MultiAgentPanel'
 import { RagPanel } from './panels/RagPanel'
 import { StructuredPanel } from './panels/StructuredPanel'
 import { ToolsPanel } from './panels/ToolsPanel'
-
-const samples = [
-  { id: 'chat', label: 'Chat', description: 'Token / SSE / TTFT' },
-  { id: 'structured', label: '结构化输出', description: '工单 JSON' },
-  { id: 'tools', label: 'Tool Calling', description: '天气 + 计算器' },
-  { id: 'agent', label: 'Agent Loop', description: 'ReAct / Framework' },
-  { id: 'mcp', label: 'MCP', description: '工具协议标准化' },
-  { id: 'rag', label: 'RAG', description: 'pgvector 检索增强' },
-  { id: 'context', label: '上下文', description: 'trim / summarize' },
-  { id: 'multiagent', label: '多 Agent', description: 'Orchestrator' },
-] as const
-
-type SampleId = (typeof samples)[number]['id']
+import { samples, type SampleId } from './shared/samples'
 
 const PROVIDER_STORAGE_KEY = 'ai-example.provider'
 
@@ -68,39 +56,45 @@ function App() {
       padding="lg"
       classNames={{ navbar: 'app-navbar', main: 'app-main' }}
     >
-      <AppShell.Navbar p="lg">
-        <Stack gap={4} mb="xl">
-          <div className="wordmark">
-            <span className="wordmark-mark">AI</span>
-            <span className="wordmark-rest">Example</span>
-          </div>
-          <Text size="sm" c="dimmed">
-            接口 playground
-          </Text>
-        </Stack>
-        <Stack gap={4} mb="lg">
-          {samples.map((item) => (
-            <NavLink
-              key={item.id}
-              className="nav-item"
-              label={item.label}
-              description={item.description}
-              active={sample === item.id}
-              onClick={() => setSample(item.id)}
-            />
-          ))}
-        </Stack>
-        <Select
-          label="模型"
-          description={selected ? selected.model : '默认 DeepSeek'}
-          data={providers.map((item) => ({
-            value: item.id,
-            label: item.configured ? item.label : `${item.label}（未配 Key）`,
-          }))}
-          value={provider}
-          onChange={onProviderChange}
-          allowDeselect={false}
-        />
+      <AppShell.Navbar p="lg" className="app-navbar-inner">
+        <div className="app-navbar-body">
+          <Stack gap={4} mb="xl">
+            <div className="wordmark">
+              <span className="wordmark-mark">AI</span>
+              <span className="wordmark-rest">Example</span>
+            </div>
+            <Text size="sm" c="dimmed">
+              接口 playground
+            </Text>
+          </Stack>
+          <Stack gap={4} mb="lg">
+            {samples.map((item) => (
+              <NavLink
+                key={item.id}
+                className="nav-item"
+                label={item.label}
+                description={item.description}
+                active={sample === item.id}
+                onClick={() => setSample(item.id)}
+              />
+            ))}
+          </Stack>
+          <Select
+            label="模型"
+            description={selected ? selected.model : '默认 DeepSeek'}
+            data={providers.map((item) => ({
+              value: item.id,
+              label: item.configured ? item.label : `${item.label}（未配 Key）`,
+            }))}
+            value={provider}
+            onChange={onProviderChange}
+            allowDeselect={false}
+          />
+        </div>
+        <a className="promo-entry" href="/promo.html">
+          <span className="promo-entry-label">基础闭环宣传页</span>
+          <span className="promo-entry-desc">8 样例学习路径</span>
+        </a>
       </AppShell.Navbar>
       <AppShell.Main>
         {sample === 'chat' && <ChatPanel provider={provider} />}

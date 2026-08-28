@@ -2,6 +2,8 @@
 
 独立的 Agent 学习 cookbook。**基础闭环 v0.2.0**（一至三期 + 基础补丁）；进阶见 [学习路径 · 进阶入口](docs/learning-path.md#进阶入口)。
 
+**宣传**：[基础闭环宣传页](frontend/promo.html) · [方版宣传图](frontend/public/promo/opensource-poster-1080.png)（源文件 [poster.html](frontend/poster.html)，导出 `cd frontend && pnpm poster:export`）
+
 - **第一期**：Chat → 结构化输出 → Tool Calling → ReAct Agent Loop
 - **第二期**：MCP → RAG（pgvector）
 - **第三期**：上下文工程 → 多 Agent
