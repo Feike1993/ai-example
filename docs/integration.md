@@ -64,6 +64,20 @@
 - 拷 `samples.multiagent`：Orchestrator + 专员（工具 / 执笔）
 - 分布式与评测平台见 [backlog](backlog.md)；不要一上来上独立工作流引擎
 
-Python 对照用于理解协议；JVM 业务优先集成 Java 代码。
+### 第四期
+
+#### Hybrid RAG
+
+- 拷 `RrfFusion`、`RagKeywordRetriever`，扩展 `RagSampleService`
+- ingest 后确保 PG 全文 GIN 索引；`retrievalMode=hybrid` 时 RRF 融合
+- compare API 便于 UI 对照 vector / hybrid
+
+#### Agent 评测
+
+- 拷 `samples.eval` + `eval/golden/*.json`
+- `POST /eval/run` 复用现有 Service；断言 mustContain / expectToolName / expectSources
+- 不做评测看板；Token 用量汇总依赖 v0.2.0 的 `TokenUsage`
+
+Python 对照：`hybrid_rag.py`、`eval_runner.py`。
 
 刻意不做总表：[backlog.md](backlog.md)。

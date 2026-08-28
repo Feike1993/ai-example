@@ -20,7 +20,7 @@ import { ragGuide } from '../guides'
 type Mode = 'sync' | 'sse'
 
 /**
- * RAG 样例：一键 ingest、同步提问、可选 SSE，展示 sources。
+ * 基础 RAG 样例：ingest、纯向量检索、SSE。
  */
 export function RagPanel({ provider }: { provider: string }) {
   const [question, setQuestion] = useState('本项目第一期学了什么？RAG 是什么？')
@@ -78,6 +78,7 @@ export function RagPanel({ provider }: { provider: string }) {
       const data = await postJson<RagQueryResponse>(`${API_BASE}/rag/query`, {
         question,
         provider,
+        retrievalMode: 'vector',
       })
       setElapsedMs(Math.round(performance.now() - started))
       setResult(data)
@@ -111,6 +112,8 @@ export function RagPanel({ provider }: { provider: string }) {
     stopRef.current = streamRag(
       question,
       provider,
+      'vector',
+      false,
       (nextSources, empty) => {
         latestSources = nextSources
         latestEmpty = empty
@@ -134,6 +137,7 @@ export function RagPanel({ provider }: { provider: string }) {
           sources: latestSources,
           retrievalEmpty: latestEmpty,
           usage: null,
+          retrievalMode: 'vector',
         })
       },
       (err) => {
@@ -161,11 +165,26 @@ export function RagPanel({ provider }: { provider: string }) {
     void runSync()
   }
 
+  const renderSources = (items: RagSource[]) => (
+    <Stack gap={6}>
+      {items.map((item) => (
+        <div key={item.id}>
+          <Group gap={6} mb={4}>
+            <Badge variant="light">{item.source || 'unknown'}</Badge>
+          </Group>
+          <Text size="sm" c="dimmed">
+            {item.excerpt}
+          </Text>
+        </div>
+      ))}
+    </Stack>
+  )
+
   return (
     <SampleFrame guide={ragGuide}>
       <Workbench
         title="RAG"
-        hint="先 ingest，再提问。需要 Docker pgvector + DashScope Embedding Key。"
+        hint="先 ingest；纯向量检索。需要 Docker pgvector + DashScope Embedding。"
         streaming={streaming}
         form={
           <Stack gap="md">
@@ -221,18 +240,7 @@ export function RagPanel({ provider }: { provider: string }) {
                     <Text size="sm" mb={6}>
                       sources
                     </Text>
-                    <Stack gap={6}>
-                      {sources.map((item) => (
-                        <div key={item.id}>
-                          <Group gap={6} mb={4}>
-                            <Badge variant="light">{item.source || 'unknown'}</Badge>
-                          </Group>
-                          <Text size="sm" c="dimmed">
-                            {item.excerpt}
-                          </Text>
-                        </div>
-                      ))}
-                    </Stack>
+                    {renderSources(sources)}
                   </div>
                 )}
                 <pre className="stream-text">

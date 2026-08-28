@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from 'react'
 import { motion } from 'motion/react'
-import { samples, type SampleId } from '../shared/samples'
+import { baselineSamples, type SampleId } from '../shared/samples'
 import { ContextBudget } from './components/animations/ContextBudget'
 import { JsonMorph } from './components/animations/JsonMorph'
 import { McpUsbDemo } from './components/animations/McpUsbDemo'
@@ -32,7 +32,7 @@ const animationMap: Record<SampleId, ReactNode> = {
 
 /** 宣传页主布局：Hero + sticky 侧栏 + 8 样例 Journey。 */
 export default function PromoApp() {
-  const ids = useMemo(() => samples.map((s) => s.id), [])
+  const ids = useMemo(() => baselineSamples.map((s) => s.id), [])
   const { activeId, setActiveId } = useScrollSpy(ids)
   useHashNavigation(setActiveId)
 
@@ -89,12 +89,13 @@ export default function PromoApp() {
           <StickyNav activeId={activeId} variant="sidebar" />
         </aside>
         <div className="promo-journey-content">
-          {samples.map((sample) => {
-            const showDivider = lastPhase !== sample.phase
-            lastPhase = sample.phase
+          {baselineSamples.map((sample) => {
+            const phase = sample.phase as PhaseId
+            const showDivider = lastPhase !== phase
+            lastPhase = phase
             return (
               <div key={sample.id}>
-                {showDivider && <PhaseDivider phase={sample.phase} />}
+                {showDivider && <PhaseDivider phase={phase} />}
                 <SampleSection sample={sample} animation={animationMap[sample.id]} />
               </div>
             )

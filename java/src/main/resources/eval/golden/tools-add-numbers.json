@@ -1,0 +1,7 @@
+{
+  "id": "tools-add-numbers",
+  "target": "tools",
+  "prompt": "请用加法工具计算 3 加 5 等于多少。",
+  "mustContain": ["8"],
+  "mustNotContain": []
+}

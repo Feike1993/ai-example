@@ -1,5 +1,5 @@
 import type { SampleId } from '../../shared/samples'
-import { samples } from '../../shared/samples'
+import { baselineSamples } from '../../shared/samples'
 import { scrollToSample } from '../hooks/useScrollSpy'
 
 type StickyNavProps = {
@@ -12,7 +12,7 @@ export function StickyNav({ activeId, variant = 'sidebar' }: StickyNavProps) {
   if (variant === 'chips') {
     return (
       <nav className="promo-nav-chips" aria-label="样例导航">
-        {samples.map((item) => (
+        {baselineSamples.map((item) => (
           <button
             key={item.id}
             type="button"
@@ -28,7 +28,7 @@ export function StickyNav({ activeId, variant = 'sidebar' }: StickyNavProps) {
 
   return (
     <nav className="promo-nav-sidebar" aria-label="样例导航">
-      {samples.map((item) => (
+      {baselineSamples.map((item) => (
         <button
           key={item.id}
           type="button"

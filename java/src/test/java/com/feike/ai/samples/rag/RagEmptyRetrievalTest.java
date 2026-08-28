@@ -37,7 +37,8 @@ class RagEmptyRetrievalTest {
         RagSampleService service = new RagSampleService(
             vectorStore,
             registry,
-            new AiProperties.Rag(true, 4, 400, 1, true)
+            new AiProperties.Rag(true, 4, 400, 1, true, new AiProperties.Rag.Hybrid(true, 60, 4, false)),
+            null
         );
 
         RagSampleService.RagQueryResult result = service.query("完全不存在的虚构关键词 xyz123", "deepseek", null);
@@ -64,7 +65,8 @@ class RagEmptyRetrievalTest {
         RagSampleService service = new RagSampleService(
             vectorStore,
             registry,
-            new AiProperties.Rag(true, 4, 400, 2, true)
+            new AiProperties.Rag(true, 4, 400, 2, true, new AiProperties.Rag.Hybrid(true, 60, 4, false)),
+            null
         );
 
         RagSampleService.RagQueryResult result = service.query("弱相关问题", "deepseek", null);
@@ -80,7 +82,8 @@ class RagEmptyRetrievalTest {
         RagSampleService service = new RagSampleService(
             mock(VectorStore.class),
             mock(LlmProviderRegistry.class),
-            new AiProperties.Rag(true, 4, 400, 2, false)
+            new AiProperties.Rag(true, 4, 400, 2, false, new AiProperties.Rag.Hybrid(true, 60, 4, false)),
+            null
         );
 
         assertTrue(service.isRetrievalEmpty(List.of()));
@@ -97,7 +100,8 @@ class RagEmptyRetrievalTest {
         RagSampleService service = new RagSampleService(
             mock(VectorStore.class),
             registry,
-            new AiProperties.Rag(true, 4, 400, 1, true)
+            new AiProperties.Rag(true, 4, 400, 1, true, new AiProperties.Rag.Hybrid(true, 60, 4, false)),
+            null
         );
 
         List<String> chunks = service.streamAnswer("无命中问题", "deepseek", List.of()).collectList().block();

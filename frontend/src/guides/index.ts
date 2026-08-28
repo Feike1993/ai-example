@@ -1,5 +1,7 @@
 export { agentGuide } from './agent'
 export { chatGuide } from './chat'
+export { evalGuide } from './eval'
+export { hybridRagGuide } from './hybridRag'
 export { contextGuide } from './context'
 export { mcpGuide } from './mcp'
 export { multiAgentGuide } from './multiAgent'

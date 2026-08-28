@@ -47,7 +47,7 @@ class StructuredOutputInvokerTest {
             new AiProperties.Agent(8),
             "dashscope",
             new AiProperties.Embedding("text-embedding-v3", 1024),
-            new AiProperties.Rag(true, 4, 400, 1, true),
+            new AiProperties.Rag(true, 4, 400, 1, true, new AiProperties.Rag.Hybrid(true, 60, 4, false)),
             new AiProperties.ContextSettings(24, 2000, 6),
             new AiProperties.MultiAgent(4, 6)
         );

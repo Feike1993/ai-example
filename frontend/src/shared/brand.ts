@@ -2,6 +2,7 @@
 export const brand = {
   accent: '#2a6f5f',
   accentDark: '#245f51',
+  advanced: '#1e4d42',
   bg: '#e4ebe6',
   sidebar: '#d7e2dc',
   heroDark: '#0f1a14',
@@ -17,9 +18,17 @@ export const brand = {
 
 export type PhaseId = 1 | 2 | 3
 
+export type LearningStage = 'baseline' | 'advanced'
+
 /** 三期标签文案。 */
 export const phaseLabels: Record<PhaseId, string> = {
   1: '第一期 · 最小 Agent 闭环',
   2: '第二期 · MCP + RAG',
   3: '第三期 · 上下文 + 多 Agent',
+}
+
+/** Playground 侧栏分组标题。 */
+export const stageLabels: Record<LearningStage, string> = {
+  baseline: '基础闭环 · v0.2.0',
+  advanced: '进阶 · 第四期',
 }

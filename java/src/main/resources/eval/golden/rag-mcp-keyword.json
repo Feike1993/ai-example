@@ -1,0 +1,7 @@
+{
+  "id": "rag-mcp-keyword",
+  "target": "rag",
+  "prompt": "MCP 是什么？和 Function Calling 有什么关系？",
+  "mustContain": ["MCP"],
+  "expectSources": true
+}

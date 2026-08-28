@@ -1,0 +1,7 @@
+{
+  "id": "multiagent-weather-advice",
+  "target": "multiagent",
+  "prompt": "查一下北京天气，再写一句简短的出行建议。",
+  "mustContain": ["北京"],
+  "mustNotContain": []
+}

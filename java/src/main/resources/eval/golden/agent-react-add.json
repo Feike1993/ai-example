@@ -1,0 +1,8 @@
+{
+  "id": "agent-react-add",
+  "target": "agentReact",
+  "prompt": "用工具计算 2 加 6 的结果，只回答数字。",
+  "mustContain": ["8"],
+  "expectToolName": "add",
+  "maxSteps": 6
+}

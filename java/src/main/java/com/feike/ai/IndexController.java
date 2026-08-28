@@ -13,18 +13,19 @@ import java.util.Map;
 public class IndexController {
 
     /**
-     * 返回样例清单。
+     * 返回样例清单，按基础闭环与进阶第四期分组。
      *
-     * @return 项目名、期数和各样例路径
+     * @return 项目名、baseline / advanced 样例路径
      */
     @GetMapping("/")
     public Map<String, Object> index() {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("name", "ai-example");
-        body.put("phase", 3);
-        body.put("baseline", "0.2.0");
         body.put("providers", "GET /ai-example/providers");
-        body.put("samples", Map.of(
+
+        Map<String, Object> baseline = new LinkedHashMap<>();
+        baseline.put("version", "0.2.0");
+        baseline.put("samples", Map.of(
             "chat", "POST /ai-example/chat  GET /ai-example/chat/stream?prompt=",
             "structured", "POST /ai-example/structured/ticket",
             "tools", "POST /ai-example/tools",
@@ -35,6 +36,17 @@ public class IndexController {
             "context", "POST /ai-example/context/chat  GET|DELETE /ai-example/context/session/{id}",
             "multiagent", "POST /ai-example/multiagent/run"
         ));
+        body.put("baseline", baseline);
+
+        Map<String, Object> advanced = new LinkedHashMap<>();
+        advanced.put("phase", 4);
+        advanced.put("samples", Map.of(
+            "hybridRag",
+            "POST /ai-example/rag/query (retrievalMode=hybrid)  POST /ai-example/rag/query/compare",
+            "eval", "POST /ai-example/eval/run"
+        ));
+        body.put("advanced", advanced);
+
         return body;
     }
 }

@@ -1,6 +1,8 @@
 import { AppShell, NavLink, Select, Stack, Text } from '@mantine/core'
 import { useEffect, useState } from 'react'
 import { listProviders, type ProviderView } from './api'
+import { EvalPanel } from './panels/EvalPanel'
+import { HybridRagPanel } from './panels/HybridRagPanel'
 import { AgentPanel } from './panels/AgentPanel'
 import { ChatPanel } from './panels/ChatPanel'
 import { ContextPanel } from './panels/ContextPanel'
@@ -9,7 +11,8 @@ import { MultiAgentPanel } from './panels/MultiAgentPanel'
 import { RagPanel } from './panels/RagPanel'
 import { StructuredPanel } from './panels/StructuredPanel'
 import { ToolsPanel } from './panels/ToolsPanel'
-import { samples, type SampleId } from './shared/samples'
+import { stageLabels } from './shared/brand'
+import { advancedSamples, baselineSamples, type PlaygroundSampleId } from './shared/samples'
 
 const PROVIDER_STORAGE_KEY = 'ai-example.provider'
 
@@ -17,7 +20,7 @@ const PROVIDER_STORAGE_KEY = 'ai-example.provider'
  * 样例 playground 壳：侧栏品牌、模型选择、各期接口面板。
  */
 function App() {
-  const [sample, setSample] = useState<SampleId>('chat')
+  const [sample, setSample] = useState<PlaygroundSampleId>('chat')
   const [provider, setProvider] = useState('deepseek')
   const [providers, setProviders] = useState<ProviderView[]>([])
 
@@ -67,11 +70,25 @@ function App() {
               接口 playground
             </Text>
           </Stack>
-          <Stack gap={4} mb="lg">
-            {samples.map((item) => (
+          <Text className="nav-section-label">{stageLabels.baseline}</Text>
+          <Stack gap={4} mb="md">
+            {baselineSamples.map((item) => (
               <NavLink
                 key={item.id}
                 className="nav-item"
+                label={item.label}
+                description={item.description}
+                active={sample === item.id}
+                onClick={() => setSample(item.id)}
+              />
+            ))}
+          </Stack>
+          <Text className="nav-section-label nav-section-label--advanced">{stageLabels.advanced}</Text>
+          <Stack gap={4} mb="lg">
+            {advancedSamples.map((item) => (
+              <NavLink
+                key={item.id}
+                className="nav-item nav-item--advanced"
                 label={item.label}
                 description={item.description}
                 active={sample === item.id}
@@ -105,6 +122,8 @@ function App() {
         {sample === 'rag' && <RagPanel provider={provider} />}
         {sample === 'context' && <ContextPanel provider={provider} />}
         {sample === 'multiagent' && <MultiAgentPanel provider={provider} />}
+        {sample === 'hybridRag' && <HybridRagPanel provider={provider} />}
+        {sample === 'eval' && <EvalPanel provider={provider} />}
       </AppShell.Main>
     </AppShell>
   )

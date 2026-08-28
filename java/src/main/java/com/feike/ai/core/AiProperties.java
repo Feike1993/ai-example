@@ -57,7 +57,7 @@ public record AiProperties(
             embedding = new Embedding("text-embedding-v3", 1024);
         }
         if (rag == null) {
-            rag = new Rag(true, 4, 400, 1, true);
+            rag = new Rag(true, 4, 400, 1, true, new Rag.Hybrid(true, 60, 4, false));
         }
         if (context == null) {
             context = new ContextSettings(24, 2000, 6);
@@ -150,8 +150,16 @@ public record AiProperties(
      * @param chunkSize         Token 分块目标大小
      * @param minSources        命中条数低于此值视为空检索（默认 1，即 hits 为空）
      * @param skipLlmWhenEmpty  空检索时是否跳过 LLM、直接返回固定拒答（默认 true）
+     * @param hybrid            Hybrid 检索（向量 + PG 全文 + RRF）参数
      */
-    public record Rag(boolean enabled, int topK, int chunkSize, int minSources, boolean skipLlmWhenEmpty) {
+    public record Rag(
+        boolean enabled,
+        int topK,
+        int chunkSize,
+        int minSources,
+        boolean skipLlmWhenEmpty,
+        Hybrid hybrid
+    ) {
         public Rag {
             if (topK < 1) {
                 topK = 1;
@@ -161,6 +169,28 @@ public record AiProperties(
             }
             if (minSources < 1) {
                 minSources = 1;
+            }
+            if (hybrid == null) {
+                hybrid = new Hybrid(true, 60, 4, false);
+            }
+        }
+
+        /**
+         * Hybrid RAG：RRF 融合与可选查询改写。
+         *
+         * @param enabled              为 false 时 {@code retrievalMode=hybrid} 回退纯向量
+         * @param rrfK                 RRF 常数 k
+         * @param keywordTopK          关键词路 topK
+         * @param rewriteQueryEnabled  是否用一次 Chat 把口语问题改写成检索友好短句
+         */
+        public record Hybrid(boolean enabled, int rrfK, int keywordTopK, boolean rewriteQueryEnabled) {
+            public Hybrid {
+                if (rrfK < 1) {
+                    rrfK = 60;
+                }
+                if (keywordTopK < 1) {
+                    keywordTopK = 4;
+                }
             }
         }
     }

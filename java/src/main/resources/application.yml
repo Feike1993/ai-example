@@ -63,6 +63,11 @@ app:
       # 命中条数 < min-sources 视为空检索；空检索默认跳过 LLM 直接拒答
       min-sources: ${RAG_MIN_SOURCES:1}
       skip-llm-when-empty: ${RAG_SKIP_LLM_WHEN_EMPTY:true}
+      hybrid:
+        enabled: ${RAG_HYBRID_ENABLED:true}
+        rrf-k: ${RAG_RRF_K:60}
+        keyword-top-k: ${RAG_KEYWORD_TOP_K:4}
+        rewrite-query-enabled: ${RAG_REWRITE_QUERY:false}
     providers:
       deepseek:
         label: DeepSeek

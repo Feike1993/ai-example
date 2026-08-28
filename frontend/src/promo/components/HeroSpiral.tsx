@@ -1,6 +1,6 @@
 import { motion } from 'motion/react'
 import { brand, phaseLabels, type PhaseId } from '../../shared/brand'
-import { samples } from '../../shared/samples'
+import { baselineSamples } from '../../shared/samples'
 
 const phaseColor: Record<PhaseId, string> = {
   1: brand.phase1,
@@ -13,10 +13,11 @@ export function HeroSpiral() {
   return (
     <div className="hero-spiral" aria-hidden="true">
       <svg viewBox="0 0 420 320" className="hero-spiral-svg">
-        {samples.map((sample, i) => {
+        {baselineSamples.map((sample, i) => {
+          const phase = sample.phase as PhaseId
           const x = 40 + (i % 4) * 95
-          const y = sample.phase === 1 ? 200 : sample.phase === 2 ? 120 : 40
-          const color = phaseColor[sample.phase]
+          const y = phase === 1 ? 200 : phase === 2 ? 120 : 40
+          const color = phaseColor[phase]
           return (
             <motion.g
               key={sample.id}
@@ -28,24 +29,24 @@ export function HeroSpiral() {
                 cx={x + 36}
                 cy={y + 18}
                 r={28}
-                fill={sample.phase === 3 ? 'transparent' : color}
+                fill={phase === 3 ? 'transparent' : color}
                 stroke={color}
-                strokeWidth={sample.phase === 3 ? 2.5 : 0}
+                strokeWidth={phase === 3 ? 2.5 : 0}
                 animate={{ y: [0, -4, 0] }}
                 transition={{ repeat: Infinity, duration: 2.4 + i * 0.15, ease: 'easeInOut' }}
               />
-              <text x={x + 36} y={y + 23} textAnchor="middle" fill={sample.phase === 3 ? color : brand.white} fontSize="13" fontWeight="700">
+              <text x={x + 36} y={y + 23} textAnchor="middle" fill={phase === 3 ? color : brand.white} fontSize="13" fontWeight="700">
                 {String(sample.index).padStart(2, '0')}
               </text>
-              {i < samples.length - 1 && (
+              {i < baselineSamples.length - 1 && (
                 <line
                   x1={x + 64}
                   y1={y + 18}
                   x2={x + 95}
                   y2={
-                    samples[i + 1].phase === sample.phase
+                    baselineSamples[i + 1].phase === phase
                       ? y + 18
-                      : samples[i + 1].phase === 2
+                      : baselineSamples[i + 1].phase === 2
                         ? 138
                         : 58
                   }

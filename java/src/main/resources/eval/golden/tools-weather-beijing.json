@@ -1,0 +1,7 @@
+{
+  "id": "tools-weather-beijing",
+  "target": "tools",
+  "prompt": "北京今天天气怎么样？用工具查，不要编造。",
+  "mustContain": ["北京", "25"],
+  "mustNotContain": []
+}

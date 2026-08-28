@@ -1,4 +1,4 @@
-import { samples } from '../shared/samples'
+import { baselineSamples } from '../shared/samples'
 
 export type SpiralNode = {
   cx: number
@@ -9,14 +9,15 @@ export type SpiralNode = {
 
 /** 宣传页 HeroSpiral 同源的 8 节点坐标（viewBox 420×320）。 */
 export function getSpiralNodePositions(): SpiralNode[] {
-  return samples.map((sample, i) => {
+  return baselineSamples.map((sample, i) => {
+    const phase = sample.phase as 1 | 2 | 3
     const x = 40 + (i % 4) * 95
-    const y = sample.phase === 1 ? 200 : sample.phase === 2 ? 120 : 40
+    const y = phase === 1 ? 200 : phase === 2 ? 120 : 40
     return {
       cx: x + 36,
       cy: y + 18,
       index: sample.index,
-      phase: sample.phase,
+      phase,
     }
   })
 }

@@ -1,4 +1,4 @@
-import { samples } from '../../shared/samples'
+import { baselineSamples } from '../../shared/samples'
 
 /** 页脚 CTA 与文档链接。 */
 export function FooterCta() {
@@ -31,7 +31,7 @@ export function FooterCta() {
         </a>
       </div>
       <nav className="promo-footer-docs" aria-label="样例文档">
-        {samples.map((s) => (
+        {baselineSamples.map((s) => (
           <a
             key={s.id}
             href={`https://github.com/Feike1993/ai-example/blob/main/${s.docPath}`}

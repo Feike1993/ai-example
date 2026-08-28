@@ -1,5 +1,5 @@
 import { phaseLabels, type PhaseId } from '../../shared/brand'
-import { samples } from '../../shared/samples'
+import { baselineSamples } from '../../shared/samples'
 
 const phases: PhaseId[] = [1, 2, 3]
 
@@ -15,7 +15,7 @@ export function PhaseTimeline() {
             <span className="phase-timeline-num">第 {phase} 期</span>
             <h3>{phaseLabels[phase].split(' · ')[1]}</h3>
             <ul>
-              {samples
+              {baselineSamples
                 .filter((s) => s.phase === phase)
                 .map((s) => (
                   <li key={s.id}>

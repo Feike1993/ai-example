@@ -64,6 +64,9 @@ export type RagSource = {
   source: string
   excerpt: string
   metadata?: Record<string, unknown>
+  vectorRank?: number | null
+  keywordRank?: number | null
+  rrfScore?: number | null
 }
 
 export type RagQueryResponse = {
@@ -71,6 +74,31 @@ export type RagQueryResponse = {
   sources: RagSource[]
   retrievalEmpty: boolean
   usage: TokenUsage | null
+  retrievalMode?: string
+}
+
+export type RagCompareResponse = {
+  vector: RagQueryResponse
+  hybrid: RagQueryResponse
+}
+
+export type EvalCaseResult = {
+  id: string
+  passed: boolean
+  durationMs: number
+  steps: number
+  toolFailures: number
+  error: string | null
+  answer: string | null
+  usage: TokenUsage | null
+}
+
+export type EvalRunResponse = {
+  total: number
+  passed: number
+  failed: number
+  cases: EvalCaseResult[]
+  usageSummary: TokenUsage | null
 }
 
 export type RagIngestResponse = {
@@ -342,6 +370,8 @@ export function streamAgentReact(
 export function streamRag(
   question: string,
   provider: string,
+  retrievalMode: 'vector' | 'hybrid',
+  rewriteQuery: boolean,
   onSources: (sources: RagSource[], retrievalEmpty: boolean) => void,
   onChunk: (text: string) => void,
   onDone: () => void,
@@ -350,6 +380,12 @@ export function streamRag(
   const params = new URLSearchParams({ question })
   if (provider) {
     params.set('provider', provider)
+  }
+  if (retrievalMode === 'hybrid') {
+    params.set('retrievalMode', 'hybrid')
+  }
+  if (rewriteQuery) {
+    params.set('rewriteQuery', 'true')
   }
   const url = `${API_BASE}/rag/query/stream?${params.toString()}`
   const source = new EventSource(url)

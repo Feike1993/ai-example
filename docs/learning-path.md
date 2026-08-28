@@ -50,17 +50,23 @@
 
 **v0.2.0 发版之后**进入第四期，只做 backlog 标注的两项进阶：
 
-1. **Hybrid RAG** — 向量 + PostgreSQL 全文 + RRF；`POST /rag/query/compare`；样例 `09-hybrid-rag.md`
-2. **Agent 评测** — `classpath:eval/golden/*.json` + `POST /eval/run`；样例 `10-eval.md`
+1. **Hybrid RAG** — 向量 + PostgreSQL 全文 + RRF；`POST /rag/query/compare`；样例 [09-hybrid-rag.md](samples/09-hybrid-rag.md)
+2. **Agent 评测** — `classpath:eval/golden/*.json` + `POST /eval/run`；样例 [10-eval.md](samples/10-eval.md)
 
-第五期占位（仅文档）：Redis / DB 持久会话、长期记忆向量库、MCP 独立进程、语义分块 / HyDE 等。详见规划中的 `phase4.md` / `phase5.md`。
+见 [phase4.md](phase4.md)。第五期占位：[phase5.md](phase5.md)。
+
+## 第四期：Hybrid RAG + Agent 评测（进阶）
+
+见 [phase4.md](phase4.md)：
+
+9. [Hybrid RAG](samples/09-hybrid-rag.md) → 10. [Agent 评测](samples/10-eval.md)
 
 基础 vs 进阶分层：
 
 | 层次 | 范围 | 状态 |
 | --- | --- | --- |
 | **基础** | 最小 Agent 闭环 + MCP/RAG 入门 + 进程内上下文 + 同进程多 Agent + 基础补丁 A1–A5 | **已完成**（tag `v0.2.0`） |
-| **进阶** | Hybrid 检索、golden 评测、持久会话、HyDE、分布式 Agent 等 | **第四期起** |
+| **进阶** | Hybrid 检索、golden 评测、持久会话、HyDE、分布式 Agent 等 | **第四期**（Hybrid + Eval 已实现） |
 
 ## 刻意不做 / 后续候选
 

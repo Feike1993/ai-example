@@ -33,6 +33,8 @@
 | Chat / Agent system prompt 外置 | integration 约定 | 已覆盖 | v0.2.0 补丁 A1 | `PromptLoader` + `chat-assistant.st` / `agent-react.st` |
 | RAG 空检索拒答 | 第二期 RAG 入门 | 已覆盖 | v0.2.0 补丁 A3 | `retrievalEmpty` + 短路；混合检索仍属第四期 |
 | Agent ReAct 最终答案流式 | 第二期后横切 | 已覆盖（最小） | v0.2.0 补丁 A4 | 仅 answer SSE；逐步 tool SSE 仍为候选 |
+| 混合检索（向量 + 关键词 + RRF） | 第二期 | 已覆盖 | 第四期 Hybrid RAG | `retrievalMode=hybrid` + compare API |
+| 完整评测平台（golden / 回归） | 第三期 | 已覆盖（最小 harness） | 第四期 Eval | `POST /eval/run`；无看板 |
 
 ## 仍刻意不做（候选）
 
@@ -52,8 +54,8 @@
 
 | 主题 | 首次提出 | 现状 | 为何当时不做 | 若要做 |
 | --- | --- | --- | --- | --- |
-| 混合检索（向量 + BM25 + RRF） | 第二期 | 候选 | 先讲清纯向量闭环 | 第四期 |
-| 查询改写 / HyDE | 第二期 | 候选 | 同上 | 第四期 |
+| 混合检索（向量 + BM25 + RRF） | 第二期 | 已覆盖 | 第四期 | 见 [09-hybrid-rag.md](samples/09-hybrid-rag.md) |
+| 查询改写 / HyDE | 第二期 | 候选 | 第四期（最小 rewriteQuery） / 第五期 | 完整 HyDE 留 phase5 |
 | 异步索引管道（如 Redis Stream） | 第二期 | 候选 | 依赖 Redis | 业务项目 |
 | 语义分块 / 父子文档 | 第二期 | 候选 | 固定 token 分块足够演示权衡 | 第四期 |
 
@@ -71,7 +73,7 @@
 | 主题 | 首次提出 | 现状 | 为何当时不做 | 若要做 |
 | --- | --- | --- | --- | --- |
 | 分布式 / 多进程 Agent、消息总线 | 第三期 | 候选 | 同进程即可讲清交接与信息边界 | 业务项目 |
-| 完整评测平台（离线集 / 回归 / 看板） | 第三期 | 候选 | 响应内轨迹足够入门可观测 | 第四期 |
+| 完整评测平台（离线集 / 回归 / 看板） | 第三期 | 已覆盖（harness） | 第四期 Eval | 看板仍不做 |
 | Java 侧独立工作流 / 图引擎 | 第三期 | 明确不做（本仓） | 用结构化交接即可；Python 仅最小 LangGraph | 业务项目 |
 
 ### 横切

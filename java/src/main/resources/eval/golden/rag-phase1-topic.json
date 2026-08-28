@@ -1,0 +1,7 @@
+{
+  "id": "rag-phase1-topic",
+  "target": "rag",
+  "prompt": "本项目第一期学了什么？",
+  "mustContain": ["Chat"],
+  "expectSources": true
+}

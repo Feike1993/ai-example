@@ -1,6 +1,6 @@
 # AI Agent 学习样例
 
-独立的 Agent 学习 cookbook。**基础闭环 v0.2.0**（一至三期 + 基础补丁）；进阶见 [学习路径 · 进阶入口](docs/learning-path.md#进阶入口)。
+独立的 Agent 学习 cookbook。**基础闭环 v0.2.0**（一至三期 + 基础补丁）；**第四期进阶**：Hybrid RAG + Agent 评测。
 
 **宣传**：[基础闭环宣传页](frontend/promo.html) · [方版宣传图](frontend/public/promo/opensource-poster-1080.png)（源文件 [poster.html](frontend/poster.html)，导出 `cd frontend && pnpm poster:export`）
 
@@ -8,6 +8,7 @@
 - **第二期**：MCP → RAG（pgvector）
 - **第三期**：上下文工程 → 多 Agent
 - **基础补丁**：Prompt 外置 / Token 用量 / RAG 空检索拒答 / Agent 答案流式（见 [baseline-patches](docs/baseline-patches.md)）
+- **第四期**：Hybrid RAG → golden 评测（见 [phase4](docs/phase4.md)）
 
 Java：**Spring Boot 4.1 + Spring AI 2.0 + Gradle**；Python：**LangGraph / MCP SDK**；前端：**Vite + React playground**。
 
@@ -35,8 +36,10 @@ Java：**Spring Boot 4.1 + Spring AI 2.0 + Gradle**；Python：**LangGraph / MCP
 | 2 | RAG | 分块 / Embedding / 检索 | `POST /ai-example/rag/query` | `samples.rag` |
 | 3 | 上下文工程 | trim / summarize | `POST /ai-example/context/chat` | `samples.context_memory` |
 | 3 | 多 Agent | Orchestrator–Subagent | `POST /ai-example/multiagent/run` | `samples.multi_agent` |
+| 4 | Hybrid RAG | 向量 + 全文 + RRF | `POST /ai-example/rag/query/compare` | `samples.hybrid_rag` |
+| 4 | Agent 评测 | golden suite | `POST /ai-example/eval/run` | `samples.eval_runner` |
 
-文档：[学习路径](docs/learning-path.md) · [基础补丁](docs/baseline-patches.md) · [集成说明](docs/integration.md) · [第二期](docs/phase2.md) · [第三期](docs/phase3.md) · [CHANGELOG](CHANGELOG.md) · [刻意不做 backlog](docs/backlog.md)
+文档：[学习路径](docs/learning-path.md) · [基础补丁](docs/baseline-patches.md) · [集成说明](docs/integration.md) · [第二期](docs/phase2.md) · [第三期](docs/phase3.md) · [第四期](docs/phase4.md) · [CHANGELOG](CHANGELOG.md) · [刻意不做 backlog](docs/backlog.md)
 
 ## 环境
 

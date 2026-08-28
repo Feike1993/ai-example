@@ -1,0 +1,8 @@
+{
+  "id": "agent-react-weather",
+  "target": "agentReact",
+  "prompt": "查一下北京天气，并告诉我适合出门吗？必须调用天气工具。",
+  "mustContain": ["北京"],
+  "expectToolName": "getWeather",
+  "maxSteps": 8
+}
