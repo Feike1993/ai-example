@@ -77,6 +77,12 @@ public final class RrfFusion {
         return ranks;
     }
 
+    /**
+     * 向 scores 中累加 id 的 rrf 分数。
+     * @param scores 累加的目标 scores
+     * @param ids     待累加的 id 列表
+     * @param k       RRF 常数
+     */
     private static void accumulate(Map<String, Double> scores, List<String> ids, int k) {
         if (ids == null) {
             return;

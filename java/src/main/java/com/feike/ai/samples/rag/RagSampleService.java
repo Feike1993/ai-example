@@ -63,6 +63,7 @@ public class RagSampleService {
     private final LlmProviderRegistry registry;
     private final AiProperties.Rag ragSettings;
     private final TokenTextSplitter splitter;
+    // 关键词检索辅助
     private final RagKeywordRetriever keywordRetriever;
 
     /**
@@ -276,18 +277,28 @@ public class RagSampleService {
             SearchRequest.builder()
                 .query(question)
                 .topK(k)
-                .filterExpression(META_CORPUS + " == '" + CORPUS_DEMO + "'")
+                .filterExpression(META_CORPUS + " == '" + CORPUS_DEMO + "'") // 过滤语料来源
                 .build()
         );
     }
 
+    /**
+     * 混合检索：向量 + 关键词 + RRF。
+     * 什么是 RRF：RRF 是一种检索结果融合（fusion）方法，通过将向量检索和关键词检索的结果进行融合，以提高检索效果。
+     * @param question 查询问题
+     * @param k 检索结果数量
+     * @return 检索结果
+     */
     private List<Document> hybridRetrieve(String question, int k) {
+        // 向量检索
         List<Document> vectorHits = vectorRetrieve(question, k);
+        // 关键词检索
         int keywordK = ragSettings.hybrid().keywordTopK();
         List<Document> keywordHits = keywordRetriever.search(question, keywordK, CORPUS_DEMO);
 
         List<String> vectorIds = vectorHits.stream().map(Document::getId).toList();
         List<String> keywordIds = keywordHits.stream().map(Document::getId).toList();
+        // RRF 融合
         List<RrfFusion.RankedId> fused = RrfFusion.fuse(
             vectorIds,
             keywordIds,
@@ -295,14 +306,16 @@ public class RagSampleService {
             k
         );
 
+        // 合并结果
         Map<String, Document> byId = new LinkedHashMap<>();
         for (Document doc : vectorHits) {
             byId.put(doc.getId(), doc);
         }
+        // 将关键词检索结果合并到向量检索结果中
         for (Document doc : keywordHits) {
             byId.putIfAbsent(doc.getId(), doc);
         }
-
+        // 构建最终结果列表
         List<Document> merged = new ArrayList<>();
         for (RrfFusion.RankedId ranked : fused) {
             Document doc = byId.get(ranked.id());
