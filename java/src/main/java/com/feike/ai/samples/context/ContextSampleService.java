@@ -12,7 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 上下文工程样例：多轮会话 + trim / summarize 预算策略。
+ * 上下文工程样例：多轮会话 + trim / summarize 预算策略；存储由 {@link ChatSessionStore} 注入。
  */
 @Service
 public class ContextSampleService {
@@ -22,17 +22,17 @@ public class ContextSampleService {
         用简体中文回答。
         """;
 
-    private final InMemoryChatSessionStore store;
+    private final ChatSessionStore store;
     private final LlmProviderRegistry registry;
     private final AiProperties.ContextSettings contextSettings;
 
     /**
-     * @param store      进程内会话
+     * @param store      会话存储（jdbc 或 memory）
      * @param registry   LLM
      * @param properties 读取 context 预算
      */
     public ContextSampleService(
-        InMemoryChatSessionStore store,
+        ChatSessionStore store,
         LlmProviderRegistry registry,
         AiProperties properties
     ) {
@@ -55,7 +55,7 @@ public class ContextSampleService {
         List<Message> history = store.snapshot(id);
         if (history.isEmpty()) {
             history = new ArrayList<>();
-            history.add(InMemoryChatSessionStore.asSystem(DEFAULT_SYSTEM));
+            history.add(ChatSessionStore.asSystem(DEFAULT_SYSTEM));
             store.replace(id, history);
             history = store.snapshot(id);
         }
@@ -70,14 +70,11 @@ public class ContextSampleService {
         int approx;
 
         if (strategy == ContextStrategy.SUMMARIZE) {
-            // 计划 summarize
             ContextBudget.SummarizePlan plan = ContextBudget.planSummarize(
                 history, keepRecent, maxMessages, tokenBudget
             );
             if (plan.needsSummary() && !plan.toSummarize().isEmpty()) {
-                // 执行 summarize 压缩
                 summary = summarize(plan.toSummarize(), provider);
-                // 计划 assemble
                 ContextBudget.TrimResult assembled = ContextBudget.assembleWithSummary(
                     plan.systems(), summary, plan.recentTurns(), maxMessages, tokenBudget
                 );
@@ -119,7 +116,8 @@ public class ContextSampleService {
             approx,
             dropped,
             summary,
-            usage
+            usage,
+            store.storeKind()
         );
     }
 
@@ -129,7 +127,7 @@ public class ContextSampleService {
      * @param sessionId 会话 id
      * @return 视图列表
      */
-    public List<InMemoryChatSessionStore.MessageView> session(String sessionId) {
+    public List<ChatSessionStore.MessageView> session(String sessionId) {
         return store.views(sessionId);
     }
 
@@ -144,17 +142,18 @@ public class ContextSampleService {
     }
 
     /**
-     * 对旧轮次进行 summarize。
-     * @param oldTurns 旧轮次
-     * @param provider LLM 提供商
-     * @return 摘要
+     * @return 当前存储实现标识
      */
+    public String storeKind() {
+        return store.storeKind();
+    }
+
     private String summarize(List<Message> oldTurns, String provider) {
         StringBuilder sb = new StringBuilder();
         for (Message message : oldTurns) {
-            sb.append(InMemoryChatSessionStore.roleOf(message))
+            sb.append(ChatSessionStore.roleOf(message))
                 .append(": ")
-                .append(InMemoryChatSessionStore.textOf(message))
+                .append(ChatSessionStore.textOf(message))
                 .append("\n");
         }
         String content = registry.plainClient(provider)
@@ -167,15 +166,7 @@ public class ContextSampleService {
     }
 
     /**
-     * @param sessionId        会话 id
-     * @param strategy         策略名
-     * @param content          模型回复
-     * @param rawMessageCount  存储中的原始消息数
-     * @param sentMessageCount 实际送给模型的消息数（含本轮 user）
-     * @param approxTokens     近似 token
-     * @param droppedCount     trim 丢掉条数
-     * @param summary          summarize 时的摘要；trim 时为 null
-     * @param usage            本轮主聊天的 token 用量（不含 summarize 调用）
+     * @param store 当前存储实现：{@code jdbc} 或 {@code memory}
      */
     public record ContextChatResult(
         String sessionId,
@@ -186,6 +177,7 @@ public class ContextSampleService {
         int approxTokens,
         int droppedCount,
         String summary,
-        TokenUsage usage
+        TokenUsage usage,
+        String store
     ) {}
 }

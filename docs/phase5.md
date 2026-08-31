@@ -1,25 +1,48 @@
-# 第五期占位（未实现）
+# 第五期学习路径：持久会话 + 长期记忆
 
-第四期交付 Hybrid RAG 与 golden 评测后，下列主题仍留在 backlog，仅作文档占位，避免 scope 膨胀：
+第四期覆盖 Hybrid RAG 与 golden 评测。第五期在此之上做两块与「记忆」相关的进阶：
 
-## 基础设施
+1. **持久会话**（[samples/11-persist-session.md](samples/11-persist-session.md)）— 第三期进程内 Map 升级为 PostgreSQL
+2. **长期记忆**（[samples/12-long-term-memory.md](samples/12-long-term-memory.md)）— pgvector 独立 corpus 写入 / 召回
 
-- Redis / DB **持久会话**（升级第三期进程内 context）
-- MCP **独立进程** Server + Client 真连远端 Streamable HTTP
+建议顺序：先持久会话（理解「短期窗口换存储」），再长期记忆（理解「跨会话事实库」）。
 
-## RAG / 记忆进阶
+## 建议顺序
 
-- **长期记忆**写入 pgvector 独立 collection
-- 语义分块 / 父子文档
-- 完整 **HyDE** / 多轮查询改写链
-- 异步索引管道（如 Redis Stream）
+1. **持久会话**
+   - 短期记忆 = 塞回窗口的消息；trim / summarize 策略不变
+   - `app.ai.context.store=jdbc|memory`；默认 jdbc，与 RAG 同库
+2. **长期记忆**
+   - 与 RAG 演示语料隔离（`corpus=long-term-memory`）
+   - remember → recall → chat with memory
 
-## 多 Agent / 可观测
+## 怎么跑（摘要）
 
-- 分布式 / 多进程 Agent、消息总线
-- 评测**看板**、离线跑批平台
-- SSE token 累加、Agent 逐步 tool SSE
+```bash
+docker compose up -d
+cd java && ./gradlew bootRun
+cd frontend && pnpm install && pnpm dev
 
-拷贝进业务项目时按需自行实现；本仓保持 cookbook 粒度。
+# 持久会话：重启后同一 sessionId 仍可续聊
+curl -s http://localhost:8080/ai-example/context/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"sessionId":"persist-1","prompt":"我叫小明","strategy":"trim"}'
 
-详见 [backlog.md](backlog.md)。
+# 长期记忆
+curl -s -X POST http://localhost:8080/ai-example/memory/remember \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"用户喜欢北京烤鸭","userId":"demo"}'
+curl -s -X POST http://localhost:8080/ai-example/memory/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt":"我喜欢吃什么？","userId":"demo"}'
+```
+
+Python 对照：
+
+```bash
+cd python && uv sync --group dev
+uv run python -m ai_example.samples.context_memory
+uv run python -m ai_example.samples.long_term_memory
+```
+
+刻意不做：Redis、MCP 第二进程、完整 HyDE、语义分块 — 见 [backlog.md](backlog.md)。

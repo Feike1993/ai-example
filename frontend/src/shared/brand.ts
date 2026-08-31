@@ -18,6 +18,9 @@ export const brand = {
 
 export type PhaseId = 1 | 2 | 3
 
+/** 进阶期次（Playground advanced 区）。 */
+export type AdvancedPhaseId = 4 | 5
+
 export type LearningStage = 'baseline' | 'advanced'
 
 /** 三期标签文案。 */
@@ -36,5 +39,5 @@ export const stageLabels: Record<LearningStage, string> = {
 /** Playground 阶段切换副标题（一行提示）。 */
 export const stageHints: Record<LearningStage, string> = {
   baseline: 'v0.2.0 · 8 样例',
-  advanced: '第四期 · 2 样例',
+  advanced: '第四 / 五期 · Hybrid / 评测 / 记忆',
 }

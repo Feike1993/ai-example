@@ -56,13 +56,14 @@
 
 ### 上下文工程
 
-- 拷 `samples.context`：进程内会话 + trim / summarize
-- 生产换 Redis/DB 持久化；精确 tokenizer 与向量长期记忆见 [backlog](backlog.md)
+- 拷 `samples.context`：`ChatSessionStore` + trim / summarize
+- 默认 `JdbcChatSessionStore`（PostgreSQL）；`app.ai.context.store=memory` 可回退进程内
+- 精确 tokenizer 见 [backlog](backlog.md)
 
 ### 多 Agent
 
 - 拷 `samples.multiagent`：Orchestrator + 专员（工具 / 执笔）
-- 分布式与评测平台见 [backlog](backlog.md)；不要一上来上独立工作流引擎
+- 分布式与评测看板见 [backlog](backlog.md)；不要一上来上独立工作流引擎
 
 ### 第四期
 
@@ -79,5 +80,19 @@
 - 不做评测看板；Token 用量汇总依赖 v0.2.0 的 `TokenUsage`
 
 Python 对照：`hybrid_rag.py`、`eval_runner.py`。
+
+### 第五期
+
+#### 持久会话
+
+- 拷 `ChatSessionStore` / `JdbcChatSessionStore`；与 RAG 同库
+- 接口形状兼容第三期 `/context/*`
+
+#### 长期记忆
+
+- 拷 `samples.memory`；`corpus=long-term-memory` 与 RAG 演示语料隔离
+- remember / recall / chat；依赖 Embedding + pgvector
+
+Python 对照：`context_memory.py`（可选 SQLite）、`long_term_memory.py`。
 
 刻意不做总表：[backlog.md](backlog.md)。

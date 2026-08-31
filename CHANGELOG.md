@@ -45,5 +45,22 @@ Hybrid RAG、golden 评测、Redis 持久会话、逐步 tool SSE、流式 token
 
 ### 文档
 
-- [phase4.md](docs/phase4.md)、[phase5.md](docs/phase5.md)
+- [phase4.md](docs/phase4.md)
 - [09-hybrid-rag.md](docs/samples/09-hybrid-rag.md)、[10-eval.md](docs/samples/10-eval.md)
+
+## [Unreleased] — 第五期进阶
+
+### 持久会话
+
+- `ChatSessionStore`：默认 `JdbcChatSessionStore`（PostgreSQL），可切 `memory`
+- 响应字段 `store`；重启后同一 `sessionId` 可续聊
+
+### 长期记忆
+
+- `corpus=long-term-memory` + `/memory/remember|recall|chat`
+- 前端 **长期记忆** Tab；Python `long_term_memory` 对照
+
+### 文档
+
+- [phase5.md](docs/phase5.md)
+- [11-persist-session.md](docs/samples/11-persist-session.md)、[12-long-term-memory.md](docs/samples/12-long-term-memory.md)

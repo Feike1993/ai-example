@@ -47,7 +47,7 @@ public final class ContextBudget {
         for (Message message : history) {
             if (message.getMessageType() == MessageType.SYSTEM) {
                 systems.add(message);
-            } else if (InMemoryChatSessionStore.isUserOrAssistant(message)) {
+            } else if (ChatSessionStore.isUserOrAssistant(message)) {
                 turns.add(message);
             }
         }
@@ -92,7 +92,7 @@ public final class ContextBudget {
         for (Message message : history) {
             if (message.getMessageType() == MessageType.SYSTEM) {
                 systems.add(message);
-            } else if (InMemoryChatSessionStore.isUserOrAssistant(message)) {
+            } else if (ChatSessionStore.isUserOrAssistant(message)) {
                 turns.add(message);
             }
         }
@@ -138,7 +138,7 @@ public final class ContextBudget {
     private static List<Message> extractTurns(List<Message> messages) {
         List<Message> turns = new ArrayList<>();
         for (Message message : messages) {
-            if (InMemoryChatSessionStore.isUserOrAssistant(message)) {
+            if (ChatSessionStore.isUserOrAssistant(message)) {
                 turns.add(message);
             }
         }

@@ -18,8 +18,9 @@ import java.util.Map;
  * @param embeddingProvider   Embedding 用的 Provider id（本仓固定 dashscope）
  * @param embedding           Embedding 模型与维度
  * @param rag                 RAG 分块 / topK / 开关
- * @param context             上下文工程：消息条数与近似 token 预算
+ * @param context             上下文工程：消息条数、token 预算、存储实现
  * @param multiagent          多 Agent 步数上限
+ * @param memory              长期记忆召回参数
  */
 @ConfigurationProperties(prefix = "app.ai")
 public record AiProperties(
@@ -32,7 +33,8 @@ public record AiProperties(
     Embedding embedding,
     Rag rag,
     ContextSettings context,
-    MultiAgent multiagent
+    MultiAgent multiagent,
+    Memory memory
 ) {
     public AiProperties {
         if (defaultProvider == null || defaultProvider.isBlank()) {
@@ -60,10 +62,13 @@ public record AiProperties(
             rag = new Rag(true, 4, 400, 1, true, new Rag.Hybrid(true, 60, 4, false));
         }
         if (context == null) {
-            context = new ContextSettings(24, 2000, 6);
+            context = new ContextSettings(24, 2000, 6, "jdbc");
         }
         if (multiagent == null) {
             multiagent = new MultiAgent(4, 6);
+        }
+        if (memory == null) {
+            memory = new Memory(4, "demo", 0.92);
         }
     }
 
@@ -196,13 +201,14 @@ public record AiProperties(
     }
 
     /**
-     * 上下文工程预算。
+     * 上下文工程预算与存储。
      *
      * @param maxMessages        送入模型的最大消息条数（含 system）
      * @param tokenBudget        近似 token 上限（字符数/4）
      * @param keepRecentMessages summarize 时保留的最近 user/assistant 条数
+     * @param store              {@code jdbc}（默认）或 {@code memory}
      */
-    public record ContextSettings(int maxMessages, int tokenBudget, int keepRecentMessages) {
+    public record ContextSettings(int maxMessages, int tokenBudget, int keepRecentMessages, String store) {
         public ContextSettings {
             if (maxMessages < 4) {
                 maxMessages = 4;
@@ -212,6 +218,35 @@ public record AiProperties(
             }
             if (keepRecentMessages < 2) {
                 keepRecentMessages = 2;
+            }
+            if (store == null || store.isBlank()) {
+                store = "jdbc";
+            } else {
+                store = store.trim().toLowerCase();
+                if (!store.equals("jdbc") && !store.equals("memory")) {
+                    store = "jdbc";
+                }
+            }
+        }
+    }
+
+    /**
+     * 长期记忆样例配置。
+     *
+     * @param topK                 召回条数
+     * @param userIdDefault        未传 userId 时的默认用户
+     * @param similarityThreshold  相似合并阈值（0–1，越高越严）；达到则删旧写新
+     */
+    public record Memory(int topK, String userIdDefault, double similarityThreshold) {
+        public Memory {
+            if (topK < 1) {
+                topK = 4;
+            }
+            if (userIdDefault == null || userIdDefault.isBlank()) {
+                userIdDefault = "demo";
+            }
+            if (similarityThreshold <= 0 || similarityThreshold > 1) {
+                similarityThreshold = 0.92;
             }
         }
     }

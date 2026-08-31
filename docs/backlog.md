@@ -35,6 +35,8 @@
 | Agent ReAct 最终答案流式 | 第二期后横切 | 已覆盖（最小） | v0.2.0 补丁 A4 | 仅 answer SSE；逐步 tool SSE 仍为候选 |
 | 混合检索（向量 + 关键词 + RRF） | 第二期 | 已覆盖 | 第四期 Hybrid RAG | `retrievalMode=hybrid` + compare API |
 | 完整评测平台（golden / 回归） | 第三期 | 已覆盖（最小 harness） | 第四期 Eval | `POST /eval/run`；无看板 |
+| DB 持久会话（PostgreSQL） | 第三期 | 已覆盖 | 第五期 | `JdbcChatSessionStore`；Redis 仍为候选 |
+| 长期记忆写入向量库 | 第三期 | 已覆盖 | 第五期 | `corpus=long-term-memory` + `/memory/*` |
 
 ## 仍刻意不做（候选）
 
@@ -63,8 +65,8 @@
 
 | 主题 | 首次提出 | 现状 | 为何当时不做 | 若要做 |
 | --- | --- | --- | --- | --- |
-| Redis / DB 持久会话 | 第三期 | 候选 | 进程内 Map 即可对比 trim vs summarize | 第四期 |
-| 长期记忆写入向量库 | 第三期 | 候选 | 与 RAG 进阶合并更合适 | 第四期 |
+| Redis / DB 持久会话 | 第三期 | 已覆盖（PG） | 第五期用 PostgreSQL；Redis 仍候选 | 见 [11-persist-session.md](samples/11-persist-session.md) |
+| 长期记忆写入向量库 | 第三期 | 已覆盖 | 第五期 | 见 [12-long-term-memory.md](samples/12-long-term-memory.md) |
 | 精确 tokenizer 计费 | 第三期 | 候选 | 字符/4 启发式足够建立预算直觉 | 业务项目 |
 | 完整 Harness 六层产品化 | 第三期占位 | 明确不做（本仓） | 文档点名即可；代码只落记忆 + 预算约束 | 业务架构 |
 

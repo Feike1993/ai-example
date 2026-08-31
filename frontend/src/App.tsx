@@ -7,6 +7,7 @@ import { AgentPanel } from './panels/AgentPanel'
 import { ChatPanel } from './panels/ChatPanel'
 import { ContextPanel } from './panels/ContextPanel'
 import { McpPanel } from './panels/McpPanel'
+import { MemoryPanel } from './panels/MemoryPanel'
 import { MultiAgentPanel } from './panels/MultiAgentPanel'
 import { RagPanel } from './panels/RagPanel'
 import { StructuredPanel } from './panels/StructuredPanel'
@@ -148,6 +149,7 @@ function App() {
         {sample === 'multiagent' && <MultiAgentPanel provider={provider} />}
         {sample === 'hybridRag' && <HybridRagPanel provider={provider} />}
         {sample === 'eval' && <EvalPanel provider={provider} />}
+        {sample === 'memory' && <MemoryPanel provider={provider} />}
       </AppShell.Main>
     </AppShell>
   )

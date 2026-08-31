@@ -1,4 +1,4 @@
-import type { LearningStage, PhaseId } from './brand'
+import type { AdvancedPhaseId, LearningStage, PhaseId } from './brand'
 
 /** 基础 8 样例 id（宣传页与 Playground 共用）。 */
 export type BaselineSampleId =
@@ -12,7 +12,7 @@ export type BaselineSampleId =
   | 'multiagent'
 
 /** 进阶样例 id（仅 Playground）。 */
-export type AdvancedSampleId = 'hybridRag' | 'eval'
+export type AdvancedSampleId = 'hybridRag' | 'eval' | 'memory'
 
 /** Playground 全部 Tab id。 */
 export type PlaygroundSampleId = BaselineSampleId | AdvancedSampleId
@@ -26,7 +26,7 @@ export type SampleMeta = {
   label: string
   description: string
   stage: LearningStage
-  phase: PhaseId | 4
+  phase: PhaseId | AdvancedPhaseId
   /** 宣传页主标题（不与侧栏 label/description 重复） */
   tagline: string
   /** 宣传页一段讲解：学什么、为什么 */
@@ -37,7 +37,11 @@ export type SampleMeta = {
 }
 
 export type BaselineSampleMeta = SampleMeta & { id: BaselineSampleId; stage: 'baseline'; phase: PhaseId }
-export type AdvancedSampleMeta = SampleMeta & { id: AdvancedSampleId; stage: 'advanced'; phase: 4 }
+export type AdvancedSampleMeta = SampleMeta & {
+  id: AdvancedSampleId
+  stage: 'advanced'
+  phase: AdvancedPhaseId
+}
 
 /** 样例元数据：Playground 侧栏与宣传页（基础 8 项）单一数据源。 */
 export const samples: readonly SampleMeta[] = [
@@ -127,8 +131,8 @@ export const samples: readonly SampleMeta[] = [
     stage: 'baseline',
     phase: 3,
     tagline: '会话预算是工程问题',
-    body: '模型本身没有跨请求记忆。超预算时用 trim 裁旧轮，或 summarize 压摘要；留意 Lost in the Middle。',
-    concepts: ['窗口裁剪 trim', '增量摘要 summarize', 'Lost in the Middle'],
+    body: '模型本身没有跨请求记忆。超预算时用 trim 裁旧轮，或 summarize 压摘要。第五期起默认 PostgreSQL 持久化（store=jdbc），重启可续聊。',
+    concepts: ['窗口裁剪 trim', '增量摘要 summarize', 'PG 持久会话'],
     endpoint: 'POST /ai-example/context/chat',
     docPath: 'docs/samples/07-context.md',
   },
@@ -171,6 +175,19 @@ export const samples: readonly SampleMeta[] = [
     endpoint: 'POST /ai-example/eval/run',
     docPath: 'docs/samples/10-eval.md',
   },
+  {
+    id: 'memory',
+    index: 11,
+    label: '长期记忆',
+    description: 'pgvector 事实库',
+    stage: 'advanced',
+    phase: 5,
+    tagline: '跨会话写入与召回事实',
+    body: '与 RAG 演示语料隔离的 corpus；remember → recall → chat。空召回拒答，不编造。',
+    concepts: ['独立 corpus', 'remember / recall', '与会话窗口区分'],
+    endpoint: 'POST /ai-example/memory/chat',
+    docPath: 'docs/samples/12-long-term-memory.md',
+  },
 ] as const
 
 /** 基础闭环 8 样例（宣传页数据源）。 */
@@ -178,7 +195,7 @@ export const baselineSamples: readonly BaselineSampleMeta[] = samples.filter(
   (s): s is BaselineSampleMeta => s.stage === 'baseline',
 )
 
-/** 进阶第四期样例（仅 Playground）。 */
+/** 进阶样例（仅 Playground）。 */
 export const advancedSamples: readonly AdvancedSampleMeta[] = samples.filter(
   (s): s is AdvancedSampleMeta => s.stage === 'advanced',
 )

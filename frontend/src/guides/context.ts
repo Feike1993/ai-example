@@ -6,15 +6,15 @@ export const contextGuide: SampleGuideData = {
   concepts: [
     '模型无跨请求记忆；「记得」= 你把历史再塞进窗口。',
     'trim：丢最旧轮次；summarize：旧轮次压成摘要再拼最近轮次。',
+    '默认 store=jdbc（PostgreSQL）持久化；store=memory 为进程内 Map。',
     'Token 预算用字符/4 启发式即可建立直觉；精确 tokenizer 见 backlog。',
-    'Lost in the Middle：中间内容更容易被忽略；裁剪会改变「中间」位置。',
   ],
   logic: {
     title: '上下文组装逻辑',
     steps: [
       {
         title: '会话存在应用侧',
-        detail: '本仓用进程内 Map；重启即清空。生产可换 Redis/DB。',
+        detail: 'ChatSessionStore：jdbc 写 chat_session_message；memory 为 ConcurrentHashMap。',
       },
       {
         title: '先预算，再调用',

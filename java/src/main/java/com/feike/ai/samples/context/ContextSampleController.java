@@ -69,8 +69,12 @@ public class ContextSampleController {
      */
     @GetMapping("/session/{id}")
     public Map<String, Object> session(@PathVariable("id") String id) {
-        List<InMemoryChatSessionStore.MessageView> messages = contextSampleService.session(id);
-        return Map.of("sessionId", id, "messages", messages);
+        List<ChatSessionStore.MessageView> messages = contextSampleService.session(id);
+        return Map.of(
+            "sessionId", id,
+            "messages", messages,
+            "store", contextSampleService.storeKind()
+        );
     }
 
     /**

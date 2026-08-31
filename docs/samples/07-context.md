@@ -8,7 +8,7 @@
 - **Lost in the Middle**：中间段落更容易被忽略；预算策略会改变「中间」落在哪
 - Harness 六层（信息边界 / 工具 / 编排 / 记忆 / 评估 / 约束）本仓只落 **记忆 + 预算约束**；其余见 [backlog](../backlog.md)
 
-本仓会话存 **进程内 Map**，重启清空；不接 Redis。
+本仓会话默认存 **PostgreSQL**（`app.ai.context.store=jdbc`），重启可续聊；`store=memory` 为进程内 Map。详见 [11-persist-session.md](11-persist-session.md)。Redis 仍见 [backlog](../backlog.md)。
 
 ## 怎么跑
 

@@ -77,7 +77,7 @@ export function ContextPanel({ provider }: { provider: string }) {
     <SampleFrame guide={contextGuide}>
       <Workbench
         title="上下文工程"
-        hint="同一 sessionId 多轮连聊；对比 trim 与 summarize 的预算字段。"
+        hint="同一 sessionId 多轮连聊；默认 store=jdbc 时重启 Java 仍可续聊（需 Postgres）。"
         form={
           <Stack gap="md">
             <TextInput
@@ -136,6 +136,11 @@ export function ContextPanel({ provider }: { provider: string }) {
                     <RequestMeta elapsedMs={elapsedMs} usage={result.usage} />
                     <Group gap="xs">
                       <Badge variant="light">{result.strategy}</Badge>
+                      {result.store && (
+                        <Badge color={result.store === 'jdbc' ? 'teal' : 'gray'} variant="light">
+                          store {result.store}
+                        </Badge>
+                      )}
                       <Badge variant="outline">raw {result.rawMessageCount}</Badge>
                       <Badge variant="outline">sent {result.sentMessageCount}</Badge>
                       <Badge variant="outline">~{result.approxTokens} tok</Badge>

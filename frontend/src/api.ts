@@ -116,6 +116,35 @@ export type ContextChatResponse = {
   droppedCount: number
   summary: string | null
   usage: TokenUsage | null
+  store?: string
+}
+
+export type MemorySource = {
+  id: string
+  excerpt: string
+  metadata?: Record<string, unknown>
+}
+
+export type MemoryRememberResponse = {
+  id: string
+  userId: string
+  text: string
+  duplicate?: boolean
+  updated?: boolean
+}
+
+export type MemoryRecallResponse = {
+  userId: string
+  sources: MemorySource[]
+  empty: boolean
+}
+
+export type MemoryChatResponse = {
+  answer: string
+  sources: MemorySource[]
+  retrievalEmpty: boolean
+  userId: string
+  usage: TokenUsage | null
 }
 
 export type MultiAgentStep = {
