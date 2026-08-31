@@ -51,6 +51,7 @@ cd python && uv run python -m ai_example.samples.long_term_memory
 
 - 写入时机与召回过滤（userId / corpus）
 - 空召回时不要编造
+- 回答时可轻度修正明显笔误（如「生活中杭州」→「生活在杭州」）；sources / 向量库仍为原文。若要改正文，更正后再 Remember（相似合并会覆盖）
 - 长期记忆 ≠ 知识库 RAG（个人事实 vs 文档语料）
 - **重复写入**：同 userId 下完全相同文本不会再次入库；语义相似（默认 score≥0.92）则删旧写新；召回结果按文本去重
 

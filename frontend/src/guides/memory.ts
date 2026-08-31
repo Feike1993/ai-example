@@ -8,6 +8,7 @@ export const memoryGuide: SampleGuideData = {
     'corpus=long-term-memory，与 RAG 演示语料 ai-example-demo 隔离。',
     '流程：remember 写入（精确跳过 / 相似合并）→ recall → chat。',
     '空召回时拒答，不编造记忆外内容。',
+    '回答时可轻度修正明显笔误；实质事实仍须来自记忆。',
   ],
   logic: {
     title: '记忆与 RAG 的边界',

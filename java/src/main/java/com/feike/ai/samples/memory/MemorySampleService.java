@@ -44,6 +44,8 @@ public class MemorySampleService {
 
     private static final String SYSTEM_GROUNDED = """
         你是助手。只根据「长期记忆」回答用户问题；记忆不足或为空时明确说不知道，不要编造。
+        事实内容必须来自长期记忆，不得添加记忆中没有的信息。
+        允许修正明显笔误或错别字（例如「生活中杭州」写成「生活在杭州」），但不得改动实体、偏好等实质含义。
         回答用简体中文。
         """;
 
