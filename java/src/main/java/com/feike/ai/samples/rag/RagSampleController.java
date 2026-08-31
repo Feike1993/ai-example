@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * RAG 样例 HTTP：ingest / query / compare / SSE。
+ * RAG 样例 HTTP：ingest / query / compare / compare-expansion / SSE。
  */
 @Validated
 @RestController
@@ -29,18 +29,20 @@ import java.util.Map;
 public class RagSampleController {
 
     /**
-     * @param question        用户问题
-     * @param provider        可选 Chat Provider
-     * @param topK            可选覆盖默认 topK
-     * @param retrievalMode   {@code vector}（默认）或 {@code hybrid}
-     * @param rewriteQuery    是否改写问题后再检索
+     * @param question         用户问题
+     * @param provider         可选 Chat Provider
+     * @param topK             可选覆盖默认 topK
+     * @param retrievalMode    {@code vector}（默认）或 {@code hybrid}
+     * @param rewriteQuery     是否改写问题后再检索（兼容；等价 queryExpansion=rewrite）
+     * @param queryExpansion   {@code none} / {@code rewrite} / {@code hyde}；优先于 rewriteQuery
      */
     public record RagQueryRequest(
         @NotBlank String question,
         String provider,
         Integer topK,
         String retrievalMode,
-        Boolean rewriteQuery
+        Boolean rewriteQuery,
+        String queryExpansion
     ) {}
 
     private final RagSampleService ragSampleService;
@@ -63,7 +65,8 @@ public class RagSampleController {
             request.provider(),
             request.topK(),
             parseMode(request.retrievalMode()),
-            request.rewriteQuery()
+            request.rewriteQuery(),
+            request.queryExpansion()
         );
     }
 
@@ -80,21 +83,40 @@ public class RagSampleController {
         );
     }
 
+    /**
+     * 同一问题对照 none / rewrite / hyde 三套检索命中（默认不三次生成）。
+     */
+    @PostMapping("/query/compare-expansion")
+    public RagSampleService.ExpansionCompareResult queryCompareExpansion(
+        @RequestBody @Validated RagQueryRequest request
+    ) {
+        return ragSampleService.queryCompareExpansion(
+            request.question(),
+            request.provider(),
+            request.topK(),
+            parseMode(request.retrievalMode())
+        );
+    }
+
     @GetMapping(value = "/query/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<String>> queryStream(
         @RequestParam @NotBlank String question,
         @RequestParam(required = false) String provider,
         @RequestParam(required = false) Integer topK,
         @RequestParam(required = false) String retrievalMode,
-        @RequestParam(required = false) Boolean rewriteQuery
+        @RequestParam(required = false) Boolean rewriteQuery,
+        @RequestParam(required = false) String queryExpansion
     ) {
-        List<Document> hits = ragSampleService.retrieve(
+        RagSampleService.QueryExpansion expansion =
+            RagSampleService.resolveExpansion(queryExpansion, rewriteQuery);
+        RagSampleService.RetrievalBundle bundle = ragSampleService.retrieveExpanded(
             question,
             topK,
             parseMode(retrievalMode),
-            rewriteQuery,
+            expansion,
             provider
         );
+        List<Document> hits = bundle.hits();
         List<RagSampleService.SourceView> sources = ragSampleService.toSources(hits);
         boolean retrievalEmpty = ragSampleService.isRetrievalEmpty(hits);
         String sourcesJson;
@@ -103,9 +125,13 @@ public class RagSampleController {
             payload.put("sources", sources);
             payload.put("retrievalEmpty", retrievalEmpty);
             payload.put("retrievalMode", parseMode(retrievalMode).name());
+            payload.put("queryExpansion", bundle.expansion().name());
+            if (bundle.hypotheticalDocument() != null) {
+                payload.put("hypotheticalDocument", bundle.hypotheticalDocument());
+            }
             sourcesJson = jsonMapper.writeValueAsString(payload);
         } catch (Exception ex) {
-            sourcesJson = "{\"sources\":[],\"retrievalEmpty\":true,\"retrievalMode\":\"vector\"}";
+            sourcesJson = "{\"sources\":[],\"retrievalEmpty\":true,\"retrievalMode\":\"vector\",\"queryExpansion\":\"none\"}";
         }
         ServerSentEvent<String> sourcesEvent = ServerSentEvent.<String>builder()
             .event("sources")

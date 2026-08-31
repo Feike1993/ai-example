@@ -37,6 +37,8 @@
 | 完整评测平台（golden / 回归） | 第三期 | 已覆盖（最小 harness） | 第四期 Eval | `POST /eval/run`；无看板 |
 | DB 持久会话（PostgreSQL） | 第三期 | 已覆盖 | 第五期 | `JdbcChatSessionStore`；Redis 仍为候选 |
 | 长期记忆写入向量库 | 第三期 | 已覆盖 | 第五期 | `corpus=long-term-memory` + `/memory/*` |
+| MCP 远端拆分（独立 Server + Client） | 第二期 | 已覆盖 | 第六期 | `mcp-server/` + `mode=remote` |
+| 完整 HyDE | 第二期 / 第四期 rewrite | 已覆盖 | 第六期 | `queryExpansion=hyde` + compare-expansion |
 
 ## 仍刻意不做（候选）
 
@@ -46,8 +48,8 @@
 | --- | --- | --- | --- | --- |
 | Redis（会话外存 / Stream / 缓存） | 第二期 | 候选 | 控制基础设施面；cookbook 用内存即可讲清概念 | 第四期或业务项目 |
 | 语音 / ASR–TTS | 第二期 | 候选 | 与 Agent 主线正交 | 业务项目 |
-| MCP 独立第二进程 Server | 第二期 | 候选 | 同 Boot 即可学协议，避免双进程样板 | 拷贝进业务时拆分 |
-| MCP Client 真连远端 Streamable HTTP | 第二期 | 候选 | 避免启动期 Client 连自己的鸡生蛋 | 业务侧启用 `spring.ai.mcp.client` |
+| MCP 独立第二进程 Server | 第二期 | 已覆盖 | 第六期 `mcp-server/` | 见 [13-mcp-remote.md](samples/13-mcp-remote.md) |
+| MCP Client 真连远端 Streamable HTTP | 第二期 | 已覆盖 | 第六期 `app.ai.mcp.mode=remote` | 鉴权仍为候选 |
 | RAG 知识库产品化（上传后台 / 权限 / 多租户） | 第二期 | 明确不做（本仓） | 样例不是知识库产品 | 业务项目 |
 | Provider 配置 DB 热更新 | 第一期 | 候选 | `.env` + `app.ai.providers` 足够学习 | 业务项目 |
 | 绑定 interview-guide 特殊环境变量 / 文案 | 维护期 | 明确不做（本仓） | 本仓独立 cookbook | — |
@@ -57,7 +59,7 @@
 | 主题 | 首次提出 | 现状 | 为何当时不做 | 若要做 |
 | --- | --- | --- | --- | --- |
 | 混合检索（向量 + BM25 + RRF） | 第二期 | 已覆盖 | 第四期 | 见 [09-hybrid-rag.md](samples/09-hybrid-rag.md) |
-| 查询改写 / HyDE | 第二期 | 候选 | 第四期（最小 rewriteQuery） / 第五期 | 完整 HyDE 留 phase5 |
+| 查询改写 / HyDE | 第二期 | 已覆盖 | 第四期最小 rewrite；第六期完整 HyDE | 见 [14-hyde.md](samples/14-hyde.md) |
 | 异步索引管道（如 Redis Stream） | 第二期 | 候选 | 依赖 Redis | 业务项目 |
 | 语义分块 / 父子文档 | 第二期 | 候选 | 固定 token 分块足够演示权衡 | 第四期 |
 

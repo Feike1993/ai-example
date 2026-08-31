@@ -42,15 +42,15 @@
 
 ### MCP
 
-- **Server**：独立进程更常见；拷 `samples.mcp` 里 Server 侧（`@McpTool` / ToolCallback 注册）+ `spring-ai-starter-mcp-server-webmvc`，协议用 `STREAMABLE`
-- **Client**：业务应用只加 `spring-ai-starter-mcp-client`，配置远端 `url`，把 `ToolCallbackProvider` 挂到 ChatClient
-- 本仓为了学习把 Server/Client 放同一 Boot 进程；拷进生产时请拆开，并给 HTTP MCP 加鉴权
+- **Server**：独立进程更常见；可直接参考仓库根目录 [`mcp-server/`](../mcp-server/)（STREAMABLE `/mcp`，端口 8081）
+- **Client**：业务应用加 `spring-ai-starter-mcp-client`，配置远端 `url`，把 `ToolCallbackProvider` 挂到 ChatClient
+- 本仓默认 `app.ai.mcp.mode=remote`；`inprocess` 保留二期同进程学习路径。生产务必给 HTTP MCP 加鉴权
 
 ### RAG
 
 - 拷 `samples.rag` + `spring-ai-starter-vector-store-pgvector`
 - **Embedding 与 Chat Provider 分离**：很多聊天网关没有 Embedding；本仓用 `app.ai.embedding-provider=dashscope`
-- 先保证 ingest 幂等与 `sources` 回传，再考虑混合检索 / 查询改写
+- 先保证 ingest 幂等与 `sources` 回传，再考虑混合检索 / 查询改写 / HyDE
 
 ## 第三期
 
@@ -94,5 +94,20 @@ Python 对照：`hybrid_rag.py`、`eval_runner.py`。
 - remember / recall / chat；依赖 Embedding + pgvector
 
 Python 对照：`context_memory.py`（可选 SQLite）、`long_term_memory.py`。
+
+### 第六期
+
+#### MCP 远端拆分
+
+- 拷 [`mcp-server/`](../mcp-server/) + 主应用 `spring.ai.mcp.client` 配置
+- `app.ai.mcp.mode=remote|inprocess`；鉴权见 [backlog](backlog.md)
+
+#### 完整 HyDE
+
+- 扩展 `RagSampleService`：`queryExpansion=none|rewrite|hyde`
+- 假想段落只用于检索；`POST /rag/query/compare-expansion` 对照命中
+- 配置 `app.ai.rag.hyde.enabled` / `fuse-with-original`
+
+Python 对照：`mcp_client_http.py`、`hyde_rag.py`。
 
 刻意不做总表：[backlog.md](backlog.md)。

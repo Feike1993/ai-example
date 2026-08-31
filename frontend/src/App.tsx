@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { listProviders, type ProviderView } from './api'
 import { EvalPanel } from './panels/EvalPanel'
 import { HybridRagPanel } from './panels/HybridRagPanel'
+import { HydePanel } from './panels/HydePanel'
 import { AgentPanel } from './panels/AgentPanel'
 import { ChatPanel } from './panels/ChatPanel'
 import { ContextPanel } from './panels/ContextPanel'
@@ -150,6 +151,7 @@ function App() {
         {sample === 'hybridRag' && <HybridRagPanel provider={provider} />}
         {sample === 'eval' && <EvalPanel provider={provider} />}
         {sample === 'memory' && <MemoryPanel provider={provider} />}
+        {sample === 'hyde' && <HydePanel provider={provider} />}
       </AppShell.Main>
     </AppShell>
   )

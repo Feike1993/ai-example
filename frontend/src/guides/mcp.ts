@@ -1,13 +1,14 @@
 import type { SampleGuideData } from './types'
 
-/** MCP 样例讲解：协议层工具 vs 本地 @Tool。 */
+/** MCP 样例讲解：协议层工具；默认 remote，面板可运行时切 inprocess。 */
 export const mcpGuide: SampleGuideData = {
   title: 'MCP',
   concepts: [
     'Function Calling 是 LLM 能力；MCP 是工具接入协议；Agent 是 Loop + Tools 的系统概念。',
-    'Host / Client / Server：本仓 Java 同进程暴露 Streamable HTTP `/mcp`，样例聊天复用 Server 注册的 ToolCallback。',
-    'stdio 适合本地子进程；Streamable HTTP 适合远程/生产（Spring AI 2.0 已弃用纯 SSE 传输）。',
-    'MCP 只标准化连接；Agent Loop / 熔断仍在第一期那一层。',
+    '默认 app.ai.mcp.mode=remote（仅初始值）：主应用作 Client，连 mcp-server:8081 的 Streamable HTTP `/mcp`。',
+    '面板 / PUT /mcp/mode 可在 remote ↔ inprocess 间运行时切换（内存、不持久化）；启动不强连 8081。',
+    'mode=inprocess：同进程 MethodToolCallbackProvider 直挂 ChatClient，无需旁进程。',
+    'stdio 适合本地子进程；Streamable HTTP 适合远程/生产。',
   ],
   logic: {
     title: 'MCP 底层逻辑',
@@ -18,50 +19,44 @@ export const mcpGuide: SampleGuideData = {
           '仍是 @Tool / JSON Schema；MCP Server 把同一批工具用 JSON-RPC 暴露出去，Client 发现后挂到 ChatClient。',
       },
       {
-        title: '本仓同进程学习捷径',
+        title: '远端与同进程并存',
         detail:
-          '为避免启动期 Client 连自己的鸡生蛋，聊天样例直接复用注册给 MCP Server 的 ToolCallbackProvider；生产请拆 Server/Client 并加鉴权。',
+          '主应用同时备好 SyncMcpToolCallbackProvider 与 mcpServerTools；按运行时 mode 选用。remote 需先起 mcp-server（8081）。',
       },
       {
         title: '对照本地 Tool Calling',
         detail:
-          'POST /tools 是进程内 .tools(bean)；POST /mcp/chat 响应里的 toolNames 来自 MCP 注册表，便于并排对比。',
+          'POST /tools 是进程内 .tools(bean)；POST /mcp/chat 的 toolNames 来自当前 mode 的工具源。',
       },
     ],
   },
   backend: [
     {
-      label: '注册 MCP Tools — McpToolConfiguration',
-      language: 'java',
-      code: `@Bean
-public ToolCallbackProvider mcpServerTools(DemoTools demoTools, CpkTools cpkTools) {
-    return MethodToolCallbackProvider.builder()
-        .toolObjects(demoTools, cpkTools)
-        .build();
-}`,
+      label: '软启动 Client — application.yml',
+      language: 'yaml',
+      code: `app.ai.mcp.mode: remote  # 初始值，可被 PUT /mcp/mode 覆盖
+spring.ai.mcp.client.enabled: true
+spring.ai.mcp.client.initialized: false  # 启动不连 8081
+spring.ai.mcp.client.streamable-http.connections.demo.url: http://localhost:8081`,
     },
     {
       label: '样例聊天 — McpSampleService',
       language: 'java',
-      code: `List<String> toolNames = listToolNames();
-String content = registry.plainClient(provider)
-    .prompt()
-    .user(prompt)
-    .toolCallbacks(mcpTools.getToolCallbacks())
-    .call()
-    .content();
-return new McpChatResult(content, toolNames);`,
+      code: `// remote → SyncMcpToolCallbackProvider（懒 initialize）
+// inprocess → @Qualifier("mcpServerTools")
+.tools(resolveTools())`,
     },
   ],
   frontend: [
     {
-      label: '调用 MCP Chat',
+      label: '切换模式 + 调用 Chat',
       language: 'tsx',
-      code: `const data = await postJson<McpChatResponse>(
+      code: `await putJson(\`\${API_BASE}/mcp/mode\`, { mode: 'inprocess' })
+const data = await postJson<McpChatResponse>(
   \`\${API_BASE}/mcp/chat\`,
   { prompt, provider },
 )
-setResult(data) // content + toolNames`,
+// content + toolNames + mode`,
     },
   ],
 }

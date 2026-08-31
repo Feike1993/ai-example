@@ -64,3 +64,23 @@ Hybrid RAG、golden 评测、Redis 持久会话、逐步 tool SSE、流式 token
 
 - [phase5.md](docs/phase5.md)
 - [11-persist-session.md](docs/samples/11-persist-session.md)、[12-long-term-memory.md](docs/samples/12-long-term-memory.md)
+
+## [Unreleased] — 第六期进阶
+
+### MCP 远端拆分
+
+- 独立 [`mcp-server/`](mcp-server/)（8081，STREAMABLE `/mcp`）
+- 主应用默认 `app.ai.mcp.mode=remote`；`inprocess` 保留二期路径
+- 响应字段 `mode`；前端 MCP Tab 提示先起旁进程
+
+### 完整 HyDE
+
+- `queryExpansion: none|rewrite|hyde`（`rewriteQuery=true` 兼容）
+- 假想文档 Embedding 检索；可选与原问题向量路 RRF
+- `POST /rag/query/compare-expansion`；sources 不含假想正文
+- 前端 **HyDE** Tab；Python `hyde_rag` / `mcp_client_http`
+
+### 文档
+
+- [phase6.md](docs/phase6.md)
+- [13-mcp-remote.md](docs/samples/13-mcp-remote.md)、[14-hyde.md](docs/samples/14-hyde.md)

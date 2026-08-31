@@ -31,14 +31,25 @@ spring:
       on-client-errors: false
     mcp:
       server:
+        # remote 默认关；inprocess 时设 MCP_SERVER_ENABLED=true
+        enabled: ${MCP_SERVER_ENABLED:false}
         name: ai-example-mcp
         version: 0.1.0
         protocol: STREAMABLE
         streamable-http:
           mcp-endpoint: /mcp
       client:
-        # 同进程学习样例不连远端；生产请启用并配置 streamable-http.connections
-        enabled: false
+        # remote 默认开，连旁进程 mcp-server:8081
+        enabled: ${MCP_CLIENT_ENABLED:true}
+        # false：建 Bean 时跳过 initialize()，避免启动期强连 8081；真正 listTools/chat 时再懒连
+        initialized: ${MCP_CLIENT_INITIALIZED:false}
+        request-timeout: 30s
+        type: SYNC
+        streamable-http:
+          connections:
+            demo:
+              url: ${MCP_REMOTE_URL:http://localhost:8081}
+              endpoint: /mcp
     vectorstore:
       type: ${SPRING_AI_VECTORSTORE_TYPE:pgvector}
       pgvector:
@@ -68,6 +79,13 @@ app:
         rrf-k: ${RAG_RRF_K:60}
         keyword-top-k: ${RAG_KEYWORD_TOP_K:4}
         rewrite-query-enabled: ${RAG_REWRITE_QUERY:false}
+      hyde:
+        enabled: ${RAG_HYDE_ENABLED:true}
+        fuse-with-original: ${RAG_HYDE_FUSE:true}
+    mcp:
+      # 仅作启动初始值；运行时可被 PUT /mcp/mode 覆盖（内存、不持久化，重启回此配置）
+      # remote=连 mcp-server:8081；inprocess=同进程 MethodToolCallbackProvider（不必开主应用 MCP Server HTTP）
+      mode: ${MCP_MODE:remote}
     providers:
       deepseek:
         label: DeepSeek

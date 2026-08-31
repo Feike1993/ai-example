@@ -12,7 +12,7 @@ export type BaselineSampleId =
   | 'multiagent'
 
 /** 进阶样例 id（仅 Playground）。 */
-export type AdvancedSampleId = 'hybridRag' | 'eval' | 'memory'
+export type AdvancedSampleId = 'hybridRag' | 'eval' | 'memory' | 'hyde'
 
 /** Playground 全部 Tab id。 */
 export type PlaygroundSampleId = BaselineSampleId | AdvancedSampleId
@@ -187,6 +187,19 @@ export const samples: readonly SampleMeta[] = [
     concepts: ['独立 corpus', 'remember / recall', '与会话窗口区分'],
     endpoint: 'POST /ai-example/memory/chat',
     docPath: 'docs/samples/12-long-term-memory.md',
+  },
+  {
+    id: 'hyde',
+    index: 12,
+    label: 'HyDE',
+    description: '假想文档检索',
+    stage: 'advanced',
+    phase: 6,
+    tagline: '用假想段落拉近问题与文档',
+    body: 'Chat 生成假想知识库段落再 Embedding 检索；对照 none / rewrite；假想正文不得进 sources。',
+    concepts: ['Hypothetical Document', 'queryExpansion', 'grounded sources'],
+    endpoint: 'POST /ai-example/rag/query/compare-expansion',
+    docPath: 'docs/samples/14-hyde.md',
   },
 ] as const
 

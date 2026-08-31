@@ -8,17 +8,21 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * 把现有 {@code @Tool} 注册给 MCP Server；Boot Starter 会扫描本 Bean 并对外暴露。
+ * 同进程工具源：始终注册 {@code mcpServerTools}，与 MCP Client 并存。
+ * <p>
+ * 不按 {@code app.ai.mcp.mode=inprocess} 条件装配——否则默认 remote 启动时本地 Bean 缺失，
+ * 运行时就无法切到 inprocess。样例 inprocess 路径把本 Provider 直挂 ChatClient，
+ * 不必开启主应用的 MCP Server HTTP（{@code spring.ai.mcp.server.enabled} 可仍为 false）。
  */
 @Configuration
 public class McpToolConfiguration {
 
     /**
-     * MCP Server 工具源：天气 / 加法 / CPK 演示工具。
+     * 天气 / 加法 / CPK 演示工具，供 inprocess 模式与（可选）本机 MCP Server 共用。
      *
      * @param demoTools 基础演示工具
      * @param cpkTools  CPK 相关演示工具
-     * @return 供 MCP Server 与本进程 Client 样例复用的 ToolCallbackProvider
+     * @return ToolCallbackProvider
      */
     @Bean
     public ToolCallbackProvider mcpServerTools(DemoTools demoTools, CpkTools cpkTools) {

@@ -1,6 +1,6 @@
 # AI Agent 学习样例
 
-独立的 Agent 学习 cookbook。**基础闭环 v0.2.0**（一至三期 + 基础补丁）；**第四期**：Hybrid RAG + Agent 评测；**第五期**：持久会话 + 长期记忆。
+独立的 Agent 学习 cookbook。**基础闭环 v0.2.0**（一至三期 + 基础补丁）；**第四期**：Hybrid RAG + Agent 评测；**第五期**：持久会话 + 长期记忆；**第六期**：MCP 远端拆分 + 完整 HyDE。
 
 **宣传**：[基础闭环宣传页](frontend/promo.html) · [方版宣传图](frontend/public/promo/opensource-poster-1080.png)（源文件 [poster.html](frontend/poster.html)，导出 `cd frontend && pnpm poster:export`）
 
@@ -10,6 +10,7 @@
 - **基础补丁**：Prompt 外置 / Token 用量 / RAG 空检索拒答 / Agent 答案流式（见 [baseline-patches](docs/baseline-patches.md)）
 - **第四期**：Hybrid RAG → golden 评测（见 [phase4](docs/phase4.md)）
 - **第五期**：持久会话（PostgreSQL）→ 长期记忆（pgvector）（见 [phase5](docs/phase5.md)）
+- **第六期**：MCP 远端拆分 → 完整 HyDE（见 [phase6](docs/phase6.md)）
 
 Java：**Spring Boot 4.1 + Spring AI 2.0 + Gradle**；Python：**LangGraph / MCP SDK**；前端：**Vite + React playground**。
 
@@ -41,8 +42,10 @@ Java：**Spring Boot 4.1 + Spring AI 2.0 + Gradle**；Python：**LangGraph / MCP
 | 4 | Agent 评测 | golden suite | `POST /ai-example/eval/run` | `samples.eval_runner` |
 | 5 | 持久会话 | PG 会话存储 | `POST /ai-example/context/chat` | `samples.context_memory` |
 | 5 | 长期记忆 | pgvector 事实库 | `POST /ai-example/memory/chat` | `samples.long_term_memory` |
+| 6 | MCP 远端 | 独立 Server + Client | `POST /ai-example/mcp/chat`（需 8081） | `samples.mcp_client_http` |
+| 6 | HyDE | 假想文档 Embedding | `POST /ai-example/rag/query/compare-expansion` | `samples.hyde_rag` |
 
-文档：[学习路径](docs/learning-path.md) · [基础补丁](docs/baseline-patches.md) · [集成说明](docs/integration.md) · [第二期](docs/phase2.md) · [第三期](docs/phase3.md) · [第四期](docs/phase4.md) · [第五期](docs/phase5.md) · [CHANGELOG](CHANGELOG.md) · [刻意不做 backlog](docs/backlog.md)
+文档：[学习路径](docs/learning-path.md) · [基础补丁](docs/baseline-patches.md) · [集成说明](docs/integration.md) · [第二期](docs/phase2.md) · [第三期](docs/phase3.md) · [第四期](docs/phase4.md) · [第五期](docs/phase5.md) · [第六期](docs/phase6.md) · [CHANGELOG](CHANGELOG.md) · [刻意不做 backlog](docs/backlog.md)
 
 ## 环境
 
@@ -61,13 +64,17 @@ cp .env.example .env
 ## 跑 Java
 
 ```bash
-# RAG 需要向量库
+# RAG / 记忆需要向量库
 docker compose up -d
+
+# 第六期 MCP 远端（默认 mode=remote）：另开终端起 Server
+cd mcp-server && ./gradlew bootRun
 
 cd java
 ./gradlew bootRun
 ```
 
+切回二期同进程 MCP：面板切 `inprocess`，或 `MCP_MODE=inprocess`（初始值；亦可用 `PUT /mcp/mode`）。旧法：`MCP_SERVER_ENABLED=true MCP_CLIENT_ENABLED=false`。
 ```bash
 curl http://localhost:8080/ai-example/
 curl -s http://localhost:8080/ai-example/context/chat \
@@ -94,7 +101,7 @@ pnpm install
 pnpm dev
 ```
 
-打开 http://localhost:5173 。侧栏含各期样例（含 **上下文**、**多 Agent**）。
+打开 http://localhost:5173 。侧栏含各期样例（进阶含 Hybrid / 评测 / 记忆 / HyDE；MCP 默认 remote，可面板切 inprocess；remote 需 mcp-server）。
 （请在 `frontend/` 下执行；仓库根目录没有 `package.json`，不要跑 `pnpm start`。）
 
 ## 跑 Python 对照
@@ -104,5 +111,7 @@ cd python
 uv sync --group dev
 uv run python -m ai_example.samples.context_memory
 uv run python -m ai_example.samples.multi_agent
+uv run python -m ai_example.samples.mcp_client_http
+uv run python -m ai_example.samples.hyde_rag
 uv run pytest
 ```

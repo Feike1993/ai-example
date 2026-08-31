@@ -21,6 +21,7 @@ import java.util.Map;
  * @param context             上下文工程：消息条数、token 预算、存储实现
  * @param multiagent          多 Agent 步数上限
  * @param memory              长期记忆召回参数
+ * @param mcp                 MCP 样例：remote / inprocess（配置仅为启动初始值，运行时可由 PUT /mcp/mode 覆盖）
  */
 @ConfigurationProperties(prefix = "app.ai")
 public record AiProperties(
@@ -34,7 +35,8 @@ public record AiProperties(
     Rag rag,
     ContextSettings context,
     MultiAgent multiagent,
-    Memory memory
+    Memory memory,
+    Mcp mcp
 ) {
     public AiProperties {
         if (defaultProvider == null || defaultProvider.isBlank()) {
@@ -59,7 +61,7 @@ public record AiProperties(
             embedding = new Embedding("text-embedding-v3", 1024);
         }
         if (rag == null) {
-            rag = new Rag(true, 4, 400, 1, true, new Rag.Hybrid(true, 60, 4, false));
+            rag = new Rag(true, 4, 400, 1, true, new Rag.Hybrid(true, 60, 4, false), new Rag.Hyde(true, true));
         }
         if (context == null) {
             context = new ContextSettings(24, 2000, 6, "jdbc");
@@ -69,6 +71,9 @@ public record AiProperties(
         }
         if (memory == null) {
             memory = new Memory(4, "demo", 0.92);
+        }
+        if (mcp == null) {
+            mcp = new Mcp("remote");
         }
     }
 
@@ -156,6 +161,7 @@ public record AiProperties(
      * @param minSources        命中条数低于此值视为空检索（默认 1，即 hits 为空）
      * @param skipLlmWhenEmpty  空检索时是否跳过 LLM、直接返回固定拒答（默认 true）
      * @param hybrid            Hybrid 检索（向量 + PG 全文 + RRF）参数
+     * @param hyde              HyDE 假想文档检索参数
      */
     public record Rag(
         boolean enabled,
@@ -163,7 +169,8 @@ public record AiProperties(
         int chunkSize,
         int minSources,
         boolean skipLlmWhenEmpty,
-        Hybrid hybrid
+        Hybrid hybrid,
+        Hyde hyde
     ) {
         public Rag {
             if (topK < 1) {
@@ -177,6 +184,9 @@ public record AiProperties(
             }
             if (hybrid == null) {
                 hybrid = new Hybrid(true, 60, 4, false);
+            }
+            if (hyde == null) {
+                hyde = new Hyde(true, true);
             }
         }
 
@@ -197,6 +207,37 @@ public record AiProperties(
                     keywordTopK = 4;
                 }
             }
+        }
+
+        /**
+         * HyDE：假想文档 Embedding 检索。
+         *
+         * @param enabled           是否允许 queryExpansion=hyde
+         * @param fuseWithOriginal  假想段落向量路是否与原问题向量路 RRF 融合
+         */
+        public record Hyde(boolean enabled, boolean fuseWithOriginal) {}
+    }
+
+    /**
+     * MCP 样例模式。
+     *
+     * @param mode {@code remote}（默认，连旁进程 Server）或 {@code inprocess}（同进程工具）；
+     *             仅绑定配置初始值，运行时切换见 {@code McpSampleService#setMode}
+     */
+    public record Mcp(String mode) {
+        public Mcp {
+            if (mode == null || mode.isBlank()) {
+                mode = "remote";
+            } else {
+                mode = mode.trim().toLowerCase();
+                if (!mode.equals("remote") && !mode.equals("inprocess")) {
+                    mode = "remote";
+                }
+            }
+        }
+
+        public boolean remote() {
+            return "remote".equals(mode);
         }
     }
 

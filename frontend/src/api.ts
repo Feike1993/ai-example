@@ -53,10 +53,13 @@ export type McpChatResponse = {
   content: string
   toolNames: string[]
   usage: TokenUsage | null
+  mode?: string
 }
 
 export type McpToolsResponse = {
   toolNames: string[]
+  mode?: string
+  error?: string
 }
 
 export type RagSource = {
@@ -75,11 +78,27 @@ export type RagQueryResponse = {
   retrievalEmpty: boolean
   usage: TokenUsage | null
   retrievalMode?: string
+  queryExpansion?: string
+  hypotheticalDocument?: string | null
 }
 
 export type RagCompareResponse = {
   vector: RagQueryResponse
   hybrid: RagQueryResponse
+}
+
+export type RagExpansionView = {
+  queryExpansion: string
+  sources: RagSource[]
+  retrievalEmpty: boolean
+  hypotheticalDocument?: string | null
+  rewrittenQuery?: string | null
+}
+
+export type RagExpansionCompareResponse = {
+  none: RagExpansionView
+  rewrite: RagExpansionView
+  hyde: RagExpansionView
 }
 
 export type EvalCaseResult = {
@@ -231,10 +250,21 @@ export function listProviders(): Promise<ProviderListResponse> {
  * POST JSON 并解析响应。非 2xx 抛 {@link ApiError}。
  */
 export async function postJson<T>(path: string, body: unknown): Promise<T> {
+  return requestJson<T>(path, 'POST', body)
+}
+
+/**
+ * PUT JSON 并解析响应。非 2xx 抛 {@link ApiError}。
+ */
+export async function putJson<T>(path: string, body: unknown): Promise<T> {
+  return requestJson<T>(path, 'PUT', body)
+}
+
+async function requestJson<T>(path: string, method: 'POST' | 'PUT', body: unknown): Promise<T> {
   let response: Response
   try {
     response = await fetch(path, {
-      method: 'POST',
+      method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })

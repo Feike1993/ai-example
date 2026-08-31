@@ -67,12 +67,18 @@
 
 11. [持久会话](samples/11-persist-session.md) → 12. [长期记忆](samples/12-long-term-memory.md)
 
+## 第六期：MCP 远端拆分 + 完整 HyDE（进阶）
+
+见 [phase6.md](phase6.md)：
+
+13. [MCP 远端拆分](samples/13-mcp-remote.md) → 14. [完整 HyDE](samples/14-hyde.md)
+
 基础 vs 进阶分层：
 
 | 层次 | 范围 | 状态 |
 | --- | --- | --- |
 | **基础** | 最小 Agent 闭环 + MCP/RAG 入门 + 进程内上下文 + 同进程多 Agent + 基础补丁 A1–A5 | **已完成**（tag `v0.2.0`） |
-| **进阶** | Hybrid 检索、golden 评测、持久会话、长期记忆、HyDE、分布式 Agent 等 | **第四 / 五期**（4：Hybrid+Eval；5：持久会话+长期记忆） |
+| **进阶** | Hybrid、评测、持久会话、长期记忆、MCP 远端、HyDE 等 | **第四～六期** |
 
 ## 刻意不做 / 后续候选
 

@@ -1,0 +1,15 @@
+# 单元 / 集成测默认走 inprocess，避免启动期强连 mcp-server:8081
+app:
+  ai:
+    mcp:
+      mode: inprocess
+    context:
+      store: memory
+
+spring:
+  ai:
+    mcp:
+      server:
+        enabled: true
+      client:
+        enabled: false

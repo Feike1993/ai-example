@@ -37,7 +37,7 @@ class RagEmptyRetrievalTest {
         RagSampleService service = new RagSampleService(
             vectorStore,
             registry,
-            new AiProperties.Rag(true, 4, 400, 1, true, new AiProperties.Rag.Hybrid(true, 60, 4, false)),
+            new AiProperties.Rag(true, 4, 400, 1, true, new AiProperties.Rag.Hybrid(true, 60, 4, false), new AiProperties.Rag.Hyde(true, true)),
             null
         );
 
@@ -65,7 +65,7 @@ class RagEmptyRetrievalTest {
         RagSampleService service = new RagSampleService(
             vectorStore,
             registry,
-            new AiProperties.Rag(true, 4, 400, 2, true, new AiProperties.Rag.Hybrid(true, 60, 4, false)),
+            new AiProperties.Rag(true, 4, 400, 2, true, new AiProperties.Rag.Hybrid(true, 60, 4, false), new AiProperties.Rag.Hyde(true, true)),
             null
         );
 
@@ -82,7 +82,7 @@ class RagEmptyRetrievalTest {
         RagSampleService service = new RagSampleService(
             mock(VectorStore.class),
             mock(LlmProviderRegistry.class),
-            new AiProperties.Rag(true, 4, 400, 2, false, new AiProperties.Rag.Hybrid(true, 60, 4, false)),
+            new AiProperties.Rag(true, 4, 400, 2, false, new AiProperties.Rag.Hybrid(true, 60, 4, false), new AiProperties.Rag.Hyde(true, true)),
             null
         );
 
@@ -100,7 +100,7 @@ class RagEmptyRetrievalTest {
         RagSampleService service = new RagSampleService(
             mock(VectorStore.class),
             registry,
-            new AiProperties.Rag(true, 4, 400, 1, true, new AiProperties.Rag.Hybrid(true, 60, 4, false)),
+            new AiProperties.Rag(true, 4, 400, 1, true, new AiProperties.Rag.Hybrid(true, 60, 4, false), new AiProperties.Rag.Hyde(true, true)),
             null
         );
 

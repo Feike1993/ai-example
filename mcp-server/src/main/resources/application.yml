@@ -1,0 +1,16 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: ai-example-mcp-server
+  ai:
+    mcp:
+      server:
+        name: ai-example-mcp
+        version: 0.1.0
+        protocol: STREAMABLE
+        streamable-http:
+          mcp-endpoint: /mcp
+      client:
+        enabled: false

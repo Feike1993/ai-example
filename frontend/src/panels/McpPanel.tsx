@@ -1,11 +1,13 @@
-import { Badge, Button, Group, Stack, Text, Textarea } from '@mantine/core'
+import { Badge, Button, Group, SegmentedControl, Stack, Text, Textarea } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useEffect, useState } from 'react'
 import {
   describeError,
   getJson,
   postJson,
+  putJson,
   API_BASE,
+  ApiError,
   type McpChatResponse,
   type McpToolsResponse,
 } from '../api'
@@ -16,22 +18,69 @@ import { SampleFrame } from '../components/SampleFrame'
 import { Workbench } from '../components/Workbench'
 import { mcpGuide } from '../guides'
 
+type McpMode = 'remote' | 'inprocess'
+
 /**
- * MCP 样例：展示已注册工具，并走 MCP 工具集问答。
+ * MCP 样例面板。
+ *
+ * SegmentedControl ↔ `PUT /mcp/mode`：切换进程内全局模式（不重启）。
+ * remote 列工具失败时仍更新本地 mode、清空工具列表，主应用其它样例不受影响。
  */
 export function McpPanel({ provider }: { provider: string }) {
   const [prompt, setPrompt] = useState('北京天气怎么样？再算 3+5')
   const [loading, setLoading] = useState(false)
+  const [modeSwitching, setModeSwitching] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<McpChatResponse | null>(null)
   const [toolNames, setToolNames] = useState<string[]>([])
   const [elapsedMs, setElapsedMs] = useState<number | null>(null)
+  const [mode, setMode] = useState<McpMode>('remote')
 
   useEffect(() => {
     void getJson<McpToolsResponse>(`${API_BASE}/mcp/tools`)
-      .then((data) => setToolNames(data.toolNames ?? []))
-      .catch(() => setToolNames([]))
+      .then((data) => {
+        setToolNames(data.toolNames ?? [])
+        if (data.mode === 'remote' || data.mode === 'inprocess') {
+          setMode(data.mode)
+        }
+        if (data.error) {
+          notifications.show({ color: 'yellow', title: 'MCP 工具未就绪', message: data.error })
+        }
+      })
+      .catch(() => {
+        setToolNames([])
+      })
   }, [])
+
+  const switchMode = async (next: McpMode) => {
+    if (next === mode || modeSwitching) {
+      return
+    }
+    setModeSwitching(true)
+    try {
+      const data = await putJson<McpToolsResponse>(`${API_BASE}/mcp/mode`, { mode: next })
+      setMode((data.mode === 'inprocess' ? 'inprocess' : 'remote') as McpMode)
+      setToolNames(data.toolNames ?? [])
+    } catch (err) {
+      // 后端已先写入 mode；503 body 常仍带 mode/error
+      let switched: McpMode = next
+      if (err instanceof ApiError) {
+        try {
+          const body = JSON.parse(err.body) as McpToolsResponse
+          if (body.mode === 'remote' || body.mode === 'inprocess') {
+            switched = body.mode
+          }
+        } catch {
+          /* 非 JSON 时仍用目标 next */
+        }
+      }
+      setMode(switched)
+      setToolNames([])
+      notifications.show({ color: 'red', title: '模式已切换，工具不可用', message: describeError(err) })
+    } finally {
+      setModeSwitching(false)
+    }
+  }
 
   const run = async () => {
     setError(null)
@@ -46,6 +95,9 @@ export function McpPanel({ provider }: { provider: string }) {
       if (data.toolNames?.length) {
         setToolNames(data.toolNames)
       }
+      if (data.mode === 'remote' || data.mode === 'inprocess') {
+        setMode(data.mode)
+      }
     } catch (err) {
       const message = describeError(err)
       setError(message)
@@ -59,9 +111,28 @@ export function McpPanel({ provider }: { provider: string }) {
     <SampleFrame guide={mcpGuide}>
       <Workbench
         title="MCP"
-        hint="POST /ai-example/mcp/chat；工具经 MCP Server 注册（Streamable HTTP /mcp）。"
+        hint={
+          mode === 'remote'
+            ? 'mode=remote：请先启动 mcp-server（8081）。工具经 Streamable HTTP 拉取；可切到 inprocess 免旁进程。'
+            : 'mode=inprocess：同进程工具直挂 ChatClient，无需 mcp-server。'
+        }
         form={
           <Stack gap="md">
+            <div>
+              <Text size="sm" mb={6}>
+                模式
+              </Text>
+              <SegmentedControl
+                fullWidth
+                value={mode}
+                onChange={(value) => void switchMode(value as McpMode)}
+                data={[
+                  { label: 'remote', value: 'remote' },
+                  { label: 'inprocess', value: 'inprocess' },
+                ]}
+                disabled={modeSwitching || loading}
+              />
+            </div>
             <div>
               <Text size="sm" mb={6}>
                 已发现工具
@@ -69,7 +140,7 @@ export function McpPanel({ provider }: { provider: string }) {
               <Group gap={6}>
                 {toolNames.length === 0 && (
                   <Text size="sm" c="dimmed">
-                    启动后端后自动加载
+                    {mode === 'remote' ? '需 mcp-server:8081，或切到 inprocess' : '启动后端后自动加载'}
                   </Text>
                 )}
                 {toolNames.map((name) => (
@@ -86,7 +157,7 @@ export function McpPanel({ provider }: { provider: string }) {
               value={prompt}
               onChange={(event) => setPrompt(event.currentTarget.value)}
             />
-            <Button loading={loading} disabled={!prompt.trim() || loading} onClick={() => void run()}>
+            <Button loading={loading} disabled={!prompt.trim() || loading || modeSwitching} onClick={() => void run()}>
               调用
             </Button>
           </Stack>
@@ -96,6 +167,9 @@ export function McpPanel({ provider }: { provider: string }) {
             {result && (
               <Stack gap="sm">
                 <RequestMeta elapsedMs={elapsedMs} usage={result.usage} />
+                <Badge variant="light" color={(result.mode || mode) === 'remote' ? 'teal' : 'gray'}>
+                  mode {result.mode || mode}
+                </Badge>
                 <pre className="stream-text">{result.content}</pre>
                 <RawJsonAccordion value={result} />
               </Stack>
