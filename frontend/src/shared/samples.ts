@@ -20,6 +20,7 @@ export type AdvancedSampleId =
   | 'semanticChunk'
   | 'parentChild'
   | 'memoryExtract'
+  | 'memoryCompare'
 
 /** Playground 全部 Tab id。 */
 export type PlaygroundSampleId = BaselineSampleId | AdvancedSampleId
@@ -246,6 +247,19 @@ export const samples: readonly SampleMeta[] = [
     concepts: ['extract', 'facts → remember', 'session 快照可选'],
     endpoint: 'POST /ai-example/memory/extract',
     docPath: 'docs/samples/17-memory-extract.md',
+  },
+  {
+    id: 'memoryCompare',
+    index: 16,
+    label: '召回对照',
+    description: 'topK / 阈值 / 有无记忆',
+    stage: 'advanced',
+    phase: 8,
+    tagline: '并排看清召回与答案差异',
+    body: 'recall/compare 三路 sources；chat/compare 有记忆 vs 纯 Chat。阈值依赖 score。',
+    concepts: ['topK 宽窄', 'similarityThreshold', 'with vs without'],
+    endpoint: 'POST /ai-example/memory/recall/compare',
+    docPath: 'docs/samples/18-memory-recall-compare.md',
   },
 ] as const
 

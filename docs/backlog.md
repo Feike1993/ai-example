@@ -72,6 +72,7 @@
 | Redis / DB 持久会话 | 第三期 | 已覆盖（PG） | 第五期用 PostgreSQL；Redis 仍候选 | 见 [11-persist-session.md](samples/11-persist-session.md) |
 | 长期记忆写入向量库 | 第三期 | 已覆盖 | 第五期 | 见 [12-long-term-memory.md](samples/12-long-term-memory.md) |
 | 对话自动抽事实写入记忆 | 样例 12 刻意不做 | 已覆盖（显式 API） | 第八期 8a | 见 [17-memory-extract.md](samples/17-memory-extract.md)；不静默塞进 chat |
+| 召回策略对照（topK / 阈值 / 有无记忆） | 第五期后 | 已覆盖 | 第八期 8b | 见 [18-memory-recall-compare.md](samples/18-memory-recall-compare.md) |
 | 精确 tokenizer 计费 | 第三期 | 候选 | 字符/4 启发式足够建立预算直觉 | 业务项目 |
 | 完整 Harness 六层产品化 | 第三期占位 | 明确不做（本仓） | 文档点名即可；代码只落记忆 + 预算约束 | 业务架构 |
 

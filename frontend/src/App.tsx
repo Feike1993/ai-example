@@ -12,6 +12,7 @@ import { ContextPanel } from './panels/ContextPanel'
 import { McpPanel } from './panels/McpPanel'
 import { MemoryPanel } from './panels/MemoryPanel'
 import { MemoryExtractPanel } from './panels/MemoryExtractPanel'
+import { MemoryComparePanel } from './panels/MemoryComparePanel'
 import { MultiAgentPanel } from './panels/MultiAgentPanel'
 import { RagPanel } from './panels/RagPanel'
 import { StructuredPanel } from './panels/StructuredPanel'
@@ -158,6 +159,7 @@ function App() {
         {sample === 'semanticChunk' && <SemanticChunkPanel provider={provider} />}
         {sample === 'parentChild' && <ParentChildPanel provider={provider} />}
         {sample === 'memoryExtract' && <MemoryExtractPanel provider={provider} />}
+        {sample === 'memoryCompare' && <MemoryComparePanel provider={provider} />}
       </AppShell.Main>
     </AppShell>
   )

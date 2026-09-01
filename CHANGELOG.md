@@ -105,7 +105,7 @@ Hybrid RAG、golden 评测、Redis 持久会话、逐步 tool SSE、流式 token
 
 - [phase7.md](docs/phase7.md)、[15-semantic-chunk.md](docs/samples/15-semantic-chunk.md)、[16-parent-child.md](docs/samples/16-parent-child.md)
 
-## [Unreleased] — 第八期进阶（8a 自动抽记忆；8b 待合入）
+## [Unreleased] — 第八期进阶（8a 自动抽记忆 + 8b 召回策略对照）
 
 ### 自动抽记忆（8a）
 
@@ -113,6 +113,13 @@ Hybrid RAG、golden 评测、Redis 持久会话、逐步 tool SSE、流式 token
 - 配置 `app.ai.memory.extract-max-facts`（默认 5）
 - 前端 **MemoryExtract** Tab；Python `memory_extract`
 
+### 召回策略对照（8b）
+
+- `recall` 支持可选 `similarityThreshold`（有 score 时过滤）
+- `POST /memory/recall/compare`：lowTopK / highTopK / withThreshold 三套 sources
+- `POST /memory/chat/compare`：withMemory / withoutMemory 两套答案
+- 前端 **MemoryCompare** Tab；Python `memory_recall_compare`
+
 ### 文档
 
-- [phase8.md](docs/phase8.md)、[17-memory-extract.md](docs/samples/17-memory-extract.md)
+- [phase8.md](docs/phase8.md)、[17-memory-extract.md](docs/samples/17-memory-extract.md)、[18-memory-recall-compare.md](docs/samples/18-memory-recall-compare.md)

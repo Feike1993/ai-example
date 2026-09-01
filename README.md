@@ -49,6 +49,7 @@ Java：**Spring Boot 4.1 + Spring AI 2.0 + Gradle**；Python：**LangGraph / MCP
 | 7a | 语义分块 | token vs 结构切 | `POST /ai-example/rag/query/compare-chunking` | `samples.semantic_chunk` |
 | 7b | 父子文档 | 子检索父上下文 | `chunkingStrategy=parent_child` | `samples.parent_child_rag` |
 | 8a | 自动抽记忆 | 对话抽事实 → remember | `POST /ai-example/memory/extract` | `samples.memory_extract` |
+| 8b | 召回对照 | topK / 阈值 / 有无记忆 | `POST /ai-example/memory/recall/compare` | `samples.memory_recall_compare` |
 
 文档：[学习路径](docs/learning-path.md) · [基础补丁](docs/baseline-patches.md) · [集成说明](docs/integration.md) · [第二期](docs/phase2.md) · [第三期](docs/phase3.md) · [第四期](docs/phase4.md) · [第五期](docs/phase5.md) · [第六期](docs/phase6.md) · [第七期](docs/phase7.md) · [第八期](docs/phase8.md) · [CHANGELOG](CHANGELOG.md) · [刻意不做 backlog](docs/backlog.md)
 

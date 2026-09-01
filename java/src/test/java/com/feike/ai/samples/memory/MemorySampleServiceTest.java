@@ -193,4 +193,61 @@ class MemorySampleServiceTest {
         );
         assertEquals(List.of("a", "b"), facts);
     }
+
+    @Test
+    void recallShouldFilterBySimilarityThresholdWhenScorePresent() {
+        VectorStore vectorStore = mock(VectorStore.class);
+        Document high = Document.builder().id("1").text("喜欢北京烤鸭").score(0.95).build();
+        Document low = Document.builder().id("2").text("无关天气").score(0.2).build();
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(high, low));
+
+        MemorySampleService svc = service(vectorStore, mock(LlmProviderRegistry.class));
+        MemorySampleService.RecallResult result = svc.recall("喜欢吃什么", "demo", 4, 0.5);
+
+        assertEquals(1, result.sources().size());
+        assertEquals("喜欢北京烤鸭", result.sources().getFirst().excerpt());
+    }
+
+    @Test
+    void compareRecallShouldReturnThreeBranches() {
+        VectorStore vectorStore = mock(VectorStore.class);
+        Document a = Document.builder().id("1").text("喜欢北京烤鸭").score(0.9).build();
+        Document b = Document.builder().id("2").text("住在杭州").score(0.3).build();
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(a, b));
+
+        MemorySampleService svc = service(vectorStore, mock(LlmProviderRegistry.class));
+        MemorySampleService.RecallCompareResult compare = svc.compareRecall(
+            "喜欢什么",
+            "demo",
+            1,
+            8,
+            0.5
+        );
+
+        assertEquals(1, compare.lowTopKSize());
+        assertEquals(8, compare.highTopKSize());
+        assertEquals(0.5, compare.similarityThreshold());
+        assertFalse(compare.lowTopK().empty());
+        assertEquals(2, compare.highTopK().sources().size());
+        assertEquals(1, compare.withThreshold().sources().size());
+    }
+
+    @Test
+    void compareChatWithoutGenerateShouldSkipLlm() {
+        VectorStore vectorStore = mock(VectorStore.class);
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of());
+        LlmProviderRegistry registry = mock(LlmProviderRegistry.class);
+
+        MemorySampleService svc = service(vectorStore, registry);
+        MemorySampleService.ChatCompareResult compare = svc.compareChat(
+            "任意",
+            "demo",
+            "deepseek",
+            null,
+            false
+        );
+
+        assertTrue(compare.withMemory().retrievalEmpty());
+        verify(registry, never()).plainClient(any());
+    }
 }

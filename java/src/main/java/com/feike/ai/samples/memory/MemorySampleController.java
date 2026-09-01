@@ -16,7 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 长期记忆样例 HTTP：remember / recall / chat / extract / clear。
+ * 长期记忆样例 HTTP：remember / recall / chat / extract / compare / clear。
  */
 @Validated
 @RestController
@@ -26,9 +26,25 @@ public class MemorySampleController {
 
     public record RememberRequest(@NotBlank String text, String userId, String sessionId) {}
 
-    public record RecallRequest(@NotBlank String query, String userId, Integer topK) {}
+    public record RecallRequest(@NotBlank String query, String userId, Integer topK, Double similarityThreshold) {}
 
     public record ChatRequest(@NotBlank String prompt, String userId, String provider, Integer topK) {}
+
+    public record RecallCompareRequest(
+        @NotBlank String query,
+        String userId,
+        Integer lowTopK,
+        Integer highTopK,
+        Double similarityThreshold
+    ) {}
+
+    public record ChatCompareRequest(
+        @NotBlank String prompt,
+        String userId,
+        String provider,
+        Integer topK,
+        Boolean generateAnswers
+    ) {}
 
     /**
      * @param messages   显式对话；与 turns / sessionId 三选一优先 messages
@@ -62,7 +78,25 @@ public class MemorySampleController {
 
     @PostMapping("/recall")
     public MemorySampleService.RecallResult recall(@RequestBody @Validated RecallRequest request) {
-        return memorySampleService.recall(request.query(), request.userId(), request.topK());
+        return memorySampleService.recall(
+            request.query(),
+            request.userId(),
+            request.topK(),
+            request.similarityThreshold()
+        );
+    }
+
+    @PostMapping("/recall/compare")
+    public MemorySampleService.RecallCompareResult recallCompare(
+        @RequestBody @Validated RecallCompareRequest request
+    ) {
+        return memorySampleService.compareRecall(
+            request.query(),
+            request.userId(),
+            request.lowTopK(),
+            request.highTopK(),
+            request.similarityThreshold()
+        );
     }
 
     @PostMapping("/chat")
@@ -72,6 +106,17 @@ public class MemorySampleController {
             request.userId(),
             request.provider(),
             request.topK()
+        );
+    }
+
+    @PostMapping("/chat/compare")
+    public MemorySampleService.ChatCompareResult chatCompare(@RequestBody @Validated ChatCompareRequest request) {
+        return memorySampleService.compareChat(
+            request.prompt(),
+            request.userId(),
+            request.provider(),
+            request.topK(),
+            request.generateAnswers()
         );
     }
 

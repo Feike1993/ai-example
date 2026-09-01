@@ -83,7 +83,7 @@
 
 见 [phase8.md](phase8.md)：
 
-17. [自动抽记忆](samples/17-memory-extract.md)（分支 8a）→ 18. [召回策略对照](samples/18-memory-recall-compare.md)（分支 8b，待合入）
+17. [自动抽记忆](samples/17-memory-extract.md)（分支 8a）→ 18. [召回策略对照](samples/18-memory-recall-compare.md)（分支 8b）
 
 基础 vs 进阶分层：
 

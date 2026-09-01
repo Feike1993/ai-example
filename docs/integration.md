@@ -93,7 +93,7 @@ Python 对照：`hybrid_rag.py`、`eval_runner.py`。
 - 拷 `samples.memory`；`corpus=long-term-memory` 与 RAG 演示语料隔离
 - remember / recall / chat / extract；依赖 Embedding + pgvector
 
-Python 对照：`context_memory.py`（可选 SQLite）、`long_term_memory.py`、`memory_extract.py`。
+Python 对照：`context_memory.py`（可选 SQLite）、`long_term_memory.py`、`memory_extract.py`、`memory_recall_compare.py`。
 
 ### 第六期
 

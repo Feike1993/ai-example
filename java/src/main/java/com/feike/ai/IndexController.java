@@ -67,6 +67,10 @@ public class IndexController {
             "POST /ai-example/rag/query (chunkingStrategy=parent_child)  compare-chunking.parentChild"
         );
         advancedSamples.put("memoryExtract", "POST /ai-example/memory/extract");
+        advancedSamples.put(
+            "memoryCompare",
+            "POST /ai-example/memory/recall/compare  POST /ai-example/memory/chat/compare"
+        );
         advanced.put("samples", advancedSamples);
         body.put("advanced", advanced);
 

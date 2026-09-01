@@ -127,8 +127,10 @@ public class MemorySampleService {
 
     /**
      * 按相似度召回记忆。
+     *
+     * @param similarityThreshold 可选；有 Document score 时按阈值过滤，无 score 则仅 topK
      */
-    public RecallResult recall(String query, String userId, Integer topK) {
+    public RecallResult recall(String query, String userId, Integer topK, Double similarityThreshold) {
         String uid = resolveUserId(userId);
         int k = topK != null && topK > 0 ? topK : memorySettings.topK();
         List<Document> hits = vectorStore.similaritySearch(
@@ -141,7 +143,109 @@ public class MemorySampleService {
                 )
                 .build()
         );
-        return new RecallResult(uid, toSources(hits), hits.isEmpty());
+        if (hits == null) {
+            hits = List.of();
+        }
+        Double threshold = similarityThreshold;
+        boolean scoreAvailable = hits.stream().anyMatch(doc -> doc.getScore() != null);
+        if (threshold != null && scoreAvailable) {
+            double t = threshold;
+            hits = hits.stream()
+                .filter(doc -> doc.getScore() != null && doc.getScore() >= t)
+                .toList();
+        }
+        String note = null;
+        if (threshold != null && !scoreAvailable && !hits.isEmpty()) {
+            note = "向量库未返回 score，similarityThreshold 未生效，仅 topK 生效";
+        }
+        return new RecallResult(uid, toSources(hits), hits.isEmpty(), note);
+    }
+
+    /** 兼容旧调用：无阈值。 */
+    public RecallResult recall(String query, String userId, Integer topK) {
+        return recall(query, userId, topK, null);
+    }
+
+    /**
+     * 三路召回对照：小 topK / 大 topK / 大 topK+阈值（默认不生成答案）。
+     */
+    public RecallCompareResult compareRecall(
+        String query,
+        String userId,
+        Integer lowTopK,
+        Integer highTopK,
+        Double similarityThreshold
+    ) {
+        int low = lowTopK != null && lowTopK > 0 ? lowTopK : 1;
+        int high = highTopK != null && highTopK > 0 ? highTopK : Math.max(memorySettings.topK() * 2, 8);
+        double threshold = similarityThreshold != null
+            ? similarityThreshold
+            : memorySettings.similarityThreshold();
+        RecallResult lowResult = recall(query, userId, low, null);
+        RecallResult highResult = recall(query, userId, high, null);
+        RecallResult thresholdResult = recall(query, userId, high, threshold);
+        return new RecallCompareResult(
+            lowResult.userId(),
+            low,
+            high,
+            threshold,
+            lowResult,
+            highResult,
+            thresholdResult
+        );
+    }
+
+    /**
+     * 有记忆 vs 无记忆纯 Chat 对照。
+     *
+     * @param generateAnswers 默认 true；false 时 without 仅占位、with 仍走 recall 不生成
+     */
+    public ChatCompareResult compareChat(
+        String prompt,
+        String userId,
+        String provider,
+        Integer topK,
+        Boolean generateAnswers
+    ) {
+        boolean generate = generateAnswers == null || generateAnswers;
+        MemoryChatResult withMemory;
+        if (generate) {
+            withMemory = chat(prompt, userId, provider, topK);
+        } else {
+            RecallResult recalled = recall(prompt, userId, topK);
+            withMemory = new MemoryChatResult(
+                recalled.empty() ? EMPTY_REFUSAL : "（generateAnswers=false，跳过生成）",
+                recalled.sources(),
+                recalled.empty(),
+                recalled.userId(),
+                null
+            );
+        }
+
+        MemoryChatResult withoutMemory;
+        if (!generate) {
+            withoutMemory = new MemoryChatResult(
+                "（generateAnswers=false，跳过生成）",
+                List.of(),
+                true,
+                resolveUserId(userId),
+                null
+            );
+        } else {
+            var call = registry.plainClient(provider)
+                .prompt()
+                .system("你是助手。用简体中文回答；没有依据时可以说不知道。")
+                .user(prompt)
+                .call();
+            withoutMemory = new MemoryChatResult(
+                call.content(),
+                List.of(),
+                true,
+                resolveUserId(userId),
+                TokenUsageExtractor.from(call.chatResponse())
+            );
+        }
+        return new ChatCompareResult(withMemory, withoutMemory);
     }
 
     /**
@@ -410,7 +514,11 @@ public class MemorySampleService {
      */
     public record RememberResult(String id, String userId, String text, boolean duplicate, boolean updated) {}
 
-    public record RecallResult(String userId, List<SourceView> sources, boolean empty) {}
+    public record RecallResult(String userId, List<SourceView> sources, boolean empty, String note) {
+        public RecallResult(String userId, List<SourceView> sources, boolean empty) {
+            this(userId, sources, empty, null);
+        }
+    }
 
     public record MemoryChatResult(
         String answer,
@@ -439,4 +547,27 @@ public class MemorySampleService {
         List<RememberResult> remembered,
         int skippedDuplicates
     ) {}
+
+    /**
+     * 召回三路对照。
+     *
+     * @param lowTopKSize           窄召回所用 topK
+     * @param highTopKSize          宽召回所用 topK
+     * @param similarityThreshold   withThreshold 路使用的阈值
+     * @param lowTopK               窄召回结果
+     * @param highTopK              宽召回结果
+     * @param withThreshold         宽召回 + 阈值过滤
+     */
+    public record RecallCompareResult(
+        String userId,
+        int lowTopKSize,
+        int highTopKSize,
+        double similarityThreshold,
+        RecallResult lowTopK,
+        RecallResult highTopK,
+        RecallResult withThreshold
+    ) {}
+
+    /** 有记忆 / 无记忆 chat 对照。 */
+    public record ChatCompareResult(MemoryChatResult withMemory, MemoryChatResult withoutMemory) {}
 }

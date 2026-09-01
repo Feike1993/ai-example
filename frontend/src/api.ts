@@ -174,6 +174,7 @@ export type MemoryRecallResponse = {
   userId: string
   sources: MemorySource[]
   empty: boolean
+  note?: string | null
 }
 
 export type MemoryChatResponse = {
@@ -189,6 +190,21 @@ export type MemoryExtractResponse = {
   facts: string[]
   remembered: MemoryRememberResponse[]
   skippedDuplicates: number
+}
+
+export type MemoryRecallCompareResponse = {
+  userId: string
+  lowTopKSize: number
+  highTopKSize: number
+  similarityThreshold: number
+  lowTopK: MemoryRecallResponse
+  highTopK: MemoryRecallResponse
+  withThreshold: MemoryRecallResponse
+}
+
+export type MemoryChatCompareResponse = {
+  withMemory: MemoryChatResponse
+  withoutMemory: MemoryChatResponse
 }
 
 export type MultiAgentStep = {
