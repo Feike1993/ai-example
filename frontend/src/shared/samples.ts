@@ -12,7 +12,7 @@ export type BaselineSampleId =
   | 'multiagent'
 
 /** 进阶样例 id（仅 Playground）。 */
-export type AdvancedSampleId = 'hybridRag' | 'eval' | 'memory' | 'hyde' | 'semanticChunk'
+export type AdvancedSampleId = 'hybridRag' | 'eval' | 'memory' | 'hyde' | 'semanticChunk' | 'parentChild'
 
 /** Playground 全部 Tab id。 */
 export type PlaygroundSampleId = BaselineSampleId | AdvancedSampleId
@@ -213,6 +213,19 @@ export const samples: readonly SampleMeta[] = [
     concepts: ['结构感知分块', 'corpus 隔离', 'compare-chunking'],
     endpoint: 'POST /ai-example/rag/query/compare-chunking',
     docPath: 'docs/samples/15-semantic-chunk.md',
+  },
+  {
+    id: 'parentChild',
+    index: 14,
+    label: '父子文档',
+    description: '子检索父上下文',
+    stage: 'advanced',
+    phase: 7,
+    tagline: '小块检索，大块生成',
+    body: '子块 Embedding 检索；命中后展开 parentText 去重拼上下文。',
+    concepts: ['parent-child', 'expand-parent', '粒度解耦'],
+    endpoint: 'POST /ai-example/rag/query (chunkingStrategy=parent_child)',
+    docPath: 'docs/samples/16-parent-child.md',
   },
 ] as const
 

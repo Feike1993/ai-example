@@ -1,6 +1,6 @@
 # AI Agent 学习样例
 
-独立的 Agent 学习 cookbook。**基础闭环 v0.2.0**（一至三期 + 基础补丁）；**第四期**：Hybrid RAG + Agent 评测；**第五期**：持久会话 + 长期记忆；**第六期**：MCP 远端拆分 + 完整 HyDE；**第七期（进行中）**：语义分块（7a）→ 父子文档（7b）。
+独立的 Agent 学习 cookbook。**基础闭环 v0.2.0**（一至三期 + 基础补丁）；**第四期**：Hybrid RAG + Agent 评测；**第五期**：持久会话 + 长期记忆；**第六期**：MCP 远端拆分 + 完整 HyDE；**第七期**：语义分块 + 父子文档。
 
 **宣传**：[基础闭环宣传页](frontend/promo.html) · [方版宣传图](frontend/public/promo/opensource-poster-1080.png)（源文件 [poster.html](frontend/poster.html)，导出 `cd frontend && pnpm poster:export`）
 
@@ -11,7 +11,7 @@
 - **第四期**：Hybrid RAG → golden 评测（见 [phase4](docs/phase4.md)）
 - **第五期**：持久会话（PostgreSQL）→ 长期记忆（pgvector）（见 [phase5](docs/phase5.md)）
 - **第六期**：MCP 远端拆分 → 完整 HyDE（见 [phase6](docs/phase6.md)）
-- **第七期**：语义分块（见 [phase7](docs/phase7.md) / [15](docs/samples/15-semantic-chunk.md)）；父子文档待 7b
+- **第七期**：语义分块 → 父子文档（见 [phase7](docs/phase7.md)）
 
 Java：**Spring Boot 4.1 + Spring AI 2.0 + Gradle**；Python：**LangGraph / MCP SDK**；前端：**Vite + React playground**。
 
@@ -46,6 +46,7 @@ Java：**Spring Boot 4.1 + Spring AI 2.0 + Gradle**；Python：**LangGraph / MCP
 | 6 | MCP 远端 | 独立 Server + Client | `POST /ai-example/mcp/chat`（需 8081） | `samples.mcp_client_http` |
 | 6 | HyDE | 假想文档 Embedding | `POST /ai-example/rag/query/compare-expansion` | `samples.hyde_rag` |
 | 7a | 语义分块 | token vs 结构切 | `POST /ai-example/rag/query/compare-chunking` | `samples.semantic_chunk` |
+| 7b | 父子文档 | 子检索父上下文 | `chunkingStrategy=parent_child` | `samples.parent_child_rag` |
 
 文档：[学习路径](docs/learning-path.md) · [基础补丁](docs/baseline-patches.md) · [集成说明](docs/integration.md) · [第二期](docs/phase2.md) · [第三期](docs/phase3.md) · [第四期](docs/phase4.md) · [第五期](docs/phase5.md) · [第六期](docs/phase6.md) · [第七期](docs/phase7.md) · [CHANGELOG](CHANGELOG.md) · [刻意不做 backlog](docs/backlog.md)
 

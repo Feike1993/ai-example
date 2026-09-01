@@ -110,4 +110,14 @@ Python 对照：`context_memory.py`（可选 SQLite）、`long_term_memory.py`�
 
 Python 对照：`mcp_client_http.py`、`hyde_rag.py`。
 
+### 第七期
+
+#### 语义分块 / 父子文档
+
+- 拷 `SemanticMarkdownSplitter`；ingest `strategy` + 旁路 corpus
+- 父子：子块 metadata 含 `parentText`；`expandParents` 拼上下文
+- `POST /rag/query/compare-chunking`
+
+Python：`semantic_chunk.py`、`parent_child_rag.py`。
+
 刻意不做总表：[backlog.md](backlog.md)。

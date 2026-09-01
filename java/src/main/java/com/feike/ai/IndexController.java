@@ -51,7 +51,9 @@ public class IndexController {
             "hyde",
             "POST /ai-example/rag/query (queryExpansion=hyde)  POST /ai-example/rag/query/compare-expansion",
             "semanticChunk",
-            "POST /ai-example/rag/ingest (strategy)  POST /ai-example/rag/query/compare-chunking"
+            "POST /ai-example/rag/ingest (strategy)  POST /ai-example/rag/query/compare-chunking",
+            "parentChild",
+            "POST /ai-example/rag/query (chunkingStrategy=parent_child)  compare-chunking.parentChild"
         ));
         body.put("advanced", advanced);
 

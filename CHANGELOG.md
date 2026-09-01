@@ -85,16 +85,22 @@ Hybrid RAG、golden 评测、Redis 持久会话、逐步 tool SSE、流式 token
 - [phase6.md](docs/phase6.md)
 - [13-mcp-remote.md](docs/samples/13-mcp-remote.md)、[14-hyde.md](docs/samples/14-hyde.md)
 
-## [Unreleased] — 第七期进阶（7a 语义分块）
+## [Unreleased] — 第七期进阶（7a 语义分块 + 7b 父子文档）
 
-### 语义分块
+### 语义分块（7a）
 
 - `SemanticMarkdownSplitter`：标题 / 空行切 + 软合并（无 LLM）
 - ingest `strategy=token|semantic|all`；corpus `ai-example-demo-semantic`
-- `POST /rag/query/compare-chunking` 对照两套 sources
+- `POST /rag/query/compare-chunking` 对照 sources
 - 前端 **SemanticChunk** Tab；Python `semantic_chunk`
+
+### 父子文档（7b）
+
+- ingest `parent_child`：子块 Embedding，metadata 含 `parentText`
+- 检索后 `expand-parent` 去重父块拼上下文
+- compare-chunking 第三路 `parentChild`
+- 前端 **ParentChild** Tab；Python `parent_child_rag`
 
 ### 文档
 
-- [phase7.md](docs/phase7.md)、[15-semantic-chunk.md](docs/samples/15-semantic-chunk.md)
-- 父子文档（7b）待后续分支
+- [phase7.md](docs/phase7.md)、[15-semantic-chunk.md](docs/samples/15-semantic-chunk.md)、[16-parent-child.md](docs/samples/16-parent-child.md)
