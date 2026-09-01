@@ -57,7 +57,7 @@ class RagHydeRetrievalTest {
                 true, 4, 400, 1, true,
                 new AiProperties.Rag.Hybrid(true, 60, 4, false),
                 new AiProperties.Rag.Hyde(true, false),
-                new AiProperties.Rag.Chunking("ai-example-demo-semantic")
+                new AiProperties.Rag.Chunking("ai-example-demo-semantic", "ai-example-demo-parent", 200, true)
             ),
             null
         );
@@ -112,7 +112,7 @@ class RagHydeRetrievalTest {
                 true, 4, 400, 1, true,
                 new AiProperties.Rag.Hybrid(true, 60, 4, false),
                 new AiProperties.Rag.Hyde(true, false),
-                new AiProperties.Rag.Chunking("ai-example-demo-semantic")
+                new AiProperties.Rag.Chunking("ai-example-demo-semantic", "ai-example-demo-parent", 200, true)
             ),
             null
         );
@@ -174,7 +174,7 @@ class RagHydeRetrievalTest {
                 true, 4, 400, 1, true,
                 new AiProperties.Rag.Hybrid(true, 60, 4, false),
                 new AiProperties.Rag.Hyde(true, false),
-                new AiProperties.Rag.Chunking("ai-example-demo-semantic")
+                new AiProperties.Rag.Chunking("ai-example-demo-semantic", "ai-example-demo-parent", 200, true)
             ),
             null
         );

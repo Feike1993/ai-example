@@ -61,7 +61,7 @@ public record AiProperties(
             embedding = new Embedding("text-embedding-v3", 1024);
         }
         if (rag == null) {
-            rag = new Rag(true, 4, 400, 1, true, new Rag.Hybrid(true, 60, 4, false), new Rag.Hyde(true, true), new Rag.Chunking("ai-example-demo-semantic"));
+            rag = new Rag(true, 4, 400, 1, true, new Rag.Hybrid(true, 60, 4, false), new Rag.Hyde(true, true), new Rag.Chunking("ai-example-demo-semantic", "ai-example-demo-parent", 200, true));
         }
         if (context == null) {
             context = new ContextSettings(24, 2000, 6, "jdbc");
@@ -191,7 +191,7 @@ public record AiProperties(
                 hyde = new Hyde(true, true);
             }
             if (chunking == null) {
-                chunking = new Chunking("ai-example-demo-semantic");
+                chunking = new Chunking("ai-example-demo-semantic", "ai-example-demo-parent", 200, true);
             }
         }
 
@@ -223,14 +223,23 @@ public record AiProperties(
         public record Hyde(boolean enabled, boolean fuseWithOriginal) {}
 
         /**
-         * 分块旁路配置（7a：语义 corpus；7b 再扩 parent）。
+         * 分块旁路配置（7a 语义 corpus；7b 父子 corpus / 子块大小 / 展开）。
          *
          * @param semanticCorpus 语义分块写入的 corpus 名
+         * @param parentCorpus   父子文档子块写入的 corpus 名
+         * @param childSize      子块目标长度（字符近似）
+         * @param expandParent   检索后是否用 parentText 拼上下文
          */
-        public record Chunking(String semanticCorpus) {
+        public record Chunking(String semanticCorpus, String parentCorpus, int childSize, boolean expandParent) {
             public Chunking {
                 if (semanticCorpus == null || semanticCorpus.isBlank()) {
                     semanticCorpus = "ai-example-demo-semantic";
+                }
+                if (parentCorpus == null || parentCorpus.isBlank()) {
+                    parentCorpus = "ai-example-demo-parent";
+                }
+                if (childSize < 40) {
+                    childSize = 200;
                 }
             }
         }

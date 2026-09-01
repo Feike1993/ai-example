@@ -4,14 +4,14 @@
 
 | 分支 | 样例 | 状态 |
 | --- | --- | --- |
-| `phase7a` | [15 语义分块](samples/15-semantic-chunk.md) | **本分支交付** |
-| `phase7b` | [16 父子文档](samples/16-parent-child.md) | 待 7a 合入后再做 |
+| `phase7a` | [15 语义分块](samples/15-semantic-chunk.md) | 已交付 |
+| `phase7b` | [16 父子文档](samples/16-parent-child.md) | **本分支交付** |
 
-## 建议顺序（7a）
+## 建议顺序
 
-1. `POST /rag/ingest` 带 `strategy=all`（或分别 token / semantic）
-2. `POST /rag/query/compare-chunking` 对照两套 sources
-3. Playground 进阶 Tab **SemanticChunk**
+1. `POST /rag/ingest` `strategy=all`（token + semantic + parent_child）
+2. `POST /rag/query/compare-chunking` 对照三套 sources
+3. Playground：**SemanticChunk** → **ParentChild**
 
 ## 怎么跑（摘要）
 
@@ -33,6 +33,7 @@ Python：
 ```bash
 cd python && uv sync --group dev
 uv run python -m ai_example.samples.semantic_chunk
+uv run python -m ai_example.samples.parent_child_rag
 ```
 
-刻意不做（本仓）：LLM 切边界、异步索引 — 见 [backlog.md](backlog.md)。父子文档见 7b / 样例 16。
+刻意不做：LLM 切边界、异步索引 — 见 [backlog.md](backlog.md)。

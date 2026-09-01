@@ -77,7 +77,7 @@
 
 见 [phase7.md](phase7.md)：
 
-15. [语义分块](samples/15-semantic-chunk.md)（分支 7a）→ 16. [父子文档](samples/16-parent-child.md)（分支 7b，待合入）
+15. [语义分块](samples/15-semantic-chunk.md)（分支 7a）→ 16. [父子文档](samples/16-parent-child.md)（分支 7b）
 
 基础 vs 进阶分层：
 

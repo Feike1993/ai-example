@@ -39,6 +39,8 @@
 | 长期记忆写入向量库 | 第三期 | 已覆盖 | 第五期 | `corpus=long-term-memory` + `/memory/*` |
 | MCP 远端拆分（独立 Server + Client） | 第二期 | 已覆盖 | 第六期 | `mcp-server/` + `mode=remote` |
 | 完整 HyDE | 第二期 / 第四期 rewrite | 已覆盖 | 第六期 | `queryExpansion=hyde` + compare-expansion |
+| 语义分块 | 第二期 | 已覆盖 | 第七期 7a | `compare-chunking` token/semantic |
+| 父子文档 | 第二期 | 已覆盖 | 第七期 7b | 子块检索 + 父块展开 |
 
 ## 仍刻意不做（候选）
 
@@ -61,7 +63,7 @@
 | 混合检索（向量 + BM25 + RRF） | 第二期 | 已覆盖 | 第四期 | 见 [09-hybrid-rag.md](samples/09-hybrid-rag.md) |
 | 查询改写 / HyDE | 第二期 | 已覆盖 | 第四期最小 rewrite；第六期完整 HyDE | 见 [14-hyde.md](samples/14-hyde.md) |
 | 异步索引管道（如 Redis Stream） | 第二期 | 候选 | 依赖 Redis | 业务项目 |
-| 语义分块 / 父子文档 | 第二期 | 候选 | 固定 token 分块足够演示权衡 | 第四期 |
+| 语义分块 / 父子文档 | 第二期 | 已覆盖 | 第七期 7a/7b | 见 [15](samples/15-semantic-chunk.md)、[16](samples/16-parent-child.md) |
 
 ### 上下文 / 记忆进阶
 

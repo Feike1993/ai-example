@@ -84,6 +84,9 @@ app:
         fuse-with-original: ${RAG_HYDE_FUSE:true}
       chunking:
         semantic-corpus: ${RAG_SEMANTIC_CORPUS:ai-example-demo-semantic}
+        parent-corpus: ${RAG_PARENT_CORPUS:ai-example-demo-parent}
+        child-size: ${RAG_CHILD_SIZE:200}
+        expand-parent: ${RAG_EXPAND_PARENT:true}
     mcp:
       # 仅作启动初始值；运行时可被 PUT /mcp/mode 覆盖（内存、不持久化，重启回此配置）
       # remote=连 mcp-server:8081；inprocess=同进程 MethodToolCallbackProvider（不必开主应用 MCP Server HTTP）

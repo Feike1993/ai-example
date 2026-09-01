@@ -69,10 +69,11 @@ public class RagSampleService {
         hyde
     }
 
-    /** 分块策略：固定 token 或结构感知语义（7a）。 */
+    /** 分块策略：固定 token、结构语义、或父子文档（7b）。 */
     public enum ChunkingStrategy {
         token,
-        semantic
+        semantic,
+        parent_child
     }
 
     private final VectorStore vectorStore;
@@ -119,8 +120,14 @@ public class RagSampleService {
         if ("all".equals(value)) {
             IngestResult token = ingestOne(ChunkingStrategy.token);
             IngestResult semantic = ingestOne(ChunkingStrategy.semantic);
+            IngestResult parent = ingestOne(ChunkingStrategy.parent_child);
             List<String> sources = new ArrayList<>(token.sources());
             for (String s : semantic.sources()) {
+                if (!sources.contains(s)) {
+                    sources.add(s);
+                }
+            }
+            for (String s : parent.sources()) {
                 if (!sources.contains(s)) {
                     sources.add(s);
                 }
@@ -129,8 +136,9 @@ public class RagSampleService {
             Map<String, Integer> corpora = new LinkedHashMap<>();
             corpora.put(CORPUS_DEMO, token.chunkCount());
             corpora.put(semanticCorpus(), semantic.chunkCount());
+            corpora.put(parentCorpus(), parent.chunkCount());
             return new IngestResult(
-                token.chunkCount() + semantic.chunkCount(),
+                token.chunkCount() + semantic.chunkCount() + parent.chunkCount(),
                 sources,
                 "all",
                 corpora
@@ -152,12 +160,21 @@ public class RagSampleService {
         }
 
         List<Document> sourceDocs = loadClasspathDocs();
-        List<Document> chunks = strategy == ChunkingStrategy.semantic
-            ? semanticSplitter.apply(sourceDocs)
-            : splitter.apply(sourceDocs);
-        for (Document chunk : chunks) {
-            chunk.getMetadata().put(META_CORPUS, corpus);
-            chunk.getMetadata().put(META_CHUNKING, strategy.name());
+        List<Document> chunks;
+        if (strategy == ChunkingStrategy.parent_child) {
+            chunks = buildParentChildChunks(sourceDocs, corpus);
+        } else if (strategy == ChunkingStrategy.semantic) {
+            chunks = semanticSplitter.apply(sourceDocs);
+            for (Document chunk : chunks) {
+                chunk.getMetadata().put(META_CORPUS, corpus);
+                chunk.getMetadata().put(META_CHUNKING, strategy.name());
+            }
+        } else {
+            chunks = splitter.apply(sourceDocs);
+            for (Document chunk : chunks) {
+                chunk.getMetadata().put(META_CORPUS, corpus);
+                chunk.getMetadata().put(META_CHUNKING, strategy.name());
+            }
         }
         vectorStore.add(chunks);
         if (keywordRetriever != null) {
@@ -171,6 +188,45 @@ public class RagSampleService {
         log.info("RAG ingest 完成: strategy={}, corpus={}, chunks={}, sources={}",
             strategy, corpus, chunks.size(), sources);
         return new IngestResult(chunks.size(), sources, strategy.name(), Map.of(corpus, chunks.size()));
+    }
+
+    /**
+     * 父块（语义切）→ 子块硬切；只入库子块，parentText 写入 metadata。
+     */
+    private List<Document> buildParentChildChunks(List<Document> sourceDocs, String corpus) {
+        List<Document> parents = semanticSplitter.apply(sourceDocs);
+        List<Document> children = new ArrayList<>();
+        int parentSeq = 0;
+        int childSize = ragSettings.chunking().childSize();
+        for (Document parent : parents) {
+            parentSeq++;
+            String source = String.valueOf(parent.getMetadata().getOrDefault("source", "unknown"));
+            String parentText = parent.getText() == null ? "" : parent.getText();
+            String parentId = "p-" + parentSeq + "-" + source;
+            List<String> parts = SemanticMarkdownSplitter.hardSplit(parentText, childSize);
+            if (parts.isEmpty()) {
+                continue;
+            }
+            int chunkIndex = 0;
+            for (String part : parts) {
+                Map<String, Object> meta = new LinkedHashMap<>();
+                if (parent.getMetadata() != null) {
+                    meta.putAll(parent.getMetadata());
+                }
+                meta.put(META_CORPUS, corpus);
+                meta.put(META_CHUNKING, ChunkingStrategy.parent_child.name());
+                meta.put("chunkRole", "child");
+                meta.put("parentId", parentId);
+                meta.put("parentText", parentText);
+                meta.put("chunkIndex", chunkIndex++);
+                meta.put("source", source);
+                children.add(Document.builder()
+                    .text(part)
+                    .metadata(meta)
+                    .build());
+            }
+        }
+        return children;
     }
 
     /**
@@ -276,9 +332,13 @@ public class RagSampleService {
         RetrievalBundle semantic = retrieveExpanded(
             question, topK, mode, QueryExpansion.none, provider, corpusFor(ChunkingStrategy.semantic)
         );
+        RetrievalBundle parentChild = retrieveExpanded(
+            question, topK, mode, QueryExpansion.none, provider, corpusFor(ChunkingStrategy.parent_child)
+        );
         return new ChunkingCompareResult(
             toChunkingView(ChunkingStrategy.token, token),
-            toChunkingView(ChunkingStrategy.semantic, semantic)
+            toChunkingView(ChunkingStrategy.semantic, semantic),
+            toChunkingView(ChunkingStrategy.parent_child, parentChild)
         );
     }
 
@@ -324,11 +384,12 @@ public class RagSampleService {
      * 在已检索结果上做流式生成。
      */
     public Flux<String> streamAnswer(String question, String provider, List<Document> hits) {
+        List<Document> contextDocs = expandParents(hits);
         if (isRetrievalEmpty(hits) && ragSettings.skipLlmWhenEmpty()) {
             log.info("RAG 流式空检索短路拒答: question={}, hits={}", question, hits.size());
             return Flux.just(EMPTY_REFUSAL);
         }
-        String context = buildContext(hits);
+        String context = buildContext(contextDocs);
         return registry.plainClient(provider)
             .prompt()
             .system(SYSTEM_GROUNDED)
@@ -379,7 +440,9 @@ public class RagSampleService {
                 metadata,
                 intOrNull(metadata.get("vectorRank")),
                 intOrNull(metadata.get("keywordRank")),
-                doubleOrNull(metadata.get("rrfScore"))
+                doubleOrNull(metadata.get("rrfScore")),
+                metadata.get("chunkRole") == null ? null : String.valueOf(metadata.get("chunkRole")),
+                parentExcerpt(metadata.get("parentText"))
             ));
         }
         return views;
@@ -476,6 +539,7 @@ public class RagSampleService {
         ChunkingStrategy chunking
     ) {
         List<Document> hits = bundle.hits();
+        List<Document> contextDocs = expandParents(hits);
         boolean empty = isRetrievalEmpty(hits);
         String chunkingName = chunking == null ? ChunkingStrategy.token.name() : chunking.name();
         if (empty && ragSettings.skipLlmWhenEmpty()) {
@@ -492,7 +556,7 @@ public class RagSampleService {
                 chunkingName
             );
         }
-        String context = buildContext(hits);
+        String context = buildContext(contextDocs);
         var call = registry.plainClient(provider)
             .prompt()
             .system(SYSTEM_GROUNDED)
@@ -520,8 +584,15 @@ public class RagSampleService {
     }
 
     static ChunkingStrategy parseChunkingStrategy(String value) {
-        if (value != null && value.trim().equalsIgnoreCase("semantic")) {
+        if (value == null || value.isBlank()) {
+            return ChunkingStrategy.token;
+        }
+        String normalized = value.trim().toLowerCase().replace('-', '_');
+        if ("semantic".equals(normalized)) {
             return ChunkingStrategy.semantic;
+        }
+        if ("parent_child".equals(normalized) || "parentchild".equals(normalized)) {
+            return ChunkingStrategy.parent_child;
         }
         return ChunkingStrategy.token;
     }
@@ -530,16 +601,74 @@ public class RagSampleService {
         return ragSettings.chunking().semanticCorpus();
     }
 
+    private String parentCorpus() {
+        return ragSettings.chunking().parentCorpus();
+    }
+
     /** 供 Controller 解析 semantic corpus 名。 */
     public String semanticCorpusPublic() {
         return semanticCorpus();
+    }
+
+    /** 供 Controller 解析 parent corpus 名。 */
+    public String parentCorpusPublic() {
+        return parentCorpus();
     }
 
     private String corpusFor(ChunkingStrategy strategy) {
         if (strategy == ChunkingStrategy.semantic) {
             return semanticCorpus();
         }
+        if (strategy == ChunkingStrategy.parent_child) {
+            return parentCorpus();
+        }
         return CORPUS_DEMO;
+    }
+
+    /**
+     * 子块命中后展开为去重父块，用于生成上下文；sources 仍展示子块。
+     */
+    List<Document> expandParents(List<Document> hits) {
+        if (!ragSettings.chunking().expandParent() || hits == null || hits.isEmpty()) {
+            return hits == null ? List.of() : hits;
+        }
+        Map<String, Document> parents = new LinkedHashMap<>();
+        List<Document> passthrough = new ArrayList<>();
+        for (Document hit : hits) {
+            Map<String, Object> meta = hit.getMetadata() == null ? Map.of() : hit.getMetadata();
+            Object role = meta.get("chunkRole");
+            Object parentText = meta.get("parentText");
+            if ("child".equals(String.valueOf(role)) && parentText != null) {
+                String parentId = meta.get("parentId") == null
+                    ? hit.getId()
+                    : String.valueOf(meta.get("parentId"));
+                if (!parents.containsKey(parentId)) {
+                    Map<String, Object> parentMeta = new LinkedHashMap<>(meta);
+                    parentMeta.put("chunkRole", "parent");
+                    parents.put(parentId, Document.builder()
+                        .id(parentId)
+                        .text(String.valueOf(parentText))
+                        .metadata(parentMeta)
+                        .build());
+                }
+            } else {
+                passthrough.add(hit);
+            }
+        }
+        List<Document> out = new ArrayList<>(parents.values());
+        out.addAll(passthrough);
+        return out;
+    }
+
+    private static String parentExcerpt(Object parentText) {
+        if (parentText == null) {
+            return null;
+        }
+        String text = String.valueOf(parentText);
+        if (text.isBlank()) {
+            return null;
+        }
+        return text.length() > 160 ? text.substring(0, 160) + "…" : text;
     }
 
     private ExpansionView toExpansionView(RetrievalBundle bundle) {
@@ -848,7 +977,12 @@ public class RagSampleService {
         boolean retrievalEmpty
     ) {}
 
-    public record ChunkingCompareResult(ChunkingView token, ChunkingView semantic) {}
+    public record ChunkingCompareResult(ChunkingView token, ChunkingView semantic, ChunkingView parentChild) {
+        /** 7a 兼容：仅两路。 */
+        public ChunkingCompareResult(ChunkingView token, ChunkingView semantic) {
+            this(token, semantic, null);
+        }
+    }
 
     public record SourceView(
         String id,
@@ -857,11 +991,26 @@ public class RagSampleService {
         Map<String, Object> metadata,
         Integer vectorRank,
         Integer keywordRank,
-        Double rrfScore
+        Double rrfScore,
+        String chunkRole,
+        String parentExcerpt
     ) {
         /** 二期兼容：无 rank 字段。 */
         public SourceView(String id, String source, String excerpt, Map<String, Object> metadata) {
-            this(id, source, excerpt, metadata, null, null, null);
+            this(id, source, excerpt, metadata, null, null, null, null, null);
+        }
+
+        /** 第四～六期兼容：无 chunkRole。 */
+        public SourceView(
+            String id,
+            String source,
+            String excerpt,
+            Map<String, Object> metadata,
+            Integer vectorRank,
+            Integer keywordRank,
+            Double rrfScore
+        ) {
+            this(id, source, excerpt, metadata, vectorRank, keywordRank, rrfScore, null, null);
         }
     }
 }

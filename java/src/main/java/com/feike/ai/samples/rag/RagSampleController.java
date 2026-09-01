@@ -128,9 +128,11 @@ public class RagSampleController {
             RagSampleService.resolveExpansion(queryExpansion, rewriteQuery);
         RagSampleService.ChunkingStrategy chunking =
             RagSampleService.parseChunkingStrategy(chunkingStrategy);
-        String corpus = chunking == RagSampleService.ChunkingStrategy.semantic
-            ? ragSampleService.semanticCorpusPublic()
-            : RagSampleService.CORPUS_DEMO;
+        String corpus = switch (chunking) {
+            case semantic -> ragSampleService.semanticCorpusPublic();
+            case parent_child -> ragSampleService.parentCorpusPublic();
+            default -> RagSampleService.CORPUS_DEMO;
+        };
         RagSampleService.RetrievalBundle bundle = ragSampleService.retrieveExpanded(
             question,
             topK,

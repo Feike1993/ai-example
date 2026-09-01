@@ -70,6 +70,8 @@ export type RagSource = {
   vectorRank?: number | null
   keywordRank?: number | null
   rrfScore?: number | null
+  chunkRole?: string | null
+  parentExcerpt?: string | null
 }
 
 export type RagQueryResponse = {
@@ -112,6 +114,7 @@ export type RagChunkingView = {
 export type RagChunkingCompareResponse = {
   token: RagChunkingView
   semantic: RagChunkingView
+  parentChild?: RagChunkingView | null
 }
 
 export type EvalCaseResult = {

@@ -5,6 +5,7 @@ import { EvalPanel } from './panels/EvalPanel'
 import { HybridRagPanel } from './panels/HybridRagPanel'
 import { HydePanel } from './panels/HydePanel'
 import { SemanticChunkPanel } from './panels/SemanticChunkPanel'
+import { ParentChildPanel } from './panels/ParentChildPanel'
 import { AgentPanel } from './panels/AgentPanel'
 import { ChatPanel } from './panels/ChatPanel'
 import { ContextPanel } from './panels/ContextPanel'
@@ -154,6 +155,7 @@ function App() {
         {sample === 'memory' && <MemoryPanel provider={provider} />}
         {sample === 'hyde' && <HydePanel provider={provider} />}
         {sample === 'semanticChunk' && <SemanticChunkPanel provider={provider} />}
+        {sample === 'parentChild' && <ParentChildPanel provider={provider} />}
       </AppShell.Main>
     </AppShell>
   )
