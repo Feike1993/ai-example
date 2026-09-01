@@ -12,6 +12,22 @@ export const structuredGuide: SampleGuideData = {
   ],
   logic: {
     title: '结构化输出底层逻辑',
+    problem: '下游系统要的是字段齐全的对象，散文式回复无法直接入库或驱动流程。',
+    purpose: '用 Schema/Bean 约束模型输出形状，经本地修复与校验后得到可解析 JSON。',
+    pros: [
+      '输出可直接进业务对象与校验链路。',
+      '比事后用正则从散文抽字段稳定。',
+      '失败可带错误重试，避免静默脏数据。',
+    ],
+    cons: [
+      'JSON Mode 只保证是 JSON，不保证字段正确。',
+      '模型常出围栏、脏引号，需本地修复。',
+      '与 Tool Calling 混用易污染「只要 JSON」的假设。',
+    ],
+    scenarios: [
+      '工单、表单、分类标签等结构化抽取。',
+      '编排者决策、路由枚举等需要固定字段的中间结果。',
+    ],
     steps: [
       {
         title: '目标是「可解析的数据」',

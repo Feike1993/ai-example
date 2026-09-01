@@ -12,6 +12,22 @@ export const ragGuide: SampleGuideData = {
   ],
   logic: {
     title: 'RAG 底层逻辑',
+    problem: '模型参数内知识过时且易幻觉；私有/长尾文档无法靠微调即时接入。',
+    purpose: '离线分块 Embedding 入库，在线检索相关片段拼进提示，让回答 grounded 在 sources。',
+    pros: [
+      '知识可更新：改文档再 ingest，无需重训模型。',
+      '可展示出处，便于人工核对。',
+      '与 Chat Provider 解耦（本仓 Embedding 固定）。',
+    ],
+    cons: [
+      '分块与检索质量决定上限（GIGO）。',
+      '固定长度切分易切断章节语义。',
+      '空检索若仍生成，易编造；需拒答策略。',
+    ],
+    scenarios: [
+      '企业知识库问答、产品文档助手。',
+      '需要可追溯引用来源的答疑场景。',
+    ],
     steps: [
       {
         title: '分块权衡',

@@ -12,6 +12,22 @@ export const agentGuide: SampleGuideData = {
   ],
   logic: {
     title: 'Agent Loop 底层逻辑',
+    problem: '单次 Tool Calling 只能走一步；开放任务需要多轮「推理→行动→观察」直到完成或触达上限。',
+    purpose: '在显式循环中反复调用模型与工具，直到无 tool_calls、达 maxSteps 或可降级终答。',
+    pros: [
+      '适合目标明确但路径开放的任务。',
+      '显式 Loop 可审计每一步工具轨迹。',
+      '终止条件可防死循环。',
+    ],
+    cons: [
+      '步数与延迟、费用随任务复杂度上升。',
+      '模型选错工具会导致绕路或失败。',
+      '不如预写死工作流那样确定、易测。',
+    ],
+    scenarios: [
+      '调研、排障、多步查询后再总结。',
+      '需要中途根据工具结果改策略的助手。',
+    ],
     steps: [
       {
         title: 'Agent = 会多步决策的 Chat + Tools',

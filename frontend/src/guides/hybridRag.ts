@@ -13,6 +13,22 @@ export const hybridRagGuide: SampleGuideData = {
   ],
   logic: {
     title: 'Hybrid 检索逻辑',
+    problem: '纯向量对专有名词、编号、短关键词常漏召；纯关键词又缺语义近邻。',
+    purpose: '向量路 + 关键词路双召回，用 RRF 按排名融合，提升稳健命中。',
+    pros: [
+      '专名与语义互补，召回更稳。',
+      'RRF 不依赖两路分数同量纲。',
+      'ingest/表结构可与基础 RAG 共用。',
+    ],
+    cons: [
+      '多一路检索与融合，实现与调参更复杂。',
+      '需维护全文索引。',
+      '融合 topK、字段权重仍要按语料试。',
+    ],
+    scenarios: [
+      '文档含 API 名、工单号、产品代号。',
+      '既有口语问法又有精确关键词的知识库。',
+    ],
     steps: [
       {
         title: '双路召回',

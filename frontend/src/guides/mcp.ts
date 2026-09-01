@@ -12,6 +12,22 @@ export const mcpGuide: SampleGuideData = {
   ],
   logic: {
     title: 'MCP 底层逻辑',
+    problem: '工具若只活在单一进程内，难被其他 Host 复用；各家自定义插件协议碎片化。',
+    purpose: '用 MCP（JSON-RPC）把同一批工具暴露给 Client，支持远端 Server 与同进程双模式对照。',
+    pros: [
+      '工具可跨 Host 复用，协议标准化。',
+      '与本地 @Tool 心智一致，迁移成本低。',
+      '远端/同进程可切换，便于开发与演示。',
+    ],
+    cons: [
+      '多一跳网络与进程运维（remote 模式）。',
+      '生态与鉴权模型仍在演进。',
+      '工具发现与版本兼容需额外约定。',
+    ],
+    scenarios: [
+      '把内部工具以标准协议提供给 IDE/Agent Host。',
+      '本地开发用 inprocess，联调用 remote Server。',
+    ],
     steps: [
       {
         title: '先有工具，再有协议外壳',

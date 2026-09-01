@@ -12,6 +12,22 @@ export const semanticChunkGuide: SampleGuideData = {
   ],
   logic: {
     title: '切割管线',
+    problem: '固定 token 切分常在章节中间切断，检索命中片段缺标题语境，生成易断章取义。',
+    purpose: '按 Markdown 标题/空行结构切段并软合并，得到更贴近语义边界的块，并与 token 切对照。',
+    pros: [
+      '块边界更贴章节，减少跨节混装。',
+      '确定性、无 LLM，可复现、成本低。',
+      '双 corpus 可量化对比召回差异。',
+    ],
+    cons: [
+      '依赖 Markdown 结构，乱文档效果差。',
+      '非生产级解析器，复杂语法覆盖有限。',
+      '超长段硬切仍可能断句（Java）。',
+    ],
+    scenarios: [
+      '技术文档、手册等标题层级清晰的语料。',
+      '评估「结构感知切」相对固定长度切的收益。',
+    ],
     steps: [
       {
         title: '标题切（toSegments 第一步）',

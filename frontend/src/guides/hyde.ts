@@ -12,6 +12,22 @@ export const hydeGuide: SampleGuideData = {
   ],
   logic: {
     title: 'HyDE 检索逻辑',
+    problem: '用户短问句与知识库段落表述鸿沟大，直接 Embedding 问句常召不回相关文档。',
+    purpose: '先让模型写一段假想答案段落再 Embedding 检索，用更接近文档风格的向量去召回。',
+    pros: [
+      '改善短问句、口语问法的召回。',
+      '可与原问句向量融合（可选）。',
+      '假想文只用于检索，不污染 sources。',
+    ],
+    cons: [
+      '多一次 LLM，延迟与费用上升。',
+      '假想文跑偏会带偏检索。',
+      '不替代好的分块与语料质量。',
+    ],
+    scenarios: [
+      '问句短、文档长、措辞差异大的知识库。',
+      '与 rewrite / none 对照评估查询扩展收益。',
+    ],
     steps: [
       {
         title: '生成假想段落',

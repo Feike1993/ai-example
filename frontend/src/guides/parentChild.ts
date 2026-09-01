@@ -13,6 +13,22 @@ export const parentChildGuide: SampleGuideData = {
   ],
   logic: {
     title: '父子管线',
+    problem: '检索偏好短块（准），生成偏好长上下文（全）；单一粒度很难两头兼顾。',
+    purpose: '子块 Embedding 负责召回，命中后展开父块全文进 LLM，sources 仍展示子块便于核对。',
+    pros: [
+      '召回粒度与生成粒度解耦。',
+      '父文进 metadata，演示链路简单、无需另表。',
+      '可与 token/semantic 三路对照。',
+    ],
+    cons: [
+      '每子块复制 parentText，存储膨胀。',
+      '父切/子切参数都要调，复杂度高于单级分块。',
+      'expand 关闭时生成上下文又变回短块。',
+    ],
+    scenarios: [
+      '章节较长、需要精召回又要完整段落生成的文档 QA。',
+      '对比「只检索子块」与「展开父块」对答案质量的影响。',
+    ],
     steps: [
       {
         title: '语义切父块',

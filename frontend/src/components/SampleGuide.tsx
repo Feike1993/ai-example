@@ -1,5 +1,5 @@
 import { CodeHighlight } from '@mantine/code-highlight'
-import { List, SegmentedControl, Stack, Text, Title } from '@mantine/core'
+import { List, SegmentedControl, SimpleGrid, Stack, Text, Title } from '@mantine/core'
 import { useState } from 'react'
 import type { SampleGuideData } from '../guides/types'
 
@@ -39,18 +39,90 @@ export function SampleGuide({ guide }: { guide: SampleGuideData }) {
           <Text fw={600} mb="sm">
             {guide.logic.title}
           </Text>
-          <List type="ordered" size="sm" spacing="sm">
-            {guide.logic.steps.map((step) => (
-              <List.Item key={step.title}>
-                <Text span fw={600} size="sm">
-                  {step.title}
+
+          <Stack gap="md">
+            <div>
+              <Text fw={600} size="sm" mb={4}>
+                解决的问题
+              </Text>
+              <Text size="sm" c="dimmed">
+                {guide.logic.problem}
+              </Text>
+            </div>
+
+            <div>
+              <Text fw={600} size="sm" mb={4}>
+                目的
+              </Text>
+              <Text size="sm" c="dimmed">
+                {guide.logic.purpose}
+              </Text>
+            </div>
+
+            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+              <div>
+                <Text fw={600} size="sm" mb={4}>
+                  优点
                 </Text>
-                <Text size="sm" c="dimmed" mt={2}>
-                  {step.detail}
+                <List size="sm" spacing="xs">
+                  {guide.logic.pros.map((item) => (
+                    <List.Item key={item}>
+                      <Text size="sm" c="dimmed">
+                        {item}
+                      </Text>
+                    </List.Item>
+                  ))}
+                </List>
+              </div>
+              <div>
+                <Text fw={600} size="sm" mb={4}>
+                  缺点
                 </Text>
-              </List.Item>
-            ))}
-          </List>
+                <List size="sm" spacing="xs">
+                  {guide.logic.cons.map((item) => (
+                    <List.Item key={item}>
+                      <Text size="sm" c="dimmed">
+                        {item}
+                      </Text>
+                    </List.Item>
+                  ))}
+                </List>
+              </div>
+            </SimpleGrid>
+
+            <div>
+              <Text fw={600} size="sm" mb={4}>
+                应用场景
+              </Text>
+              <List size="sm" spacing="xs">
+                {guide.logic.scenarios.map((item) => (
+                  <List.Item key={item}>
+                    <Text size="sm" c="dimmed">
+                      {item}
+                    </Text>
+                  </List.Item>
+                ))}
+              </List>
+            </div>
+
+            <div>
+              <Text fw={600} size="sm" mb="sm">
+                流程步骤
+              </Text>
+              <List type="ordered" size="sm" spacing="sm">
+                {guide.logic.steps.map((step) => (
+                  <List.Item key={step.title}>
+                    <Text span fw={600} size="sm">
+                      {step.title}
+                    </Text>
+                    <Text size="sm" c="dimmed" mt={2}>
+                      {step.detail}
+                    </Text>
+                  </List.Item>
+                ))}
+              </List>
+            </div>
+          </Stack>
         </div>
       ) : null}
 

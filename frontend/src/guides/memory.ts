@@ -12,6 +12,22 @@ export const memoryGuide: SampleGuideData = {
   ],
   logic: {
     title: '记忆与 RAG 的边界',
+    problem: '会话裁剪后长期偏好/事实会丢；若把一切塞进短上下文又贵又不稳。',
+    purpose: '把长期事实显式写入独立 corpus，按 userId 召回，与文档 RAG 共用向量库但语义分离。',
+    pros: [
+      '跨会话保留用户级事实。',
+      '与知识库 corpus 隔离，减少串味。',
+      '写入显式，便于治理与删除。',
+    ],
+    cons: [
+      '本样例不自动抽取，靠调用方 remember。',
+      '事实冲突、过期需额外策略。',
+      '召回质量仍受分块与 Embedding 影响。',
+    ],
+    scenarios: [
+      '记住用户昵称、偏好、项目背景。',
+      '个人助理中「长期画像」与「文档问答」并存。',
+    ],
     steps: [
       {
         title: '同一 vector_store，不同 corpus',
