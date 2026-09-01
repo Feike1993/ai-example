@@ -11,6 +11,7 @@ import {
   type RagSource,
 } from '../api'
 import { RawJsonAccordion } from '../components/RawJsonAccordion'
+import { MarkdownBody } from '../components/MarkdownBody'
 import { RequestMeta } from '../components/RequestMeta'
 import { ResultBody } from '../components/ResultBody'
 import { SampleFrame } from '../components/SampleFrame'
@@ -103,7 +104,7 @@ export function SemanticChunkPanel({ provider }: { provider: string }) {
     }
   }
 
-  const renderSources = (items: RagSource[]) => (
+  const renderSources = (items: RagSource[], fullBody = false) => (
     <Stack gap={6}>
       {items.map((item) => (
         <div key={item.id}>
@@ -115,9 +116,13 @@ export function SemanticChunkPanel({ provider }: { provider: string }) {
               </Badge>
             )}
           </Group>
-          <Text size="sm" c="dimmed">
-            {item.excerpt}
-          </Text>
+          {fullBody ? (
+            <MarkdownBody>{item.excerpt}</MarkdownBody>
+          ) : (
+            <Text size="sm" c="dimmed">
+              {item.excerpt}
+            </Text>
+          )}
         </div>
       ))}
     </Stack>
@@ -127,7 +132,7 @@ export function SemanticChunkPanel({ provider }: { provider: string }) {
     <SampleFrame guide={semanticChunkGuide}>
       <Workbench
         title="语义分块"
-        hint="先 ingest strategy=all。对照 token / semantic 两套 corpus 的 sources。"
+        hint="先 ingest strategy=all。对照 token / semantic 两套 corpus 的完整命中正文。"
         form={
           <Stack gap="md">
             <Button variant="light" loading={ingesting} onClick={() => void runIngest()}>
@@ -196,7 +201,7 @@ export function SemanticChunkPanel({ provider }: { provider: string }) {
                           retrievalEmpty
                         </Badge>
                       )}
-                      {side.sources?.length > 0 && renderSources(side.sources)}
+                      {side.sources?.length > 0 && renderSources(side.sources, true)}
                     </div>
                   )
                 })}
@@ -210,7 +215,7 @@ export function SemanticChunkPanel({ provider }: { provider: string }) {
                   <Badge variant="outline">chunking: {result.chunkingStrategy}</Badge>
                 )}
                 {result.sources?.length > 0 && renderSources(result.sources)}
-                <pre className="stream-text">{result.answer}</pre>
+                <MarkdownBody>{result.answer}</MarkdownBody>
                 <RawJsonAccordion value={result} />
               </Stack>
             )}

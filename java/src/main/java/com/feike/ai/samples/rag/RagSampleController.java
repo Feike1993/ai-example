@@ -36,7 +36,6 @@ public class RagSampleController {
      * @param rewriteQuery      是否改写问题后再检索（兼容；等价 queryExpansion=rewrite）
      * @param queryExpansion    {@code none} / {@code rewrite} / {@code hyde}；优先于 rewriteQuery
      * @param chunkingStrategy  {@code token}（默认）或 {@code semantic}
-     * @param strategy          ingest 用：token / semantic / all
      */
     public record RagQueryRequest(
         @NotBlank String question,

@@ -200,6 +200,95 @@ body::before {
   color: #14241c;
 }
 
+.markdown-body {
+  margin: 0;
+  padding: 0.15rem 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-family: Figtree, 'Noto Sans SC', sans-serif;
+  font-size: 0.98rem;
+  line-height: 1.7;
+  color: #14241c;
+}
+
+.markdown-body > :first-child {
+  margin-top: 0;
+}
+
+.markdown-body > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body p {
+  margin: 0.55em 0;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3 {
+  margin: 0.85em 0 0.4em;
+  font-weight: 650;
+  line-height: 1.35;
+  color: #14241c;
+}
+
+.markdown-body h1 {
+  font-size: 1.2rem;
+}
+
+.markdown-body h2 {
+  font-size: 1.1rem;
+}
+
+.markdown-body h3 {
+  font-size: 1.02rem;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  margin: 0.45em 0;
+  padding-left: 1.35em;
+}
+
+.markdown-body li {
+  margin: 0.25em 0;
+}
+
+.markdown-body li > p {
+  margin: 0.2em 0;
+}
+
+.markdown-body strong {
+  font-weight: 650;
+}
+
+.markdown-body code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: rgba(20, 36, 28, 0.06);
+}
+
+.markdown-body pre {
+  margin: 0.6em 0;
+  padding: 0.75em 0.9em;
+  overflow-x: auto;
+  border-radius: 6px;
+  background: rgba(20, 36, 28, 0.05);
+}
+
+.markdown-body pre code {
+  padding: 0;
+  background: transparent;
+}
+
+.markdown-body a {
+  color: #2a6f5f;
+  overflow-wrap: anywhere;
+}
+
+
 .sse-caret {
   display: inline-block;
   width: 0.45em;

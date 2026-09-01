@@ -139,6 +139,9 @@ public class RagSampleService {
         return ingestOne(parseChunkingStrategy(value));
     }
 
+    /**
+     * 按策略重建单套索引：先按 corpus 删旧再写入，避免与另一套分块语料互相覆盖。
+     */
     private IngestResult ingestOne(ChunkingStrategy strategy) {
         String corpus = corpusFor(strategy);
         try {
@@ -152,6 +155,7 @@ public class RagSampleService {
         }
 
         List<Document> sourceDocs = loadClasspathDocs();
+        // semantic → 结构感知切分；token → TokenTextSplitter；写入不同 corpus
         List<Document> chunks = strategy == ChunkingStrategy.semantic
             ? semanticSplitter.apply(sourceDocs)
             : splitter.apply(sourceDocs);
@@ -261,7 +265,9 @@ public class RagSampleService {
     }
 
     /**
-     * 对照 token vs semantic 两套检索命中（默认不生成答案）。
+     * 对照 token vs semantic 两套检索命中。
+     * <p>
+     * 只比 sources（与空检索标志），默认不跑双重 LLM，降低对照成本。
      */
     public ChunkingCompareResult queryCompareChunking(
         String question,
@@ -363,14 +369,27 @@ public class RagSampleService {
         return size < ragSettings.minSources();
     }
 
+    /** 默认摘录 160 字；对照分块时请用 {@link #toSources(List, int)} 传 0 取全文。 */
     public List<SourceView> toSources(List<Document> hits) {
+        return toSources(hits, 160);
+    }
+
+    /**
+     * 将命中文档转为 SourceView。
+     *
+     * @param hits       检索命中
+     * @param maxExcerpt 最大摘录长度；{@code <= 0} 表示返回完整 chunk 正文（分块对照需要看全量差异）
+     */
+    public List<SourceView> toSources(List<Document> hits, int maxExcerpt) {
         List<SourceView> views = new ArrayList<>();
         if (hits == null) {
             return views;
         }
         for (Document doc : hits) {
             String text = doc.getText() == null ? "" : doc.getText();
-            String excerpt = text.length() > 160 ? text.substring(0, 160) + "…" : text;
+            String excerpt = (maxExcerpt > 0 && text.length() > maxExcerpt)
+                ? text.substring(0, maxExcerpt) + "…"
+                : text;
             Map<String, Object> metadata = doc.getMetadata() == null ? Map.of() : doc.getMetadata();
             views.add(new SourceView(
                 doc.getId(),
@@ -430,12 +449,14 @@ public class RagSampleService {
             String hypo = generateHypotheticalDocument(question, provider);
             List<Document> hydeHits = vectorRetrieve(hypo, k, effectiveCorpus);
             List<Document> hits;
+            // 是否融合原始检索结果
             if (ragSettings.hyde().fuseWithOriginal()) {
                 List<Document> originalHits = vectorRetrieve(question, k, effectiveCorpus);
                 hits = fuseDocumentLists(hydeHits, originalHits, k);
             } else {
                 hits = hydeHits;
             }
+            // 是否进行关键词检索融合
             if (mode == RetrievalMode.hybrid && ragSettings.hybrid().enabled() && keywordRetriever != null) {
                 hits = fuseWithKeyword(hits, question, k, effectiveCorpus);
             }
@@ -511,10 +532,11 @@ public class RagSampleService {
     }
 
     private ChunkingView toChunkingView(ChunkingStrategy strategy, RetrievalBundle bundle) {
+        // 分块对照需看完整 chunk，避免 160 字截断掩盖 token vs semantic 正文差异
         return new ChunkingView(
             strategy.name(),
             corpusFor(strategy),
-            toSources(bundle.hits()),
+            toSources(bundle.hits(), 0),
             isRetrievalEmpty(bundle.hits())
         );
     }
@@ -535,6 +557,7 @@ public class RagSampleService {
         return semanticCorpus();
     }
 
+    /** 双索引隔离：token 用演示 corpus，semantic 用独立 corpus，互不覆盖。 */
     private String corpusFor(ChunkingStrategy strategy) {
         if (strategy == ChunkingStrategy.semantic) {
             return semanticCorpus();
@@ -645,6 +668,13 @@ public class RagSampleService {
         return merged;
     }
 
+    /**
+     * 向量检索。
+     * @param question  查询问题
+     * @param k         返回结果数量
+     * @param corpus    索引库
+     * @return 检索结果列表
+     */
     private List<Document> vectorRetrieve(String question, int k, String corpus) {
         return vectorStore.similaritySearch(
             SearchRequest.builder()
@@ -840,7 +870,7 @@ public class RagSampleService {
 
     public record ExpansionCompareResult(ExpansionView none, ExpansionView rewrite, ExpansionView hyde) {}
 
-    /** 分块策略对照单路（7a：仅 sources）。 */
+    /** 分块策略对照单路（7a：sources 为完整 chunk 正文，便于对照切分差异）。 */
     public record ChunkingView(
         String chunkingStrategy,
         String corpus,
