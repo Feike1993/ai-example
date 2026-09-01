@@ -192,8 +192,11 @@ public class RagSampleService {
 
     /**
      * 父块（语义切）→ 子块硬切；只入库子块，parentText 写入 metadata。
+     * <p>
+     * 刻意不入父向量：检索粒度用短子块，生成上下文再展开父全文。
      */
     private List<Document> buildParentChildChunks(List<Document> sourceDocs, String corpus) {
+        // 父块复用语义切分，保留标题/段落边界，避免父段从章节中间切开
         List<Document> parents = semanticSplitter.apply(sourceDocs);
         List<Document> children = new ArrayList<>();
         int parentSeq = 0;
@@ -202,9 +205,12 @@ public class RagSampleService {
             parentSeq++;
             String source = String.valueOf(parent.getMetadata().getOrDefault("source", "unknown"));
             String parentText = parent.getText() == null ? "" : parent.getText();
+            // 序号+来源构成稳定键，供 expandParents 按父去重
             String parentId = "p-" + parentSeq + "-" + source;
+            // 子块按 childSize 硬切（句号/换行优先），提高命中精度
             List<String> parts = SemanticMarkdownSplitter.hardSplit(parentText, childSize);
             if (parts.isEmpty()) {
+                // 空父段不产出子块，避免写入空向量
                 continue;
             }
             int chunkIndex = 0;
@@ -217,6 +223,7 @@ public class RagSampleService {
                 meta.put(META_CHUNKING, ChunkingStrategy.parent_child.name());
                 meta.put("chunkRole", "child");
                 meta.put("parentId", parentId);
+                // 每子块复制整段父文：展开无需二次查库（演示取舍，非生产最优）
                 meta.put("parentText", parentText);
                 meta.put("chunkIndex", chunkIndex++);
                 meta.put("source", source);
@@ -226,6 +233,7 @@ public class RagSampleService {
                     .build());
             }
         }
+        // 仅返回子块列表：父块本身不 Embedding、不入 VectorStore
         return children;
     }
 
@@ -382,8 +390,11 @@ public class RagSampleService {
 
     /**
      * 在已检索结果上做流式生成。
+     * <p>
+     * 生成前同样走 {@link #expandParents}，与同步路径一致。
      */
     public Flux<String> streamAnswer(String question, String provider, List<Document> hits) {
+        // 流式与同步一致：上下文展开父块，空检索判定仍看原始 hits
         List<Document> contextDocs = expandParents(hits);
         if (isRetrievalEmpty(hits) && ragSettings.skipLlmWhenEmpty()) {
             log.info("RAG 流式空检索短路拒答: question={}, hits={}", question, hits.size());
@@ -433,6 +444,7 @@ public class RagSampleService {
             String text = doc.getText() == null ? "" : doc.getText();
             String excerpt = text.length() > 160 ? text.substring(0, 160) + "…" : text;
             Map<String, Object> metadata = doc.getMetadata() == null ? Map.of() : doc.getMetadata();
+            // UI 展示命中子块；parentExcerpt 另给父文预览，与 LLM 用的全文区分开
             views.add(new SourceView(
                 doc.getId(),
                 String.valueOf(metadata.getOrDefault("source", "")),
@@ -539,6 +551,7 @@ public class RagSampleService {
         ChunkingStrategy chunking
     ) {
         List<Document> hits = bundle.hits();
+        // 生成上下文：父子策略下展开为父全文；sources 仍用原始 hits
         List<Document> contextDocs = expandParents(hits);
         boolean empty = isRetrievalEmpty(hits);
         String chunkingName = chunking == null ? ChunkingStrategy.token.name() : chunking.name();
@@ -615,6 +628,7 @@ public class RagSampleService {
         return parentCorpus();
     }
 
+    /** 三套语料隔离：token / semantic / parent_child 互不覆盖。 */
     private String corpusFor(ChunkingStrategy strategy) {
         if (strategy == ChunkingStrategy.semantic) {
             return semanticCorpus();
@@ -627,11 +641,15 @@ public class RagSampleService {
 
     /**
      * 子块命中后展开为去重父块，用于生成上下文；sources 仍展示子块。
+     * <p>
+     * {@code expand-parent=false} 时原样返回 hits，生成也只用子块正文。
      */
     List<Document> expandParents(List<Document> hits) {
+        // 关闭展开：便于对照「只看子块上下文」的效果
         if (!ragSettings.chunking().expandParent() || hits == null || hits.isEmpty()) {
             return hits == null ? List.of() : hits;
         }
+        // LinkedHashMap：按首次命中顺序保留父块，同 parentId 只留一份
         Map<String, Document> parents = new LinkedHashMap<>();
         List<Document> passthrough = new ArrayList<>();
         for (Document hit : hits) {
@@ -639,11 +657,13 @@ public class RagSampleService {
             Object role = meta.get("chunkRole");
             Object parentText = meta.get("parentText");
             if ("child".equals(String.valueOf(role)) && parentText != null) {
+                // 缺 parentId 时回退 hit.id，仍能去重展开
                 String parentId = meta.get("parentId") == null
                     ? hit.getId()
                     : String.valueOf(meta.get("parentId"));
                 if (!parents.containsKey(parentId)) {
                     Map<String, Object> parentMeta = new LinkedHashMap<>(meta);
+                    // 标记为 parent，避免下游再次当子块处理
                     parentMeta.put("chunkRole", "parent");
                     parents.put(parentId, Document.builder()
                         .id(parentId)
@@ -652,6 +672,7 @@ public class RagSampleService {
                         .build());
                 }
             } else {
+                // 非父子命中（或其他策略混入）原样保留，避免丢上下文
                 passthrough.add(hit);
             }
         }
@@ -660,6 +681,7 @@ public class RagSampleService {
         return out;
     }
 
+    /** 父全文截断供 UI 预览；LLM 上下文仍用完整 parentText。 */
     private static String parentExcerpt(Object parentText) {
         if (parentText == null) {
             return null;
