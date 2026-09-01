@@ -73,12 +73,18 @@
 
 13. [MCP 远端拆分](samples/13-mcp-remote.md) → 14. [完整 HyDE](samples/14-hyde.md)
 
+## 第七期：语义分块 + 父子文档（进阶，双分支）
+
+见 [phase7.md](phase7.md)：
+
+15. [语义分块](samples/15-semantic-chunk.md)（分支 7a）→ 16. [父子文档](samples/16-parent-child.md)（分支 7b，待合入）
+
 基础 vs 进阶分层：
 
 | 层次 | 范围 | 状态 |
 | --- | --- | --- |
 | **基础** | 最小 Agent 闭环 + MCP/RAG 入门 + 进程内上下文 + 同进程多 Agent + 基础补丁 A1–A5 | **已完成**（tag `v0.2.0`） |
-| **进阶** | Hybrid、评测、持久会话、长期记忆、MCP 远端、HyDE 等 | **第四～六期** |
+| **进阶** | Hybrid、评测、持久会话、长期记忆、MCP 远端、HyDE、语义分块等 | **第四～七期** |
 
 ## 刻意不做 / 后续候选
 

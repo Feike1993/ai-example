@@ -12,7 +12,7 @@ export type BaselineSampleId =
   | 'multiagent'
 
 /** 进阶样例 id（仅 Playground）。 */
-export type AdvancedSampleId = 'hybridRag' | 'eval' | 'memory' | 'hyde'
+export type AdvancedSampleId = 'hybridRag' | 'eval' | 'memory' | 'hyde' | 'semanticChunk'
 
 /** Playground 全部 Tab id。 */
 export type PlaygroundSampleId = BaselineSampleId | AdvancedSampleId
@@ -200,6 +200,19 @@ export const samples: readonly SampleMeta[] = [
     concepts: ['Hypothetical Document', 'queryExpansion', 'grounded sources'],
     endpoint: 'POST /ai-example/rag/query/compare-expansion',
     docPath: 'docs/samples/14-hyde.md',
+  },
+  {
+    id: 'semanticChunk',
+    index: 13,
+    label: '语义分块',
+    description: 'token vs 结构切',
+    stage: 'advanced',
+    phase: 7,
+    tagline: '切块边界改变召回单元',
+    body: '对照 TokenTextSplitter 与 Markdown 标题/段落语义切；两套 corpus 并存。',
+    concepts: ['结构感知分块', 'corpus 隔离', 'compare-chunking'],
+    endpoint: 'POST /ai-example/rag/query/compare-chunking',
+    docPath: 'docs/samples/15-semantic-chunk.md',
   },
 ] as const
 

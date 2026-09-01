@@ -39,7 +39,7 @@ public class IndexController {
         body.put("baseline", baseline);
 
         Map<String, Object> advanced = new LinkedHashMap<>();
-        advanced.put("phase", 6);
+        advanced.put("phase", 7);
         advanced.put("samples", Map.of(
             "hybridRag",
             "POST /ai-example/rag/query (retrievalMode=hybrid)  POST /ai-example/rag/query/compare",
@@ -49,7 +49,9 @@ public class IndexController {
             "mcpRemote",
             "mcp-server:8081 + GET/POST /ai-example/mcp/*（app.ai.mcp.mode=remote|inprocess）",
             "hyde",
-            "POST /ai-example/rag/query (queryExpansion=hyde)  POST /ai-example/rag/query/compare-expansion"
+            "POST /ai-example/rag/query (queryExpansion=hyde)  POST /ai-example/rag/query/compare-expansion",
+            "semanticChunk",
+            "POST /ai-example/rag/ingest (strategy)  POST /ai-example/rag/query/compare-chunking"
         ));
         body.put("advanced", advanced);
 

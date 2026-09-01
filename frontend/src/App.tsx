@@ -4,6 +4,7 @@ import { listProviders, type ProviderView } from './api'
 import { EvalPanel } from './panels/EvalPanel'
 import { HybridRagPanel } from './panels/HybridRagPanel'
 import { HydePanel } from './panels/HydePanel'
+import { SemanticChunkPanel } from './panels/SemanticChunkPanel'
 import { AgentPanel } from './panels/AgentPanel'
 import { ChatPanel } from './panels/ChatPanel'
 import { ContextPanel } from './panels/ContextPanel'
@@ -152,6 +153,7 @@ function App() {
         {sample === 'eval' && <EvalPanel provider={provider} />}
         {sample === 'memory' && <MemoryPanel provider={provider} />}
         {sample === 'hyde' && <HydePanel provider={provider} />}
+        {sample === 'semanticChunk' && <SemanticChunkPanel provider={provider} />}
       </AppShell.Main>
     </AppShell>
   )

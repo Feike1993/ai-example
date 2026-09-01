@@ -41,6 +41,9 @@ public class RagSampleService {
     public static final String META_CORPUS = "corpus";
     public static final String CORPUS_DEMO = "ai-example-demo";
 
+    /** 元数据键：分块策略标记。 */
+    public static final String META_CHUNKING = "chunking";
+
     /** 空检索且跳过 LLM 时的固定拒答文案。 */
     public static final String EMPTY_REFUSAL =
         "根据当前知识库的检索结果，没有找到与问题相关的内容，因此无法回答。"
@@ -66,17 +69,23 @@ public class RagSampleService {
         hyde
     }
 
+    /** 分块策略：固定 token 或结构感知语义（7a）。 */
+    public enum ChunkingStrategy {
+        token,
+        semantic
+    }
+
     private final VectorStore vectorStore;
     private final LlmProviderRegistry registry;
     private final AiProperties.Rag ragSettings;
     private final TokenTextSplitter splitter;
-    // 关键词检索辅助
+    private final SemanticMarkdownSplitter semanticSplitter;
     private final RagKeywordRetriever keywordRetriever;
 
     /**
      * @param vectorStore       pgvector
      * @param registry          Chat / Embedding
-     * @param ragSettings       topK / chunkSize / 空检索 / Hybrid
+     * @param ragSettings       topK / chunkSize / 空检索 / Hybrid / chunking
      * @param keywordRetriever  关键词路；测试可传 {@code null}（Hybrid 回退向量）
      */
     public RagSampleService(
@@ -92,28 +101,63 @@ public class RagSampleService {
         this.splitter = TokenTextSplitter.builder()
             .withChunkSize(ragSettings.chunkSize())
             .build();
+        this.semanticSplitter = new SemanticMarkdownSplitter(ragSettings.chunkSize());
+    }
+
+    /** 幂等重建演示索引（默认 token corpus，与二期一致）。 */
+    public IngestResult ingest() {
+        return ingest("token");
     }
 
     /**
-     * 幂等重建演示索引：删掉本语料旧 chunk，再从 classpath 样例文档写入。
+     * 按策略重建索引：{@code token} / {@code semantic} / {@code all}。
      *
-     * @return 写入的 chunk 数与来源文件名
+     * @param strategy 分块策略；空则 token
      */
-    public IngestResult ingest() {
+    public IngestResult ingest(String strategy) {
+        String value = strategy == null || strategy.isBlank() ? "token" : strategy.trim().toLowerCase();
+        if ("all".equals(value)) {
+            IngestResult token = ingestOne(ChunkingStrategy.token);
+            IngestResult semantic = ingestOne(ChunkingStrategy.semantic);
+            List<String> sources = new ArrayList<>(token.sources());
+            for (String s : semantic.sources()) {
+                if (!sources.contains(s)) {
+                    sources.add(s);
+                }
+            }
+            sources = sources.stream().sorted().toList();
+            Map<String, Integer> corpora = new LinkedHashMap<>();
+            corpora.put(CORPUS_DEMO, token.chunkCount());
+            corpora.put(semanticCorpus(), semantic.chunkCount());
+            return new IngestResult(
+                token.chunkCount() + semantic.chunkCount(),
+                sources,
+                "all",
+                corpora
+            );
+        }
+        return ingestOne(parseChunkingStrategy(value));
+    }
+
+    private IngestResult ingestOne(ChunkingStrategy strategy) {
+        String corpus = corpusFor(strategy);
         try {
             vectorStore.delete(new Filter.Expression(
                 Filter.ExpressionType.EQ,
                 new Filter.Key(META_CORPUS),
-                new Filter.Value(CORPUS_DEMO)
+                new Filter.Value(corpus)
             ));
         } catch (Exception ex) {
             log.debug("清理旧索引时忽略: {}", ex.toString());
         }
 
         List<Document> sourceDocs = loadClasspathDocs();
-        List<Document> chunks = splitter.apply(sourceDocs);
+        List<Document> chunks = strategy == ChunkingStrategy.semantic
+            ? semanticSplitter.apply(sourceDocs)
+            : splitter.apply(sourceDocs);
         for (Document chunk : chunks) {
-            chunk.getMetadata().putIfAbsent(META_CORPUS, CORPUS_DEMO);
+            chunk.getMetadata().put(META_CORPUS, corpus);
+            chunk.getMetadata().put(META_CHUNKING, strategy.name());
         }
         vectorStore.add(chunks);
         if (keywordRetriever != null) {
@@ -124,8 +168,9 @@ public class RagSampleService {
             .distinct()
             .sorted()
             .toList();
-        log.info("RAG ingest 完成: chunks={}, sources={}", chunks.size(), sources);
-        return new IngestResult(chunks.size(), sources);
+        log.info("RAG ingest 完成: strategy={}, corpus={}, chunks={}, sources={}",
+            strategy, corpus, chunks.size(), sources);
+        return new IngestResult(chunks.size(), sources, strategy.name(), Map.of(corpus, chunks.size()));
     }
 
     /**
@@ -161,17 +206,37 @@ public class RagSampleService {
         Boolean rewriteQuery,
         String queryExpansion
     ) {
+        return query(question, provider, topK, retrievalMode, rewriteQuery, queryExpansion, null);
+    }
+
+    /**
+     * 检索 + 同步生成；可指定分块语料（token / semantic）。
+     *
+     * @param chunkingStrategy token（默认）或 semantic
+     */
+    public RagQueryResult query(
+        String question,
+        String provider,
+        Integer topK,
+        RetrievalMode retrievalMode,
+        Boolean rewriteQuery,
+        String queryExpansion,
+        String chunkingStrategy
+    ) {
+        ChunkingStrategy chunking = parseChunkingStrategy(chunkingStrategy);
         QueryExpansion expansion = resolveExpansion(queryExpansion, rewriteQuery);
-        RetrievalBundle bundle = retrieveExpanded(question, topK, retrievalMode, expansion, provider);
-        return answerFromHits(question, provider, bundle, retrievalMode);
+        RetrievalBundle bundle = retrieveExpanded(
+            question, topK, retrievalMode, expansion, provider, corpusFor(chunking)
+        );
+        return answerFromHits(question, provider, bundle, retrievalMode, chunking);
     }
 
     /**
      * 同一问题并排返回 vector 与 hybrid 两套结果，便于对照。
      */
     public CompareResult queryCompare(String question, String provider, Integer topK, Boolean rewriteQuery) {
-        RagQueryResult vector = query(question, provider, topK, RetrievalMode.vector, rewriteQuery, null);
-        RagQueryResult hybrid = query(question, provider, topK, RetrievalMode.hybrid, rewriteQuery, null);
+        RagQueryResult vector = query(question, provider, topK, RetrievalMode.vector, rewriteQuery, null, null);
+        RagQueryResult hybrid = query(question, provider, topK, RetrievalMode.hybrid, rewriteQuery, null, null);
         return new CompareResult(vector, hybrid);
     }
 
@@ -185,13 +250,35 @@ public class RagSampleService {
         RetrievalMode retrievalMode
     ) {
         RetrievalMode mode = retrievalMode == null ? RetrievalMode.vector : retrievalMode;
-        RetrievalBundle none = retrieveExpanded(question, topK, mode, QueryExpansion.none, provider);
-        RetrievalBundle rewrite = retrieveExpanded(question, topK, mode, QueryExpansion.rewrite, provider);
-        RetrievalBundle hyde = retrieveExpanded(question, topK, mode, QueryExpansion.hyde, provider);
+        RetrievalBundle none = retrieveExpanded(question, topK, mode, QueryExpansion.none, provider, CORPUS_DEMO);
+        RetrievalBundle rewrite = retrieveExpanded(question, topK, mode, QueryExpansion.rewrite, provider, CORPUS_DEMO);
+        RetrievalBundle hyde = retrieveExpanded(question, topK, mode, QueryExpansion.hyde, provider, CORPUS_DEMO);
         return new ExpansionCompareResult(
             toExpansionView(none),
             toExpansionView(rewrite),
             toExpansionView(hyde)
+        );
+    }
+
+    /**
+     * 对照 token vs semantic 两套检索命中（默认不生成答案）。
+     */
+    public ChunkingCompareResult queryCompareChunking(
+        String question,
+        String provider,
+        Integer topK,
+        RetrievalMode retrievalMode
+    ) {
+        RetrievalMode mode = retrievalMode == null ? RetrievalMode.vector : retrievalMode;
+        RetrievalBundle token = retrieveExpanded(
+            question, topK, mode, QueryExpansion.none, provider, corpusFor(ChunkingStrategy.token)
+        );
+        RetrievalBundle semantic = retrieveExpanded(
+            question, topK, mode, QueryExpansion.none, provider, corpusFor(ChunkingStrategy.semantic)
+        );
+        return new ChunkingCompareResult(
+            toChunkingView(ChunkingStrategy.token, token),
+            toChunkingView(ChunkingStrategy.semantic, semantic)
         );
     }
 
@@ -227,7 +314,9 @@ public class RagSampleService {
         String queryExpansion
     ) {
         QueryExpansion expansion = resolveExpansion(queryExpansion, rewriteQuery);
-        List<Document> hits = retrieveExpanded(question, topK, retrievalMode, expansion, provider).hits();
+        List<Document> hits = retrieveExpanded(
+            question, topK, retrievalMode, expansion, provider, CORPUS_DEMO
+        ).hits();
         return streamAnswer(question, provider, hits);
     }
 
@@ -266,7 +355,7 @@ public class RagSampleService {
         String provider
     ) {
         QueryExpansion expansion = resolveExpansion(null, rewriteQuery);
-        return retrieveExpanded(question, topK, retrievalMode, expansion, provider).hits();
+        return retrieveExpanded(question, topK, retrievalMode, expansion, provider, CORPUS_DEMO).hits();
     }
 
     public boolean isRetrievalEmpty(List<Document> hits) {
@@ -324,44 +413,44 @@ public class RagSampleService {
         Integer topK,
         RetrievalMode retrievalMode,
         QueryExpansion expansion,
-        String provider
+        String provider,
+        String corpus
     ) {
         RetrievalMode mode = retrievalMode == null ? RetrievalMode.vector : retrievalMode;
         QueryExpansion effective = expansion == null ? QueryExpansion.none : expansion;
         int k = topK != null && topK > 0 ? topK : ragSettings.topK();
+        String effectiveCorpus = (corpus == null || corpus.isBlank()) ? CORPUS_DEMO : corpus;
 
         if (effective == QueryExpansion.hyde) {
             if (!ragSettings.hyde().enabled()) {
                 log.warn("HyDE 已关闭，回退为 none");
-                List<Document> hits = retrieveByMode(question, k, mode);
+                List<Document> hits = retrieveByMode(question, k, mode, effectiveCorpus);
                 return new RetrievalBundle(hits, QueryExpansion.none, null, null);
             }
             String hypo = generateHypotheticalDocument(question, provider);
-            List<Document> hydeHits = vectorRetrieve(hypo, k);
+            List<Document> hydeHits = vectorRetrieve(hypo, k, effectiveCorpus);
             List<Document> hits;
             if (ragSettings.hyde().fuseWithOriginal()) {
-                List<Document> originalHits = vectorRetrieve(question, k);
-                // 假想路 → vectorRank；原问题路 → keywordRank（字段复用，便于观测）
+                List<Document> originalHits = vectorRetrieve(question, k, effectiveCorpus);
                 hits = fuseDocumentLists(hydeHits, originalHits, k);
             } else {
                 hits = hydeHits;
             }
             if (mode == RetrievalMode.hybrid && ragSettings.hybrid().enabled() && keywordRetriever != null) {
-                hits = fuseWithKeyword(hits, question, k);
+                hits = fuseWithKeyword(hits, question, k, effectiveCorpus);
             }
             return new RetrievalBundle(hits, QueryExpansion.hyde, hypo, null);
         }
 
         if (effective == QueryExpansion.rewrite) {
             String rewritten = rewriteQueryAlways(question, provider);
-            List<Document> hits = retrieveByMode(rewritten, k, mode);
+            List<Document> hits = retrieveByMode(rewritten, k, mode, effectiveCorpus);
             return new RetrievalBundle(hits, QueryExpansion.rewrite, null, rewritten);
         }
 
-        // none：仍尊重 hybrid.rewriteQueryEnabled 全局开关（第四期行为）
         String effectiveQuestion = maybeRewriteQuery(question, provider, false);
         String rewritten = effectiveQuestion.equals(question) ? null : effectiveQuestion;
-        List<Document> hits = retrieveByMode(effectiveQuestion, k, mode);
+        List<Document> hits = retrieveByMode(effectiveQuestion, k, mode, effectiveCorpus);
         return new RetrievalBundle(
             hits,
             rewritten == null ? QueryExpansion.none : QueryExpansion.rewrite,
@@ -370,26 +459,28 @@ public class RagSampleService {
         );
     }
 
-    private List<Document> retrieveByMode(String query, int k, RetrievalMode mode) {
+    private List<Document> retrieveByMode(String query, int k, RetrievalMode mode, String corpus) {
         if (mode == RetrievalMode.hybrid
             && ragSettings.hybrid().enabled()
             && keywordRetriever != null) {
-            return hybridRetrieve(query, k);
+            return hybridRetrieve(query, k, corpus);
         }
-        return vectorRetrieve(query, k);
+        return vectorRetrieve(query, k, corpus);
     }
 
     private RagQueryResult answerFromHits(
         String question,
         String provider,
         RetrievalBundle bundle,
-        RetrievalMode retrievalMode
+        RetrievalMode retrievalMode,
+        ChunkingStrategy chunking
     ) {
         List<Document> hits = bundle.hits();
         boolean empty = isRetrievalEmpty(hits);
+        String chunkingName = chunking == null ? ChunkingStrategy.token.name() : chunking.name();
         if (empty && ragSettings.skipLlmWhenEmpty()) {
-            log.info("RAG 空检索短路拒答: question={}, hits={}, mode={}, expansion={}",
-                question, hits.size(), retrievalMode, bundle.expansion());
+            log.info("RAG 空检索短路拒答: question={}, hits={}, mode={}, expansion={}, chunking={}",
+                question, hits.size(), retrievalMode, bundle.expansion(), chunkingName);
             return new RagQueryResult(
                 EMPTY_REFUSAL,
                 toSources(hits),
@@ -397,7 +488,8 @@ public class RagSampleService {
                 null,
                 retrievalMode.name(),
                 bundle.expansion().name(),
-                bundle.hypotheticalDocument()
+                bundle.hypotheticalDocument(),
+                chunkingName
             );
         }
         String context = buildContext(hits);
@@ -413,8 +505,41 @@ public class RagSampleService {
             TokenUsageExtractor.from(call.chatResponse()),
             retrievalMode.name(),
             bundle.expansion().name(),
-            bundle.hypotheticalDocument()
+            bundle.hypotheticalDocument(),
+            chunkingName
         );
+    }
+
+    private ChunkingView toChunkingView(ChunkingStrategy strategy, RetrievalBundle bundle) {
+        return new ChunkingView(
+            strategy.name(),
+            corpusFor(strategy),
+            toSources(bundle.hits()),
+            isRetrievalEmpty(bundle.hits())
+        );
+    }
+
+    static ChunkingStrategy parseChunkingStrategy(String value) {
+        if (value != null && value.trim().equalsIgnoreCase("semantic")) {
+            return ChunkingStrategy.semantic;
+        }
+        return ChunkingStrategy.token;
+    }
+
+    private String semanticCorpus() {
+        return ragSettings.chunking().semanticCorpus();
+    }
+
+    /** 供 Controller 解析 semantic corpus 名。 */
+    public String semanticCorpusPublic() {
+        return semanticCorpus();
+    }
+
+    private String corpusFor(ChunkingStrategy strategy) {
+        if (strategy == ChunkingStrategy.semantic) {
+            return semanticCorpus();
+        }
+        return CORPUS_DEMO;
     }
 
     private ExpansionView toExpansionView(RetrievalBundle bundle) {
@@ -490,9 +615,9 @@ public class RagSampleService {
         return materializeFused(fused, byId);
     }
 
-    private List<Document> fuseWithKeyword(List<Document> primary, String keywordQuery, int k) {
+    private List<Document> fuseWithKeyword(List<Document> primary, String keywordQuery, int k, String corpus) {
         int keywordK = ragSettings.hybrid().keywordTopK();
-        List<Document> keywordHits = keywordRetriever.search(keywordQuery, keywordK, CORPUS_DEMO);
+        List<Document> keywordHits = keywordRetriever.search(keywordQuery, keywordK, corpus);
         return fuseDocumentLists(primary, keywordHits, k);
     }
 
@@ -520,33 +645,26 @@ public class RagSampleService {
         return merged;
     }
 
-    private List<Document> vectorRetrieve(String question, int k) {
+    private List<Document> vectorRetrieve(String question, int k, String corpus) {
         return vectorStore.similaritySearch(
             SearchRequest.builder()
                 .query(question)
                 .topK(k)
-                .filterExpression(META_CORPUS + " == '" + CORPUS_DEMO + "'") // 过滤语料来源
+                .filterExpression(META_CORPUS + " == '" + corpus + "'")
                 .build()
         );
     }
 
     /**
      * 混合检索：向量 + 关键词 + RRF。
-     * 什么是 RRF：RRF 是一种检索结果融合（fusion）方法，通过将向量检索和关键词检索的结果进行融合，以提高检索效果。
-     * @param question 查询问题
-     * @param k 检索结果数量
-     * @return 检索结果
      */
-    private List<Document> hybridRetrieve(String question, int k) {
-        // 向量检索
-        List<Document> vectorHits = vectorRetrieve(question, k);
-        // 关键词检索
+    private List<Document> hybridRetrieve(String question, int k, String corpus) {
+        List<Document> vectorHits = vectorRetrieve(question, k, corpus);
         int keywordK = ragSettings.hybrid().keywordTopK();
-        List<Document> keywordHits = keywordRetriever.search(question, keywordK, CORPUS_DEMO);
+        List<Document> keywordHits = keywordRetriever.search(question, keywordK, corpus);
 
         List<String> vectorIds = vectorHits.stream().map(Document::getId).toList();
         List<String> keywordIds = keywordHits.stream().map(Document::getId).toList();
-        // RRF 融合
         List<RrfFusion.RankedId> fused = RrfFusion.fuse(
             vectorIds,
             keywordIds,
@@ -641,7 +759,17 @@ public class RagSampleService {
         return null;
     }
 
-    public record IngestResult(int chunkCount, List<String> sources) {}
+    public record IngestResult(
+        int chunkCount,
+        List<String> sources,
+        String strategy,
+        Map<String, Integer> corpora
+    ) {
+        /** 二期兼容：仅 chunkCount + sources。 */
+        public IngestResult(int chunkCount, List<String> sources) {
+            this(chunkCount, sources, ChunkingStrategy.token.name(), Map.of(CORPUS_DEMO, chunkCount));
+        }
+    }
 
     /**
      * 一次检索的中间结果（含扩展策略与假想文档预览）。
@@ -657,6 +785,7 @@ public class RagSampleService {
      * @param retrievalMode          实际使用的检索模式：{@code vector} 或 {@code hybrid}
      * @param queryExpansion         none / rewrite / hyde
      * @param hypotheticalDocument   HyDE 生成的假想段落（仅预览；不在 sources 中）
+     * @param chunkingStrategy       token / semantic
      */
     public record RagQueryResult(
         String answer,
@@ -665,11 +794,12 @@ public class RagSampleService {
         TokenUsage usage,
         String retrievalMode,
         String queryExpansion,
-        String hypotheticalDocument
+        String hypotheticalDocument,
+        String chunkingStrategy
     ) {
         /** 二期兼容：无 retrievalMode 字段时视为 vector。 */
         public RagQueryResult(String answer, List<SourceView> sources, boolean retrievalEmpty, TokenUsage usage) {
-            this(answer, sources, retrievalEmpty, usage, RetrievalMode.vector.name(), QueryExpansion.none.name(), null);
+            this(answer, sources, retrievalEmpty, usage, RetrievalMode.vector.name(), QueryExpansion.none.name(), null, ChunkingStrategy.token.name());
         }
 
         /** 第四期兼容：无 queryExpansion 字段。 */
@@ -680,7 +810,20 @@ public class RagSampleService {
             TokenUsage usage,
             String retrievalMode
         ) {
-            this(answer, sources, retrievalEmpty, usage, retrievalMode, QueryExpansion.none.name(), null);
+            this(answer, sources, retrievalEmpty, usage, retrievalMode, QueryExpansion.none.name(), null, ChunkingStrategy.token.name());
+        }
+
+        /** 第六期兼容：无 chunkingStrategy。 */
+        public RagQueryResult(
+            String answer,
+            List<SourceView> sources,
+            boolean retrievalEmpty,
+            TokenUsage usage,
+            String retrievalMode,
+            String queryExpansion,
+            String hypotheticalDocument
+        ) {
+            this(answer, sources, retrievalEmpty, usage, retrievalMode, queryExpansion, hypotheticalDocument, ChunkingStrategy.token.name());
         }
     }
 
@@ -696,6 +839,16 @@ public class RagSampleService {
     ) {}
 
     public record ExpansionCompareResult(ExpansionView none, ExpansionView rewrite, ExpansionView hyde) {}
+
+    /** 分块策略对照单路（7a：仅 sources）。 */
+    public record ChunkingView(
+        String chunkingStrategy,
+        String corpus,
+        List<SourceView> sources,
+        boolean retrievalEmpty
+    ) {}
+
+    public record ChunkingCompareResult(ChunkingView token, ChunkingView semantic) {}
 
     public record SourceView(
         String id,

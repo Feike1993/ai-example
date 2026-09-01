@@ -82,6 +82,8 @@ app:
       hyde:
         enabled: ${RAG_HYDE_ENABLED:true}
         fuse-with-original: ${RAG_HYDE_FUSE:true}
+      chunking:
+        semantic-corpus: ${RAG_SEMANTIC_CORPUS:ai-example-demo-semantic}
     mcp:
       # 仅作启动初始值；运行时可被 PUT /mcp/mode 覆盖（内存、不持久化，重启回此配置）
       # remote=连 mcp-server:8081；inprocess=同进程 MethodToolCallbackProvider（不必开主应用 MCP Server HTTP）

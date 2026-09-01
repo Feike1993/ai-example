@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * RAG 样例 HTTP：ingest / query / compare / compare-expansion / SSE。
+ * RAG 样例 HTTP：ingest / query / compare / compare-expansion / compare-chunking / SSE。
  */
 @Validated
 @RestController
@@ -29,12 +29,14 @@ import java.util.Map;
 public class RagSampleController {
 
     /**
-     * @param question         用户问题
-     * @param provider         可选 Chat Provider
-     * @param topK             可选覆盖默认 topK
-     * @param retrievalMode    {@code vector}（默认）或 {@code hybrid}
-     * @param rewriteQuery     是否改写问题后再检索（兼容；等价 queryExpansion=rewrite）
-     * @param queryExpansion   {@code none} / {@code rewrite} / {@code hyde}；优先于 rewriteQuery
+     * @param question          用户问题
+     * @param provider          可选 Chat Provider
+     * @param topK              可选覆盖默认 topK
+     * @param retrievalMode     {@code vector}（默认）或 {@code hybrid}
+     * @param rewriteQuery      是否改写问题后再检索（兼容；等价 queryExpansion=rewrite）
+     * @param queryExpansion    {@code none} / {@code rewrite} / {@code hyde}；优先于 rewriteQuery
+     * @param chunkingStrategy  {@code token}（默认）或 {@code semantic}
+     * @param strategy          ingest 用：token / semantic / all
      */
     public record RagQueryRequest(
         @NotBlank String question,
@@ -42,8 +44,11 @@ public class RagSampleController {
         Integer topK,
         String retrievalMode,
         Boolean rewriteQuery,
-        String queryExpansion
+        String queryExpansion,
+        String chunkingStrategy
     ) {}
+
+    public record RagIngestRequest(String strategy) {}
 
     private final RagSampleService ragSampleService;
     private final JsonMapper jsonMapper;
@@ -54,8 +59,9 @@ public class RagSampleController {
     }
 
     @PostMapping("/ingest")
-    public RagSampleService.IngestResult ingest() {
-        return ragSampleService.ingest();
+    public RagSampleService.IngestResult ingest(@RequestBody(required = false) RagIngestRequest request) {
+        String strategy = request == null ? null : request.strategy();
+        return ragSampleService.ingest(strategy);
     }
 
     @PostMapping("/query")
@@ -66,13 +72,11 @@ public class RagSampleController {
             request.topK(),
             parseMode(request.retrievalMode()),
             request.rewriteQuery(),
-            request.queryExpansion()
+            request.queryExpansion(),
+            request.chunkingStrategy()
         );
     }
 
-    /**
-     * 同一问题返回 vector 与 hybrid 两套 sources + answer，便于 playground 并排对照。
-     */
     @PostMapping("/query/compare")
     public RagSampleService.CompareResult queryCompare(@RequestBody @Validated RagQueryRequest request) {
         return ragSampleService.queryCompare(
@@ -83,14 +87,26 @@ public class RagSampleController {
         );
     }
 
-    /**
-     * 同一问题对照 none / rewrite / hyde 三套检索命中（默认不三次生成）。
-     */
     @PostMapping("/query/compare-expansion")
     public RagSampleService.ExpansionCompareResult queryCompareExpansion(
         @RequestBody @Validated RagQueryRequest request
     ) {
         return ragSampleService.queryCompareExpansion(
+            request.question(),
+            request.provider(),
+            request.topK(),
+            parseMode(request.retrievalMode())
+        );
+    }
+
+    /**
+     * 对照 token vs semantic 两套检索命中（默认不三次生成）。
+     */
+    @PostMapping("/query/compare-chunking")
+    public RagSampleService.ChunkingCompareResult queryCompareChunking(
+        @RequestBody @Validated RagQueryRequest request
+    ) {
+        return ragSampleService.queryCompareChunking(
             request.question(),
             request.provider(),
             request.topK(),
@@ -105,16 +121,23 @@ public class RagSampleController {
         @RequestParam(required = false) Integer topK,
         @RequestParam(required = false) String retrievalMode,
         @RequestParam(required = false) Boolean rewriteQuery,
-        @RequestParam(required = false) String queryExpansion
+        @RequestParam(required = false) String queryExpansion,
+        @RequestParam(required = false) String chunkingStrategy
     ) {
         RagSampleService.QueryExpansion expansion =
             RagSampleService.resolveExpansion(queryExpansion, rewriteQuery);
+        RagSampleService.ChunkingStrategy chunking =
+            RagSampleService.parseChunkingStrategy(chunkingStrategy);
+        String corpus = chunking == RagSampleService.ChunkingStrategy.semantic
+            ? ragSampleService.semanticCorpusPublic()
+            : RagSampleService.CORPUS_DEMO;
         RagSampleService.RetrievalBundle bundle = ragSampleService.retrieveExpanded(
             question,
             topK,
             parseMode(retrievalMode),
             expansion,
-            provider
+            provider,
+            corpus
         );
         List<Document> hits = bundle.hits();
         List<RagSampleService.SourceView> sources = ragSampleService.toSources(hits);
@@ -126,6 +149,7 @@ public class RagSampleController {
             payload.put("retrievalEmpty", retrievalEmpty);
             payload.put("retrievalMode", parseMode(retrievalMode).name());
             payload.put("queryExpansion", bundle.expansion().name());
+            payload.put("chunkingStrategy", chunking.name());
             if (bundle.hypotheticalDocument() != null) {
                 payload.put("hypotheticalDocument", bundle.hypotheticalDocument());
             }

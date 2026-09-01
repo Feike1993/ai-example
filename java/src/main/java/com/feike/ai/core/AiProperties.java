@@ -61,7 +61,7 @@ public record AiProperties(
             embedding = new Embedding("text-embedding-v3", 1024);
         }
         if (rag == null) {
-            rag = new Rag(true, 4, 400, 1, true, new Rag.Hybrid(true, 60, 4, false), new Rag.Hyde(true, true));
+            rag = new Rag(true, 4, 400, 1, true, new Rag.Hybrid(true, 60, 4, false), new Rag.Hyde(true, true), new Rag.Chunking("ai-example-demo-semantic"));
         }
         if (context == null) {
             context = new ContextSettings(24, 2000, 6, "jdbc");
@@ -162,6 +162,7 @@ public record AiProperties(
      * @param skipLlmWhenEmpty  空检索时是否跳过 LLM、直接返回固定拒答（默认 true）
      * @param hybrid            Hybrid 检索（向量 + PG 全文 + RRF）参数
      * @param hyde              HyDE 假想文档检索参数
+     * @param chunking          分块策略 / 旁路 corpus（第七期）
      */
     public record Rag(
         boolean enabled,
@@ -170,7 +171,8 @@ public record AiProperties(
         int minSources,
         boolean skipLlmWhenEmpty,
         Hybrid hybrid,
-        Hyde hyde
+        Hyde hyde,
+        Chunking chunking
     ) {
         public Rag {
             if (topK < 1) {
@@ -187,6 +189,9 @@ public record AiProperties(
             }
             if (hyde == null) {
                 hyde = new Hyde(true, true);
+            }
+            if (chunking == null) {
+                chunking = new Chunking("ai-example-demo-semantic");
             }
         }
 
@@ -216,6 +221,19 @@ public record AiProperties(
          * @param fuseWithOriginal  假想段落向量路是否与原问题向量路 RRF 融合
          */
         public record Hyde(boolean enabled, boolean fuseWithOriginal) {}
+
+        /**
+         * 分块旁路配置（7a：语义 corpus；7b 再扩 parent）。
+         *
+         * @param semanticCorpus 语义分块写入的 corpus 名
+         */
+        public record Chunking(String semanticCorpus) {
+            public Chunking {
+                if (semanticCorpus == null || semanticCorpus.isBlank()) {
+                    semanticCorpus = "ai-example-demo-semantic";
+                }
+            }
+        }
     }
 
     /**

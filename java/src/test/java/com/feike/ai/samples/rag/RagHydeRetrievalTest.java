@@ -56,7 +56,8 @@ class RagHydeRetrievalTest {
             new AiProperties.Rag(
                 true, 4, 400, 1, true,
                 new AiProperties.Rag.Hybrid(true, 60, 4, false),
-                new AiProperties.Rag.Hyde(true, false)
+                new AiProperties.Rag.Hyde(true, false),
+                new AiProperties.Rag.Chunking("ai-example-demo-semantic")
             ),
             null
         );
@@ -66,7 +67,8 @@ class RagHydeRetrievalTest {
             4,
             RagSampleService.RetrievalMode.vector,
             RagSampleService.QueryExpansion.hyde,
-            "deepseek"
+            "deepseek",
+            RagSampleService.CORPUS_DEMO
         );
 
         assertEquals(RagSampleService.QueryExpansion.hyde, bundle.expansion());
@@ -109,7 +111,8 @@ class RagHydeRetrievalTest {
             new AiProperties.Rag(
                 true, 4, 400, 1, true,
                 new AiProperties.Rag.Hybrid(true, 60, 4, false),
-                new AiProperties.Rag.Hyde(true, false)
+                new AiProperties.Rag.Hyde(true, false),
+                new AiProperties.Rag.Chunking("ai-example-demo-semantic")
             ),
             null
         );
@@ -170,7 +173,8 @@ class RagHydeRetrievalTest {
             new AiProperties.Rag(
                 true, 4, 400, 1, true,
                 new AiProperties.Rag.Hybrid(true, 60, 4, false),
-                new AiProperties.Rag.Hyde(true, false)
+                new AiProperties.Rag.Hyde(true, false),
+                new AiProperties.Rag.Chunking("ai-example-demo-semantic")
             ),
             null
         );

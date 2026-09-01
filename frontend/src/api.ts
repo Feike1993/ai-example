@@ -80,6 +80,7 @@ export type RagQueryResponse = {
   retrievalMode?: string
   queryExpansion?: string
   hypotheticalDocument?: string | null
+  chunkingStrategy?: string
 }
 
 export type RagCompareResponse = {
@@ -99,6 +100,18 @@ export type RagExpansionCompareResponse = {
   none: RagExpansionView
   rewrite: RagExpansionView
   hyde: RagExpansionView
+}
+
+export type RagChunkingView = {
+  chunkingStrategy: string
+  corpus: string
+  sources: RagSource[]
+  retrievalEmpty: boolean
+}
+
+export type RagChunkingCompareResponse = {
+  token: RagChunkingView
+  semantic: RagChunkingView
 }
 
 export type EvalCaseResult = {
@@ -123,6 +136,8 @@ export type EvalRunResponse = {
 export type RagIngestResponse = {
   chunkCount: number
   sources: string[]
+  strategy?: string
+  corpora?: Record<string, number>
 }
 
 export type ContextChatResponse = {
