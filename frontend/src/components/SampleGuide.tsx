@@ -41,23 +41,27 @@ export function SampleGuide({ guide }: { guide: SampleGuideData }) {
           </Text>
 
           <Stack gap="md">
-            <div>
-              <Text fw={600} size="sm" mb={4}>
-                解决的问题
-              </Text>
-              <Text size="sm" c="dimmed">
-                {guide.logic.problem}
-              </Text>
-            </div>
+            {guide.logic.problem ? (
+              <div>
+                <Text fw={600} size="sm" mb={4}>
+                  解决的问题
+                </Text>
+                <Text size="sm" c="dimmed">
+                  {guide.logic.problem}
+                </Text>
+              </div>
+            ) : null}
 
-            <div>
-              <Text fw={600} size="sm" mb={4}>
-                目的
-              </Text>
-              <Text size="sm" c="dimmed">
-                {guide.logic.purpose}
-              </Text>
-            </div>
+            {guide.logic.purpose ? (
+              <div>
+                <Text fw={600} size="sm" mb={4}>
+                  目的
+                </Text>
+                <Text size="sm" c="dimmed">
+                  {guide.logic.purpose}
+                </Text>
+              </div>
+            ) : null}
 
             <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
               <div>
@@ -65,7 +69,7 @@ export function SampleGuide({ guide }: { guide: SampleGuideData }) {
                   优点
                 </Text>
                 <List size="sm" spacing="xs">
-                  {guide.logic.pros.map((item) => (
+                  {(guide.logic.pros ?? []).map((item) => (
                     <List.Item key={item}>
                       <Text size="sm" c="dimmed">
                         {item}
@@ -79,7 +83,7 @@ export function SampleGuide({ guide }: { guide: SampleGuideData }) {
                   缺点
                 </Text>
                 <List size="sm" spacing="xs">
-                  {guide.logic.cons.map((item) => (
+                  {(guide.logic.cons ?? []).map((item) => (
                     <List.Item key={item}>
                       <Text size="sm" c="dimmed">
                         {item}
@@ -95,7 +99,7 @@ export function SampleGuide({ guide }: { guide: SampleGuideData }) {
                 应用场景
               </Text>
               <List size="sm" spacing="xs">
-                {guide.logic.scenarios.map((item) => (
+                {(guide.logic.scenarios ?? []).map((item) => (
                   <List.Item key={item}>
                     <Text size="sm" c="dimmed">
                       {item}
@@ -110,7 +114,7 @@ export function SampleGuide({ guide }: { guide: SampleGuideData }) {
                 流程步骤
               </Text>
               <List type="ordered" size="sm" spacing="sm">
-                {guide.logic.steps.map((step) => (
+                {(guide.logic.steps ?? []).map((step) => (
                   <List.Item key={step.title}>
                     <Text span fw={600} size="sm">
                       {step.title}
