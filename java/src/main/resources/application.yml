@@ -146,6 +146,8 @@ app:
       user-id-default: demo
       # 相似事实合并：score≥该值则删旧写新（精确相同则跳过）
       similarity-threshold: 0.92
+      # 单次 /memory/extract 最多写入条数
+      extract-max-facts: ${MEMORY_EXTRACT_MAX:5}
     # 多代理相关配置
     multiagent:
       # 最大 Orchestrator 步骤数，作用：限制 Orchestrator 的递归调用深度，防止无限递归

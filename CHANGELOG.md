@@ -104,3 +104,15 @@ Hybrid RAG、golden 评测、Redis 持久会话、逐步 tool SSE、流式 token
 ### 文档
 
 - [phase7.md](docs/phase7.md)、[15-semantic-chunk.md](docs/samples/15-semantic-chunk.md)、[16-parent-child.md](docs/samples/16-parent-child.md)
+
+## [Unreleased] — 第八期进阶（8a 自动抽记忆；8b 待合入）
+
+### 自动抽记忆（8a）
+
+- `POST /memory/extract`：messages / turns / sessionId 三选一 → Chat 抽事实 JSON → 现有 `remember`
+- 配置 `app.ai.memory.extract-max-facts`（默认 5）
+- 前端 **MemoryExtract** Tab；Python `memory_extract`
+
+### 文档
+
+- [phase8.md](docs/phase8.md)、[17-memory-extract.md](docs/samples/17-memory-extract.md)

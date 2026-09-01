@@ -49,7 +49,7 @@ class MultiAgentOrchestratorTest {
             new AiProperties.Rag(true, 4, 400, 1, true, new AiProperties.Rag.Hybrid(true, 60, 4, false), new AiProperties.Rag.Hyde(true, true), new AiProperties.Rag.Chunking("ai-example-demo-semantic", "ai-example-demo-parent", 200, true)),
             new AiProperties.ContextSettings(24, 2000, 6, "memory"),
             new AiProperties.MultiAgent(4, 6),
-            new AiProperties.Memory(4, "demo", 0.92),
+            new AiProperties.Memory(4, "demo", 0.92, 5),
             new AiProperties.Mcp("inprocess")
         );
     }

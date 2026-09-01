@@ -70,7 +70,7 @@ public record AiProperties(
             multiagent = new MultiAgent(4, 6);
         }
         if (memory == null) {
-            memory = new Memory(4, "demo", 0.92);
+            memory = new Memory(4, "demo", 0.92, 5);
         }
         if (mcp == null) {
             mcp = new Mcp("remote");
@@ -304,8 +304,9 @@ public record AiProperties(
      * @param topK                 召回条数
      * @param userIdDefault        未传 userId 时的默认用户
      * @param similarityThreshold  相似合并阈值（0–1，越高越严）；达到则删旧写新
+     * @param extractMaxFacts      单次自动抽取最多写入条数（第八期）
      */
-    public record Memory(int topK, String userIdDefault, double similarityThreshold) {
+    public record Memory(int topK, String userIdDefault, double similarityThreshold, int extractMaxFacts) {
         public Memory {
             if (topK < 1) {
                 topK = 4;
@@ -315,6 +316,9 @@ public record AiProperties(
             }
             if (similarityThreshold <= 0 || similarityThreshold > 1) {
                 similarityThreshold = 0.92;
+            }
+            if (extractMaxFacts < 1) {
+                extractMaxFacts = 5;
             }
         }
     }

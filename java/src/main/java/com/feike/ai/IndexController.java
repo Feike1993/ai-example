@@ -13,10 +13,10 @@ import java.util.Map;
 public class IndexController {
 
     /**
-     * 返回样例清单，按基础闭环与进阶（第四至六期）分组。
-     *
-     * @return 项目名、baseline / advanced 样例路径
-     */
+ * 返回样例清单，按基础闭环与进阶（第四至八期）分组。
+ *
+ * @return 项目名、baseline / advanced 样例路径
+ */
     @GetMapping("/")
     public Map<String, Object> index() {
         Map<String, Object> body = new LinkedHashMap<>();
@@ -39,22 +39,35 @@ public class IndexController {
         body.put("baseline", baseline);
 
         Map<String, Object> advanced = new LinkedHashMap<>();
-        advanced.put("phase", 7);
-        advanced.put("samples", Map.of(
+        advanced.put("phase", 8);
+        Map<String, String> advancedSamples = new LinkedHashMap<>();
+        advancedSamples.put(
             "hybridRag",
-            "POST /ai-example/rag/query (retrievalMode=hybrid)  POST /ai-example/rag/query/compare",
-            "eval", "POST /ai-example/eval/run",
+            "POST /ai-example/rag/query (retrievalMode=hybrid)  POST /ai-example/rag/query/compare"
+        );
+        advancedSamples.put("eval", "POST /ai-example/eval/run");
+        advancedSamples.put(
             "memory",
-            "POST /ai-example/memory/remember  POST /ai-example/memory/recall  POST /ai-example/memory/chat  DELETE /ai-example/memory",
+            "POST /ai-example/memory/remember  POST /ai-example/memory/recall  POST /ai-example/memory/chat  DELETE /ai-example/memory"
+        );
+        advancedSamples.put(
             "mcpRemote",
-            "mcp-server:8081 + GET/POST /ai-example/mcp/*（app.ai.mcp.mode=remote|inprocess）",
+            "mcp-server:8081 + GET/POST /ai-example/mcp/*（app.ai.mcp.mode=remote|inprocess）"
+        );
+        advancedSamples.put(
             "hyde",
-            "POST /ai-example/rag/query (queryExpansion=hyde)  POST /ai-example/rag/query/compare-expansion",
+            "POST /ai-example/rag/query (queryExpansion=hyde)  POST /ai-example/rag/query/compare-expansion"
+        );
+        advancedSamples.put(
             "semanticChunk",
-            "POST /ai-example/rag/ingest (strategy)  POST /ai-example/rag/query/compare-chunking",
+            "POST /ai-example/rag/ingest (strategy)  POST /ai-example/rag/query/compare-chunking"
+        );
+        advancedSamples.put(
             "parentChild",
             "POST /ai-example/rag/query (chunkingStrategy=parent_child)  compare-chunking.parentChild"
-        ));
+        );
+        advancedSamples.put("memoryExtract", "POST /ai-example/memory/extract");
+        advanced.put("samples", advancedSamples);
         body.put("advanced", advanced);
 
         return body;

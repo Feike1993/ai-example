@@ -184,6 +184,13 @@ export type MemoryChatResponse = {
   usage: TokenUsage | null
 }
 
+export type MemoryExtractResponse = {
+  userId: string
+  facts: string[]
+  remembered: MemoryRememberResponse[]
+  skippedDuplicates: number
+}
+
 export type MultiAgentStep = {
   index: number
   assistantText: string
