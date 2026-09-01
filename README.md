@@ -1,6 +1,6 @@
 # AI Agent 学习样例
 
-独立的 Agent 学习 cookbook。**基础闭环 v0.2.0**（一至三期 + 基础补丁）；**第四期**：Hybrid RAG + Agent 评测；**第五期**：持久会话 + 长期记忆；**第六期**：MCP 远端拆分 + 完整 HyDE；**第七期**：语义分块 + 父子文档。
+独立的 Agent 学习 cookbook。**基础闭环 v0.2.0**（一至三期 + 基础补丁）；**第四期**：Hybrid RAG + Agent 评测；**第五期**：持久会话 + 长期记忆；**第六期**：MCP 远端拆分 + 完整 HyDE；**第七期**：语义分块 + 父子文档；**第八期**：自动抽记忆 + 召回策略对照。
 
 **宣传**：[基础闭环宣传页](frontend/promo.html) · [方版宣传图](frontend/public/promo/opensource-poster-1080.png)（源文件 [poster.html](frontend/poster.html)，导出 `cd frontend && pnpm poster:export`）
 
@@ -12,6 +12,7 @@
 - **第五期**：持久会话（PostgreSQL）→ 长期记忆（pgvector）（见 [phase5](docs/phase5.md)）
 - **第六期**：MCP 远端拆分 → 完整 HyDE（见 [phase6](docs/phase6.md)）
 - **第七期**：语义分块 → 父子文档（见 [phase7](docs/phase7.md)）
+- **第八期**：自动抽记忆 → 召回策略对照（见 [phase8](docs/phase8.md)）
 
 Java：**Spring Boot 4.1 + Spring AI 2.0 + Gradle**；Python：**LangGraph / MCP SDK**；前端：**Vite + React playground**。
 
@@ -47,8 +48,10 @@ Java：**Spring Boot 4.1 + Spring AI 2.0 + Gradle**；Python：**LangGraph / MCP
 | 6 | HyDE | 假想文档 Embedding | `POST /ai-example/rag/query/compare-expansion` | `samples.hyde_rag` |
 | 7a | 语义分块 | token vs 结构切 | `POST /ai-example/rag/query/compare-chunking` | `samples.semantic_chunk` |
 | 7b | 父子文档 | 子检索父上下文 | `chunkingStrategy=parent_child` | `samples.parent_child_rag` |
+| 8a | 自动抽记忆 | 对话抽事实 → remember | `POST /ai-example/memory/extract` | `samples.memory_extract` |
+| 8b | 召回对照 | topK / 阈值 / 有无记忆 | `POST /ai-example/memory/recall/compare` | `samples.memory_recall_compare` |
 
-文档：[学习路径](docs/learning-path.md) · [基础补丁](docs/baseline-patches.md) · [集成说明](docs/integration.md) · [第二期](docs/phase2.md) · [第三期](docs/phase3.md) · [第四期](docs/phase4.md) · [第五期](docs/phase5.md) · [第六期](docs/phase6.md) · [第七期](docs/phase7.md) · [CHANGELOG](CHANGELOG.md) · [刻意不做 backlog](docs/backlog.md)
+文档：[学习路径](docs/learning-path.md) · [基础补丁](docs/baseline-patches.md) · [集成说明](docs/integration.md) · [第二期](docs/phase2.md) · [第三期](docs/phase3.md) · [第四期](docs/phase4.md) · [第五期](docs/phase5.md) · [第六期](docs/phase6.md) · [第七期](docs/phase7.md) · [第八期](docs/phase8.md) · [CHANGELOG](CHANGELOG.md) · [刻意不做 backlog](docs/backlog.md)
 
 ## 环境
 

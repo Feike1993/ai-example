@@ -12,7 +12,15 @@ export type BaselineSampleId =
   | 'multiagent'
 
 /** 进阶样例 id（仅 Playground）。 */
-export type AdvancedSampleId = 'hybridRag' | 'eval' | 'memory' | 'hyde' | 'semanticChunk' | 'parentChild'
+export type AdvancedSampleId =
+  | 'hybridRag'
+  | 'eval'
+  | 'memory'
+  | 'hyde'
+  | 'semanticChunk'
+  | 'parentChild'
+  | 'memoryExtract'
+  | 'memoryCompare'
 
 /** Playground 全部 Tab id。 */
 export type PlaygroundSampleId = BaselineSampleId | AdvancedSampleId
@@ -226,6 +234,32 @@ export const samples: readonly SampleMeta[] = [
     concepts: ['parent-child', 'expand-parent', '粒度解耦'],
     endpoint: 'POST /ai-example/rag/query (chunkingStrategy=parent_child)',
     docPath: 'docs/samples/16-parent-child.md',
+  },
+  {
+    id: 'memoryExtract',
+    index: 15,
+    label: '自动抽记忆',
+    description: '对话抽事实写入',
+    stage: 'advanced',
+    phase: 8,
+    tagline: '从对话抽出短事实再 remember',
+    body: '显式 POST /memory/extract；Chat 抽 JSON 事实列表后走现有 remember（去重/合并）。不静默塞进 context/chat。',
+    concepts: ['extract', 'facts → remember', 'session 快照可选'],
+    endpoint: 'POST /ai-example/memory/extract',
+    docPath: 'docs/samples/17-memory-extract.md',
+  },
+  {
+    id: 'memoryCompare',
+    index: 16,
+    label: '召回对照',
+    description: 'topK / 阈值 / 有无记忆',
+    stage: 'advanced',
+    phase: 8,
+    tagline: '并排看清召回与答案差异',
+    body: 'recall/compare 三路 sources；chat/compare 有记忆 vs 纯 Chat。阈值依赖 score。',
+    concepts: ['topK 宽窄', 'similarityThreshold', 'with vs without'],
+    endpoint: 'POST /ai-example/memory/recall/compare',
+    docPath: 'docs/samples/18-memory-recall-compare.md',
   },
 ] as const
 

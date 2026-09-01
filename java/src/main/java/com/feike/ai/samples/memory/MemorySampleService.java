@@ -4,14 +4,19 @@ import com.feike.ai.core.AiProperties;
 import com.feike.ai.core.LlmProviderRegistry;
 import com.feike.ai.core.TokenUsage;
 import com.feike.ai.core.TokenUsageExtractor;
+import com.feike.ai.samples.context.ChatSessionStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -23,7 +28,9 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * 长期记忆样例：写入 / 召回 pgvector 独立 corpus，与 RAG 演示语料隔离。
+ * 长期记忆样例：写入 / 召回 / 自动抽事实写入 pgvector 独立 corpus，与 RAG 演示语料隔离。
+ * <p>
+ * 抽取走显式 {@code extract}，不在上下文 chat 里静默写入，避免副作用难排查。
  */
 @Service
 @ConditionalOnProperty(prefix = "app.ai.rag", name = "enabled", havingValue = "true", matchIfMissing = true)
@@ -49,18 +56,30 @@ public class MemorySampleService {
         回答用简体中文。
         """;
 
+    private static final String SYSTEM_EXTRACT = """
+        你从对话中抽取适合写入长期记忆的短事实句。
+        只输出 JSON 字符串数组，例如 ["用户叫小明","用户住在杭州"]；不要解释、不要 Markdown 围栏。
+        每条一句、陈述句、简体中文；不要编造对话未出现的信息；最多若干条由用户消息说明。
+        """;
+
     private final VectorStore vectorStore;
     private final LlmProviderRegistry registry;
     private final AiProperties.Memory memorySettings;
+    private final JsonMapper jsonMapper;
+    private final ObjectProvider<ChatSessionStore> sessionStore;
 
     public MemorySampleService(
         VectorStore vectorStore,
         LlmProviderRegistry registry,
-        AiProperties properties
+        AiProperties properties,
+        JsonMapper jsonMapper,
+        ObjectProvider<ChatSessionStore> sessionStore
     ) {
         this.vectorStore = vectorStore;
         this.registry = registry;
         this.memorySettings = properties.memory();
+        this.jsonMapper = jsonMapper;
+        this.sessionStore = sessionStore;
     }
 
     /**
@@ -108,8 +127,10 @@ public class MemorySampleService {
 
     /**
      * 按相似度召回记忆。
+     *
+     * @param similarityThreshold 可选；有 Document score 时按阈值过滤，无 score 则仅 topK
      */
-    public RecallResult recall(String query, String userId, Integer topK) {
+    public RecallResult recall(String query, String userId, Integer topK, Double similarityThreshold) {
         String uid = resolveUserId(userId);
         int k = topK != null && topK > 0 ? topK : memorySettings.topK();
         List<Document> hits = vectorStore.similaritySearch(
@@ -122,7 +143,109 @@ public class MemorySampleService {
                 )
                 .build()
         );
-        return new RecallResult(uid, toSources(hits), hits.isEmpty());
+        if (hits == null) {
+            hits = List.of();
+        }
+        Double threshold = similarityThreshold;
+        boolean scoreAvailable = hits.stream().anyMatch(doc -> doc.getScore() != null);
+        if (threshold != null && scoreAvailable) {
+            double t = threshold;
+            hits = hits.stream()
+                .filter(doc -> doc.getScore() != null && doc.getScore() >= t)
+                .toList();
+        }
+        String note = null;
+        if (threshold != null && !scoreAvailable && !hits.isEmpty()) {
+            note = "向量库未返回 score，similarityThreshold 未生效，仅 topK 生效";
+        }
+        return new RecallResult(uid, toSources(hits), hits.isEmpty(), note);
+    }
+
+    /** 兼容旧调用：无阈值。 */
+    public RecallResult recall(String query, String userId, Integer topK) {
+        return recall(query, userId, topK, null);
+    }
+
+    /**
+     * 三路召回对照：小 topK / 大 topK / 大 topK+阈值（默认不生成答案）。
+     */
+    public RecallCompareResult compareRecall(
+        String query,
+        String userId,
+        Integer lowTopK,
+        Integer highTopK,
+        Double similarityThreshold
+    ) {
+        int low = lowTopK != null && lowTopK > 0 ? lowTopK : 1;
+        int high = highTopK != null && highTopK > 0 ? highTopK : Math.max(memorySettings.topK() * 2, 8);
+        double threshold = similarityThreshold != null
+            ? similarityThreshold
+            : memorySettings.similarityThreshold();
+        RecallResult lowResult = recall(query, userId, low, null);
+        RecallResult highResult = recall(query, userId, high, null);
+        RecallResult thresholdResult = recall(query, userId, high, threshold);
+        return new RecallCompareResult(
+            lowResult.userId(),
+            low,
+            high,
+            threshold,
+            lowResult,
+            highResult,
+            thresholdResult
+        );
+    }
+
+    /**
+     * 有记忆 vs 无记忆纯 Chat 对照。
+     *
+     * @param generateAnswers 默认 true；false 时 without 仅占位、with 仍走 recall 不生成
+     */
+    public ChatCompareResult compareChat(
+        String prompt,
+        String userId,
+        String provider,
+        Integer topK,
+        Boolean generateAnswers
+    ) {
+        boolean generate = generateAnswers == null || generateAnswers;
+        MemoryChatResult withMemory;
+        if (generate) {
+            withMemory = chat(prompt, userId, provider, topK);
+        } else {
+            RecallResult recalled = recall(prompt, userId, topK);
+            withMemory = new MemoryChatResult(
+                recalled.empty() ? EMPTY_REFUSAL : "（generateAnswers=false，跳过生成）",
+                recalled.sources(),
+                recalled.empty(),
+                recalled.userId(),
+                null
+            );
+        }
+
+        MemoryChatResult withoutMemory;
+        if (!generate) {
+            withoutMemory = new MemoryChatResult(
+                "（generateAnswers=false，跳过生成）",
+                List.of(),
+                true,
+                resolveUserId(userId),
+                null
+            );
+        } else {
+            var call = registry.plainClient(provider)
+                .prompt()
+                .system("你是助手。用简体中文回答；没有依据时可以说不知道。")
+                .user(prompt)
+                .call();
+            withoutMemory = new MemoryChatResult(
+                call.content(),
+                List.of(),
+                true,
+                resolveUserId(userId),
+                TokenUsageExtractor.from(call.chatResponse())
+            );
+        }
+        return new ChatCompareResult(withMemory, withoutMemory);
     }
 
     /**
@@ -152,6 +275,86 @@ public class MemorySampleService {
             recalled.userId(),
             TokenUsageExtractor.from(call.chatResponse())
         );
+    }
+
+    /**
+     * 从对话消息列表抽取短事实并 remember。
+     *
+     * @param messages  role/content 列表（user/assistant）
+     * @param userId    用户
+     * @param sessionId 可选写入 metadata
+     * @param provider  Chat Provider
+     */
+    public ExtractResult extract(
+        List<DialogueMessage> messages,
+        String userId,
+        String sessionId,
+        String provider
+    ) {
+        String uid = resolveUserId(userId);
+        List<DialogueMessage> dialogue = messages == null ? List.of() : messages.stream()
+            .filter(m -> m != null && m.content() != null && !m.content().isBlank())
+            .toList();
+        if (dialogue.isEmpty()) {
+            throw new IllegalArgumentException("messages 不能为空");
+        }
+        String transcript = formatTranscript(dialogue);
+        int maxFacts = memorySettings.extractMaxFacts();
+        List<String> facts;
+        try {
+            String raw = registry.plainClient(provider)
+                .prompt()
+                .system(SYSTEM_EXTRACT)
+                .user("最多抽取 " + maxFacts + " 条事实。\n\n对话：\n" + transcript)
+                .call()
+                .content();
+            facts = parseFactList(raw, maxFacts);
+        } catch (Exception ex) {
+            log.warn("自动抽记忆 Chat 失败，返回空: {}", ex.toString());
+            facts = List.of();
+        }
+
+        List<RememberResult> remembered = new ArrayList<>();
+        int skippedDuplicates = 0;
+        for (String fact : facts) {
+            RememberResult result = remember(fact, uid, sessionId);
+            remembered.add(result);
+            if (result.duplicate()) {
+                skippedDuplicates++;
+            }
+        }
+        return new ExtractResult(uid, sessionId, facts, remembered, skippedDuplicates);
+    }
+
+    /**
+     * 从会话快照抽取；会话不存在或为空时抛 {@link IllegalArgumentException}。
+     */
+    public ExtractResult extractFromSession(String sessionId, String userId, String provider) {
+        if (sessionId == null || sessionId.isBlank()) {
+            throw new IllegalArgumentException("sessionId 不能为空");
+        }
+        ChatSessionStore store = sessionStore.getIfAvailable();
+        if (store == null) {
+            throw new IllegalStateException("会话存储不可用，请改传 messages");
+        }
+        List<Message> snapshot = store.snapshot(sessionId.trim());
+        if (snapshot == null || snapshot.isEmpty()) {
+            throw new IllegalArgumentException("会话不存在或为空: " + sessionId.trim());
+        }
+        List<DialogueMessage> messages = new ArrayList<>();
+        for (Message message : snapshot) {
+            if (!ChatSessionStore.isUserOrAssistant(message)) {
+                continue;
+            }
+            messages.add(new DialogueMessage(
+                ChatSessionStore.roleOf(message),
+                ChatSessionStore.textOf(message)
+            ));
+        }
+        if (messages.isEmpty()) {
+            throw new IllegalArgumentException("会话无可抽取的 user/assistant 消息: " + sessionId.trim());
+        }
+        return extract(messages, userId, sessionId.trim(), provider);
     }
 
     /**
@@ -262,13 +465,60 @@ public class MemorySampleService {
         return sb.toString();
     }
 
+    private static String formatTranscript(List<DialogueMessage> messages) {
+        StringBuilder sb = new StringBuilder();
+        for (DialogueMessage message : messages) {
+            String role = message.role() == null || message.role().isBlank() ? "user" : message.role();
+            sb.append(role).append(": ").append(message.content().trim()).append("\n");
+        }
+        return sb.toString();
+    }
+
+    List<String> parseFactList(String raw, int maxFacts) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        String text = raw.trim();
+        if (text.startsWith("```")) {
+            int firstNl = text.indexOf('\n');
+            int lastFence = text.lastIndexOf("```");
+            if (firstNl > 0 && lastFence > firstNl) {
+                text = text.substring(firstNl + 1, lastFence).trim();
+            }
+        }
+        try {
+            List<String> parsed = jsonMapper.readValue(text, new TypeReference<List<String>>() {});
+            if (parsed == null) {
+                return List.of();
+            }
+            List<String> facts = new ArrayList<>();
+            for (String item : parsed) {
+                if (item == null || item.isBlank()) {
+                    continue;
+                }
+                facts.add(item.trim());
+                if (facts.size() >= maxFacts) {
+                    break;
+                }
+            }
+            return facts;
+        } catch (Exception ex) {
+            log.warn("解析抽取 JSON 失败: {}", ex.toString());
+            return List.of();
+        }
+    }
+
     /**
      * @param duplicate 文本完全相同，未改库
      * @param updated   相似合并：已删旧写新
      */
     public record RememberResult(String id, String userId, String text, boolean duplicate, boolean updated) {}
 
-    public record RecallResult(String userId, List<SourceView> sources, boolean empty) {}
+    public record RecallResult(String userId, List<SourceView> sources, boolean empty, String note) {
+        public RecallResult(String userId, List<SourceView> sources, boolean empty) {
+            this(userId, sources, empty, null);
+        }
+    }
 
     public record MemoryChatResult(
         String answer,
@@ -281,4 +531,43 @@ public class MemorySampleService {
     public record ClearResult(String userId, boolean cleared) {}
 
     public record SourceView(String id, String excerpt, Map<String, Object> metadata) {}
+
+    /** 抽取用的对话消息。 */
+    public record DialogueMessage(String role, String content) {}
+
+    /**
+     * @param facts              模型抽出的事实（写入前）
+     * @param remembered         每条 remember 结果
+     * @param skippedDuplicates  其中 duplicate=true 的条数
+     */
+    public record ExtractResult(
+        String userId,
+        String sessionId,
+        List<String> facts,
+        List<RememberResult> remembered,
+        int skippedDuplicates
+    ) {}
+
+    /**
+     * 召回三路对照。
+     *
+     * @param lowTopKSize           窄召回所用 topK
+     * @param highTopKSize          宽召回所用 topK
+     * @param similarityThreshold   withThreshold 路使用的阈值
+     * @param lowTopK               窄召回结果
+     * @param highTopK              宽召回结果
+     * @param withThreshold         宽召回 + 阈值过滤
+     */
+    public record RecallCompareResult(
+        String userId,
+        int lowTopKSize,
+        int highTopKSize,
+        double similarityThreshold,
+        RecallResult lowTopK,
+        RecallResult highTopK,
+        RecallResult withThreshold
+    ) {}
+
+    /** 有记忆 / 无记忆 chat 对照。 */
+    public record ChatCompareResult(MemoryChatResult withMemory, MemoryChatResult withoutMemory) {}
 }
