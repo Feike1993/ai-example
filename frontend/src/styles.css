@@ -288,6 +288,39 @@ body::before {
   overflow-wrap: anywhere;
 }
 
+.markdown-body del {
+  opacity: 0.75;
+}
+
+.markdown-body table {
+  width: 100%;
+  margin: 0.6em 0;
+  border-collapse: collapse;
+  font-size: 0.94em;
+}
+
+.markdown-body th,
+.markdown-body td {
+  padding: 0.35em 0.55em;
+  border: 1px solid rgba(20, 36, 28, 0.12);
+  text-align: left;
+  vertical-align: top;
+}
+
+.markdown-body th {
+  font-weight: 650;
+  background: rgba(20, 36, 28, 0.04);
+}
+
+.markdown-body input[type='checkbox'] {
+  margin-right: 0.4em;
+}
+
+.markdown-body .sse-caret {
+  margin-top: 0.15em;
+}
+
+
 
 .sse-caret {
   display: inline-block;

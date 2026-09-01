@@ -9,6 +9,7 @@ import {
   type MemoryRecallResponse,
   type MemoryRememberResponse,
 } from '../api'
+import { MarkdownBody } from '../components/MarkdownBody'
 import { RawJsonAccordion } from '../components/RawJsonAccordion'
 import { RequestMeta } from '../components/RequestMeta'
 import { ResultBody } from '../components/ResultBody'
@@ -204,7 +205,7 @@ export function MemoryPanel({ provider }: { provider: string }) {
                     ))}
                   </Stack>
                 )}
-                {chatResult && <pre className="stream-text">{chatResult.answer}</pre>}
+                {chatResult && <MarkdownBody>{chatResult.answer}</MarkdownBody>}
                 {(chatResult || recallResult) && (
                   <RawJsonAccordion value={chatResult ?? recallResult} />
                 )}

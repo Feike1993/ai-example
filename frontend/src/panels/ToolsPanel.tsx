@@ -2,6 +2,7 @@ import { Button, Stack, Textarea } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useState } from 'react'
 import { describeError, postJson, API_BASE, type ToolChatResponse } from '../api'
+import { MarkdownBody } from '../components/MarkdownBody'
 import { RawJsonAccordion } from '../components/RawJsonAccordion'
 import { RequestMeta } from '../components/RequestMeta'
 import { ResultBody } from '../components/ResultBody'
@@ -62,7 +63,7 @@ export function ToolsPanel({ provider }: { provider: string }) {
             {result && (
               <Stack gap="sm">
                 <RequestMeta elapsedMs={elapsedMs} usage={result.usage} />
-                <pre className="stream-text">{result.content}</pre>
+                <MarkdownBody>{result.content}</MarkdownBody>
                 <RawJsonAccordion value={result} />
               </Stack>
             )}

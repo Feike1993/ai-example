@@ -10,6 +10,7 @@ import {
   type AgentTrace,
   type FrameworkResponse,
 } from '../api'
+import { MarkdownBody } from '../components/MarkdownBody'
 import { RawJsonAccordion } from '../components/RawJsonAccordion'
 import { RequestMeta } from '../components/RequestMeta'
 import { ResultBody } from '../components/ResultBody'
@@ -221,10 +222,7 @@ export function AgentPanel({ provider }: { provider: string }) {
                   <Text size="sm" c="dimmed">
                     finalAnswer
                   </Text>
-                  <pre className="stream-text">
-                    {displayAnswer}
-                    {streaming && <span className="sse-caret" />}
-                  </pre>
+                  <MarkdownBody streaming={streaming}>{displayAnswer}</MarkdownBody>
                   {displayReached && (
                     <Badge color="orange" variant="light" w="fit-content">
                       reachedMaxSteps
@@ -254,7 +252,7 @@ export function AgentPanel({ provider }: { provider: string }) {
             {framework && mode === 'framework' && (
               <Stack gap="sm">
                 <RequestMeta elapsedMs={elapsedMs} usage={framework.usage} />
-                <pre className="stream-text">{framework.content}</pre>
+                <MarkdownBody>{framework.content}</MarkdownBody>
                 <RawJsonAccordion value={framework} />
               </Stack>
             )}

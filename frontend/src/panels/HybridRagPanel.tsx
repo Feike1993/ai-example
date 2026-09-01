@@ -10,6 +10,7 @@ import {
   type RagQueryResponse,
   type RagSource,
 } from '../api'
+import { MarkdownBody } from '../components/MarkdownBody'
 import { RawJsonAccordion } from '../components/RawJsonAccordion'
 import { RequestMeta } from '../components/RequestMeta'
 import { ResultBody } from '../components/ResultBody'
@@ -205,7 +206,7 @@ export function HybridRagPanel({ provider }: { provider: string }) {
                         </Badge>
                       )}
                       {side.sources?.length > 0 && renderSources(side.sources)}
-                      <pre className="stream-text">{side.answer}</pre>
+                      <MarkdownBody>{side.answer}</MarkdownBody>
                     </div>
                   )
                 })}
@@ -231,7 +232,7 @@ export function HybridRagPanel({ provider }: { provider: string }) {
                     {renderSources(result.sources)}
                   </div>
                 )}
-                <pre className="stream-text">{result.answer}</pre>
+                <MarkdownBody>{result.answer}</MarkdownBody>
                 <RawJsonAccordion value={result} />
               </Stack>
             )}

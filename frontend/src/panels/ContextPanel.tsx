@@ -7,6 +7,7 @@ import {
   API_BASE,
   type ContextChatResponse,
 } from '../api'
+import { MarkdownBody } from '../components/MarkdownBody'
 import { RawJsonAccordion } from '../components/RawJsonAccordion'
 import { RequestMeta } from '../components/RequestMeta'
 import { ResultBody } from '../components/ResultBody'
@@ -155,7 +156,7 @@ export function ContextPanel({ provider }: { provider: string }) {
                         summary: {result.summary}
                       </Text>
                     )}
-                    <pre className="stream-text">{result.content}</pre>
+                    <MarkdownBody>{result.content}</MarkdownBody>
                     <RawJsonAccordion value={result} />
                   </>
                 )}

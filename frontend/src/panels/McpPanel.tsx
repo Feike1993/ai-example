@@ -11,6 +11,7 @@ import {
   type McpChatResponse,
   type McpToolsResponse,
 } from '../api'
+import { MarkdownBody } from '../components/MarkdownBody'
 import { RawJsonAccordion } from '../components/RawJsonAccordion'
 import { RequestMeta } from '../components/RequestMeta'
 import { ResultBody } from '../components/ResultBody'
@@ -170,7 +171,7 @@ export function McpPanel({ provider }: { provider: string }) {
                 <Badge variant="light" color={(result.mode || mode) === 'remote' ? 'teal' : 'gray'}>
                   mode {result.mode || mode}
                 </Badge>
-                <pre className="stream-text">{result.content}</pre>
+                <MarkdownBody>{result.content}</MarkdownBody>
                 <RawJsonAccordion value={result} />
               </Stack>
             )}

@@ -2,6 +2,7 @@ import { Badge, Button, Stack, Table, Text } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useState } from 'react'
 import { API_BASE, describeError, formatTokenUsage, postJson, type EvalRunResponse } from '../api'
+import { MarkdownBody } from '../components/MarkdownBody'
 import { RawJsonAccordion } from '../components/RawJsonAccordion'
 import { RequestMeta } from '../components/RequestMeta'
 import { ResultBody } from '../components/ResultBody'
@@ -107,7 +108,7 @@ export function EvalPanel({ provider }: { provider: string }) {
                               {item.error}
                             </Text>
                           )}
-                          {item.answer && <pre className="stream-text">{item.answer}</pre>}
+                          {item.answer && <MarkdownBody>{item.answer}</MarkdownBody>}
                         </Stack>
                       ))}
                   </div>

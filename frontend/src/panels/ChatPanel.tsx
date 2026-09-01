@@ -2,6 +2,7 @@ import { Button, NumberInput, SegmentedControl, Stack, Textarea } from '@mantine
 import { notifications } from '@mantine/notifications'
 import { useEffect, useRef, useState } from 'react'
 import { describeError, postJson, streamChat, API_BASE, type ChatResponse } from '../api'
+import { MarkdownBody } from '../components/MarkdownBody'
 import { RawJsonAccordion } from '../components/RawJsonAccordion'
 import { RequestMeta } from '../components/RequestMeta'
 import { ResultBody } from '../components/ResultBody'
@@ -168,10 +169,9 @@ export function ChatPanel({ provider }: { provider: string }) {
                   elapsedLabel={mode === 'sse' ? 'TTFT' : '耗时'}
                   usage={mode === 'sync' ? result?.usage : null}
                 />
-                <pre className="stream-text">
+                <MarkdownBody streaming={streaming}>
                   {streaming ? streamText : (result?.content ?? streamText)}
-                  {streaming && <span className="sse-caret" />}
-                </pre>
+                </MarkdownBody>
                 {!streaming && result && <RawJsonAccordion value={result} />}
               </Stack>
             )}
