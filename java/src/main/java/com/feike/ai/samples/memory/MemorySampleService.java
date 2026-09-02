@@ -532,7 +532,7 @@ public class MemorySampleService {
 
     public record SourceView(String id, String excerpt, Map<String, Object> metadata) {}
 
-    /** 抽取用的对话消息。 */
+    /** 抽取有用的对话消息。 */
     public record DialogueMessage(String role, String content) {}
 
     /**
