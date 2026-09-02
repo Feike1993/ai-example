@@ -87,6 +87,28 @@ export type RagQueryResponse = {
   queryExpansion?: string
   hypotheticalDocument?: string | null
   chunkingStrategy?: string
+  citationMode?: string
+  citations?: RagCitation[]
+  citationValid?: boolean | null
+}
+
+export type RagCitation = {
+  sourceId: string
+  quote: string
+}
+
+export type GuardrailCheck = {
+  name: string
+  passed: boolean
+  detail: string
+}
+
+export type GuardrailChatResponse = {
+  blocked: boolean
+  blockStage: string | null
+  answer: string
+  checks: GuardrailCheck[]
+  usage: TokenUsage | null
 }
 
 export type RagCompareResponse = {

@@ -24,6 +24,8 @@ export type AdvancedSampleId =
   | 'mcpBearer'
   | 'agentToolSse'
   | 'agentUsage'
+  | 'guardrail'
+  | 'ragCitation'
 
 /** Playground 全部 Tab id。 */
 export type PlaygroundSampleId = BaselineSampleId | AdvancedSampleId
@@ -302,6 +304,32 @@ export const samples: readonly SampleMeta[] = [
     concepts: ['TokenUsage.sum', 'usageCalls', 'event:usage'],
     endpoint: 'POST /ai-example/agent/react',
     docPath: 'docs/samples/21-stream-token-usage.md',
+  },
+  {
+    id: 'guardrail',
+    index: 20,
+    label: '输出护栏',
+    description: '词表 + 结构校验',
+    stage: 'advanced',
+    phase: 11,
+    tagline: '答前答后硬约束',
+    body: 'input/output deny-words 短路；可选 SafeEnvelope；响应带回 checks。',
+    concepts: ['input_deny', 'output_deny', 'structure'],
+    endpoint: 'POST /ai-example/guardrail/chat',
+    docPath: 'docs/samples/22-output-guardrail.md',
+  },
+  {
+    id: 'ragCitation',
+    index: 21,
+    label: 'RAG Citation',
+    description: '强制可校验引用',
+    stage: 'advanced',
+    phase: 11,
+    tagline: '有出处才答',
+    body: 'citationMode=required：结构化 citations，sourceId 必须落在 sources。',
+    concepts: ['citationMode', 'citationValid', 'sourceId'],
+    endpoint: 'POST /ai-example/rag/query (citationMode=required)',
+    docPath: 'docs/samples/23-rag-citation.md',
   },
 ] as const
 

@@ -13,7 +13,7 @@ import java.util.Map;
 public class IndexController {
 
     /**
- * 返回样例清单，按基础闭环与进阶（第四至十期）分组。
+ * 返回样例清单，按基础闭环与进阶（第四至十一期）分组。
  *
  * @return 项目名、baseline / advanced 样例路径
  */
@@ -39,7 +39,7 @@ public class IndexController {
         body.put("baseline", baseline);
 
         Map<String, Object> advanced = new LinkedHashMap<>();
-        advanced.put("phase", 10);
+        advanced.put("phase", 11);
         Map<String, String> advancedSamples = new LinkedHashMap<>();
         advancedSamples.put(
             "hybridRag",
@@ -82,6 +82,14 @@ public class IndexController {
         advancedSamples.put(
             "agentUsage",
             "POST /ai-example/agent/react（Trace.usage + usageCalls）"
+        );
+        advancedSamples.put(
+            "guardrail",
+            "POST /ai-example/guardrail/chat（checks + deny-words / structure）"
+        );
+        advancedSamples.put(
+            "ragCitation",
+            "POST /ai-example/rag/query（citationMode=required）"
         );
         advanced.put("samples", advancedSamples);
         body.put("advanced", advanced);

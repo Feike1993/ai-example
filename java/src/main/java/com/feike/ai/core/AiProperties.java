@@ -22,6 +22,7 @@ import java.util.Map;
  * @param multiagent          多 Agent 步数上限
  * @param memory              长期记忆召回参数
  * @param mcp                 MCP 样例：remote / inprocess（配置仅为启动初始值，运行时可由 PUT /mcp/mode 覆盖）
+ * @param guardrail           输出护栏：敏感词表等
  */
 @ConfigurationProperties(prefix = "app.ai")
 public record AiProperties(
@@ -36,7 +37,8 @@ public record AiProperties(
     ContextSettings context,
     MultiAgent multiagent,
     Memory memory,
-    Mcp mcp
+    Mcp mcp,
+    Guardrail guardrail
 ) {
     public AiProperties {
         if (defaultProvider == null || defaultProvider.isBlank()) {
@@ -74,6 +76,9 @@ public record AiProperties(
         }
         if (mcp == null) {
             mcp = new Mcp("remote", "dev-mcp-token");
+        }
+        if (guardrail == null) {
+            guardrail = new Guardrail(java.util.List.of("违禁演示词", "BLOCKED_DEMO"));
         }
     }
 
@@ -342,6 +347,27 @@ public record AiProperties(
             }
             if (maxWorkerSteps < 1) {
                 maxWorkerSteps = 1;
+            }
+        }
+    }
+
+    /**
+     * 输出护栏：确定性敏感词表（第十一期）。
+     *
+     * @param denyWords 命中即拒答的子串列表；大小写不敏感
+     */
+    public record Guardrail(java.util.List<String> denyWords) {
+        public Guardrail {
+            if (denyWords == null || denyWords.isEmpty()) {
+                denyWords = java.util.List.of("违禁演示词", "BLOCKED_DEMO");
+            } else {
+                denyWords = denyWords.stream()
+                    .filter(w -> w != null && !w.isBlank())
+                    .map(String::trim)
+                    .toList();
+                if (denyWords.isEmpty()) {
+                    denyWords = java.util.List.of("违禁演示词", "BLOCKED_DEMO");
+                }
             }
         }
     }

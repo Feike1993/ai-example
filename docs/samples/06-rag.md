@@ -61,6 +61,7 @@ uv run python -m ai_example.samples.rag
 - Python：`samples.rag` 内存向量 + 余弦相似度；空 hits 时同样可短路拒答
 - Embedding Provider 与 Chat Provider **分开配置**
 - 详见 [backlog](../backlog.md)、[baseline-patches](../baseline-patches.md) A3
+- **强制 citation（第十一期）**：`citationMode=required` 时结构化引用并校验 `sourceId`，见 [23-rag-citation.md](23-rag-citation.md)
 
 ## 测试
 

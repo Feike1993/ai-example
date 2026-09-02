@@ -13,7 +13,8 @@ import { McpPanel } from './panels/McpPanel'
 import { MemoryPanel } from './panels/MemoryPanel'
 import { MemoryExtractPanel } from './panels/MemoryExtractPanel'
 import { MemoryComparePanel } from './panels/MemoryComparePanel'
-import { mcpBearerGuide, agentToolSseGuide, agentUsageGuide } from './guides'
+import { GuardrailPanel } from './panels/GuardrailPanel'
+import { mcpBearerGuide, agentToolSseGuide, agentUsageGuide, guardrailGuide, ragCitationGuide } from './guides'
 import { MultiAgentPanel } from './panels/MultiAgentPanel'
 import { RagPanel } from './panels/RagPanel'
 import { StructuredPanel } from './panels/StructuredPanel'
@@ -182,6 +183,17 @@ function App() {
             title="Usage 累加"
             defaultTransport="sync"
             focus="usage"
+          />
+        )}
+        {sample === 'guardrail' && <GuardrailPanel provider={provider} guide={guardrailGuide} />}
+        {sample === 'ragCitation' && (
+          <RagPanel
+            provider={provider}
+            guide={ragCitationGuide}
+            title="RAG Citation"
+            hint="citationMode=required：结构化引用并校验 sourceId。SSE 仍为自由文本。"
+            defaultCitationMode="required"
+            allowSse={false}
           />
         )}
       </AppShell.Main>

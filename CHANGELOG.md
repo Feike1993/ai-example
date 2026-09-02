@@ -152,3 +152,19 @@ Hybrid RAG、golden 评测、Redis 持久会话、逐步 tool SSE、流式 token
 ### 文档
 
 - [phase10.md](docs/phase10.md)、[20-agent-tool-sse.md](docs/samples/20-agent-tool-sse.md)、[21-stream-token-usage.md](docs/samples/21-stream-token-usage.md)
+
+## [Unreleased] — 第十一期进阶（护栏与引用）
+
+### 输出护栏
+
+- `POST /guardrail/chat`：input/output deny-words + 可选 SafeEnvelope；响应 `checks[]`
+- 配置 `app.ai.guardrail.deny-words`；前端 **Guardrail**；Python `guardrail_chat`
+
+### RAG 强制 citation
+
+- `citationMode=none|required`；`CitationValidator` 校验 sourceId∈sources
+- 失败 `citationValid=false` + 固定拒答；前端 **RagCitation**；Python `rag_citation`
+
+### 文档
+
+- [phase11.md](docs/phase11.md)、[22-output-guardrail.md](docs/samples/22-output-guardrail.md)、[23-rag-citation.md](docs/samples/23-rag-citation.md)

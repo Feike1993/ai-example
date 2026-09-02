@@ -157,3 +157,8 @@ app:
       max-orchestrator-steps: 4
       # 最大 Worker 步骤数，作用：限制 Worker 的递归调用深度，防止无限递归
       max-worker-steps: 6
+    # 第十一期：输出护栏（确定性词表；失败短路）
+    guardrail:
+      deny-words:
+        - 违禁演示词
+        - BLOCKED_DEMO

@@ -134,4 +134,12 @@ Python：`semantic_chunk.py`、`parent_child_rag.py`。
 - 同步 `POST /agent/react` 的 Trace 带 `usage` / `usageCalls`
 - 前端进阶 AgentToolSse / AgentUsage；Python `react_agent.run_observable_demo`
 
+### 第十一期
+
+#### 护栏与引用
+
+- `POST /guardrail/chat` + `app.ai.guardrail.deny-words`
+- RAG `citationMode=required` + `CitationValidator`
+- 前端 Guardrail / RagCitation；Python `guardrail_chat` / `rag_citation`
+
 刻意不做总表：[backlog.md](backlog.md)。

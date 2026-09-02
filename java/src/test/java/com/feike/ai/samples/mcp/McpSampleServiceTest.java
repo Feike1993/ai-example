@@ -89,7 +89,8 @@ class McpSampleServiceTest {
             null,
             null,
             null,
-            new AiProperties.Mcp(initialMode, "dev-mcp-token")
+            new AiProperties.Mcp(initialMode, "dev-mcp-token"),
+            null
         );
 
         ObjectProvider<SyncMcpToolCallbackProvider> clientTools = mock(ObjectProvider.class);

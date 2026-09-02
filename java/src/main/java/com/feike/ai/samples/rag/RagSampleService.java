@@ -4,6 +4,7 @@ import com.feike.ai.core.AiProperties;
 import com.feike.ai.core.LlmProviderRegistry;
 import com.feike.ai.core.TokenUsage;
 import com.feike.ai.core.TokenUsageExtractor;
+import com.feike.ai.samples.structured.StructuredOutputInvoker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
@@ -25,6 +26,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * RAG 样例：内置 Markdown → 分块 Embedding 写入 pgvector，再检索拼上下文生成。
@@ -49,9 +51,21 @@ public class RagSampleService {
         "根据当前知识库的检索结果，没有找到与问题相关的内容，因此无法回答。"
             + "请换个问法，或先确认已 ingest 相关文档。";
 
+    /** citation 校验失败时的固定拒答文案。 */
+    public static final String CITATION_REFUSAL =
+        "模型给出的引用未通过校验（空引用或 sourceId 不在本次检索结果中），因此无法采信该答案。"
+            + "请重试，或改用 citationMode=none。";
+
     private static final String SYSTEM_GROUNDED = """
         你是助手。只根据「检索上下文」回答用户问题；上下文不足或为空时明确说不知道，不要编造。
         回答用简体中文。
+        """;
+
+    private static final String SYSTEM_CITED = """
+        你是助手。只根据「检索上下文」回答用户问题；上下文不足时明确说不知道，不要编造。
+        必须返回 JSON：answer（简体中文答案）与 citations（数组，每项含 sourceId、quote）。
+        sourceId 必须是检索上下文中给出的文档 id；每条关键主张至少对应一条 citation。
+        不要输出 Markdown 代码块。
         """;
 
     /** 检索模式：纯向量或 Hybrid RRF。 */
@@ -76,18 +90,47 @@ public class RagSampleService {
         parent_child
     }
 
+    /** 引用模式：自由文本或强制结构化 citation。 */
+    public enum CitationMode {
+        none,
+        required
+    }
+
     private final VectorStore vectorStore;
     private final LlmProviderRegistry registry;
     private final AiProperties.Rag ragSettings;
     private final TokenTextSplitter splitter;
     private final SemanticMarkdownSplitter semanticSplitter;
     private final RagKeywordRetriever keywordRetriever;
+    private final StructuredOutputInvoker structuredOutputInvoker;
 
     /**
-     * @param vectorStore       pgvector
-     * @param registry          Chat / Embedding
-     * @param ragSettings       topK / chunkSize / 空检索 / Hybrid / chunking
-     * @param keywordRetriever  关键词路；测试可传 {@code null}（Hybrid 回退向量）
+     * @param vectorStore              pgvector
+     * @param registry                 Chat / Embedding
+     * @param ragSettings              topK / chunkSize / 空检索 / Hybrid / chunking
+     * @param keywordRetriever         关键词路；测试可传 {@code null}（Hybrid 回退向量）
+     * @param structuredOutputInvoker  citationMode=required 时使用；测试可传 {@code null}
+     */
+    public RagSampleService(
+        VectorStore vectorStore,
+        LlmProviderRegistry registry,
+        AiProperties.Rag ragSettings,
+        RagKeywordRetriever keywordRetriever,
+        StructuredOutputInvoker structuredOutputInvoker
+    ) {
+        this.vectorStore = vectorStore;
+        this.registry = registry;
+        this.ragSettings = ragSettings;
+        this.keywordRetriever = keywordRetriever;
+        this.structuredOutputInvoker = structuredOutputInvoker;
+        this.splitter = TokenTextSplitter.builder()
+            .withChunkSize(ragSettings.chunkSize())
+            .build();
+        this.semanticSplitter = new SemanticMarkdownSplitter(ragSettings.chunkSize());
+    }
+
+    /**
+     * 测试兼容：无 structured invoker。
      */
     public RagSampleService(
         VectorStore vectorStore,
@@ -95,14 +138,7 @@ public class RagSampleService {
         AiProperties.Rag ragSettings,
         RagKeywordRetriever keywordRetriever
     ) {
-        this.vectorStore = vectorStore;
-        this.registry = registry;
-        this.ragSettings = ragSettings;
-        this.keywordRetriever = keywordRetriever;
-        this.splitter = TokenTextSplitter.builder()
-            .withChunkSize(ragSettings.chunkSize())
-            .build();
-        this.semanticSplitter = new SemanticMarkdownSplitter(ragSettings.chunkSize());
+        this(vectorStore, registry, ragSettings, keywordRetriever, null);
     }
 
     /** 幂等重建演示索引（默认 token corpus，与二期一致）。 */
@@ -291,12 +327,31 @@ public class RagSampleService {
         String queryExpansion,
         String chunkingStrategy
     ) {
+        return query(question, provider, topK, retrievalMode, rewriteQuery, queryExpansion, chunkingStrategy, null);
+    }
+
+    /**
+     * 检索 + 同步生成；可指定 citationMode。
+     *
+     * @param citationMode {@code none}（默认）或 {@code required}
+     */
+    public RagQueryResult query(
+        String question,
+        String provider,
+        Integer topK,
+        RetrievalMode retrievalMode,
+        Boolean rewriteQuery,
+        String queryExpansion,
+        String chunkingStrategy,
+        String citationMode
+    ) {
         ChunkingStrategy chunking = parseChunkingStrategy(chunkingStrategy);
         QueryExpansion expansion = resolveExpansion(queryExpansion, rewriteQuery);
+        CitationMode citations = parseCitationMode(citationMode);
         RetrievalBundle bundle = retrieveExpanded(
             question, topK, retrievalMode, expansion, provider, corpusFor(chunking)
         );
-        return answerFromHits(question, provider, bundle, retrievalMode, chunking);
+        return answerFromHits(question, provider, bundle, retrievalMode, chunking, citations);
     }
 
     /**
@@ -571,26 +626,49 @@ public class RagSampleService {
         RetrievalMode retrievalMode,
         ChunkingStrategy chunking
     ) {
+        return answerFromHits(question, provider, bundle, retrievalMode, chunking, CitationMode.none);
+    }
+
+    private RagQueryResult answerFromHits(
+        String question,
+        String provider,
+        RetrievalBundle bundle,
+        RetrievalMode retrievalMode,
+        ChunkingStrategy chunking,
+        CitationMode citationMode
+    ) {
         List<Document> hits = bundle.hits();
         // 生成上下文：父子策略下展开为父全文；sources 仍用原始 hits
         List<Document> contextDocs = expandParents(hits);
         boolean empty = isRetrievalEmpty(hits);
         String chunkingName = chunking == null ? ChunkingStrategy.token.name() : chunking.name();
+        CitationMode mode = citationMode == null ? CitationMode.none : citationMode;
+        List<SourceView> sources = toSources(hits);
         if (empty && ragSettings.skipLlmWhenEmpty()) {
             log.info("RAG 空检索短路拒答: question={}, hits={}, mode={}, expansion={}, chunking={}",
                 question, hits.size(), retrievalMode, bundle.expansion(), chunkingName);
             return new RagQueryResult(
                 EMPTY_REFUSAL,
-                toSources(hits),
+                sources,
                 true,
                 null,
                 retrievalMode.name(),
                 bundle.expansion().name(),
                 bundle.hypotheticalDocument(),
-                chunkingName
+                chunkingName,
+                mode.name(),
+                List.of(),
+                mode == CitationMode.required ? Boolean.FALSE : null
             );
         }
         String context = buildContext(contextDocs);
+
+        if (mode == CitationMode.required) {
+            return answerWithCitations(
+                question, provider, context, sources, empty, retrievalMode, bundle, chunkingName
+            );
+        }
+
         var call = registry.plainClient(provider)
             .prompt()
             .system(SYSTEM_GROUNDED)
@@ -598,14 +676,127 @@ public class RagSampleService {
             .call();
         return new RagQueryResult(
             call.content(),
-            toSources(hits),
+            sources,
             empty,
             TokenUsageExtractor.from(call.chatResponse()),
             retrievalMode.name(),
             bundle.expansion().name(),
             bundle.hypotheticalDocument(),
-            chunkingName
+            chunkingName,
+            CitationMode.none.name(),
+            List.of(),
+            null
         );
+    }
+
+    private RagQueryResult answerWithCitations(
+        String question,
+        String provider,
+        String context,
+        List<SourceView> sources,
+        boolean empty,
+        RetrievalMode retrievalMode,
+        RetrievalBundle bundle,
+        String chunkingName
+    ) {
+        if (structuredOutputInvoker == null) {
+            throw new IllegalStateException("citationMode=required 需要 StructuredOutputInvoker");
+        }
+        String userPrompt = "检索上下文（每段以 [id=...] 开头）：\n" + contextWithIds(sources, context)
+            + "\n\n用户问题：" + question;
+        try {
+            StructuredOutputInvoker.InvokeResult<CitationValidator.GroundedAnswer> invoke =
+                structuredOutputInvoker.invoke(
+                    registry.plainClient(provider),
+                    SYSTEM_CITED,
+                    userPrompt,
+                    CitationValidator.GroundedAnswer.class
+                );
+            CitationValidator.GroundedAnswer grounded = invoke.value();
+            List<CitationValidator.Citation> citations =
+                grounded == null || grounded.citations() == null ? List.of() : grounded.citations();
+            Set<String> allowed = CitationValidator.idsOf(sources);
+            CitationValidator.Result validation = CitationValidator.validate(citations, allowed);
+            if (!validation.valid()) {
+                log.info("RAG citation 校验失败: {}", validation.detail());
+                return new RagQueryResult(
+                    CITATION_REFUSAL,
+                    sources,
+                    empty,
+                    invoke.usage(),
+                    retrievalMode.name(),
+                    bundle.expansion().name(),
+                    bundle.hypotheticalDocument(),
+                    chunkingName,
+                    CitationMode.required.name(),
+                    toCitationViews(citations),
+                    false
+                );
+            }
+            String answer = grounded.answer() == null ? "" : grounded.answer();
+            return new RagQueryResult(
+                answer,
+                sources,
+                empty,
+                invoke.usage(),
+                retrievalMode.name(),
+                bundle.expansion().name(),
+                bundle.hypotheticalDocument(),
+                chunkingName,
+                CitationMode.required.name(),
+                toCitationViews(citations),
+                true
+            );
+        } catch (RuntimeException ex) {
+            log.warn("RAG citation 结构化失败: {}", ex.getMessage());
+            return new RagQueryResult(
+                CITATION_REFUSAL,
+                sources,
+                empty,
+                null,
+                retrievalMode.name(),
+                bundle.expansion().name(),
+                bundle.hypotheticalDocument(),
+                chunkingName,
+                CitationMode.required.name(),
+                List.of(),
+                false
+            );
+        }
+    }
+
+    private static List<CitationView> toCitationViews(List<CitationValidator.Citation> citations) {
+        List<CitationView> views = new ArrayList<>();
+        for (CitationValidator.Citation citation : citations) {
+            if (citation == null) {
+                continue;
+            }
+            views.add(new CitationView(
+                citation.sourceId(),
+                citation.quote() == null ? "" : citation.quote()
+            ));
+        }
+        return List.copyOf(views);
+    }
+
+    /**
+     * 在 user prompt 里强调 id；上下文正文仍用 buildContext 结果，并在前附加 id 列表。
+     */
+    private static String contextWithIds(List<SourceView> sources, String context) {
+        StringBuilder sb = new StringBuilder();
+        for (SourceView source : sources) {
+            sb.append("[id=").append(source.id()).append("] source=")
+                .append(source.source() == null ? "" : source.source()).append('\n');
+        }
+        sb.append('\n').append(context);
+        return sb.toString();
+    }
+
+    static CitationMode parseCitationMode(String value) {
+        if (value != null && value.trim().equalsIgnoreCase("required")) {
+            return CitationMode.required;
+        }
+        return CitationMode.none;
     }
 
     private ChunkingView toChunkingView(ChunkingStrategy strategy, RetrievalBundle bundle) {
@@ -966,6 +1157,9 @@ public class RagSampleService {
      * @param queryExpansion         none / rewrite / hyde
      * @param hypotheticalDocument   HyDE 生成的假想段落（仅预览；不在 sources 中）
      * @param chunkingStrategy       token / semantic
+     * @param citationMode           none / required
+     * @param citations              结构化引用；none 时为空列表
+     * @param citationValid          required 时校验结果；none 时为 {@code null}
      */
     public record RagQueryResult(
         String answer,
@@ -975,11 +1169,14 @@ public class RagSampleService {
         String retrievalMode,
         String queryExpansion,
         String hypotheticalDocument,
-        String chunkingStrategy
+        String chunkingStrategy,
+        String citationMode,
+        List<CitationView> citations,
+        Boolean citationValid
     ) {
         /** 二期兼容：无 retrievalMode 字段时视为 vector。 */
         public RagQueryResult(String answer, List<SourceView> sources, boolean retrievalEmpty, TokenUsage usage) {
-            this(answer, sources, retrievalEmpty, usage, RetrievalMode.vector.name(), QueryExpansion.none.name(), null, ChunkingStrategy.token.name());
+            this(answer, sources, retrievalEmpty, usage, RetrievalMode.vector.name(), QueryExpansion.none.name(), null, ChunkingStrategy.token.name(), CitationMode.none.name(), List.of(), null);
         }
 
         /** 第四期兼容：无 queryExpansion 字段。 */
@@ -990,7 +1187,7 @@ public class RagSampleService {
             TokenUsage usage,
             String retrievalMode
         ) {
-            this(answer, sources, retrievalEmpty, usage, retrievalMode, QueryExpansion.none.name(), null, ChunkingStrategy.token.name());
+            this(answer, sources, retrievalEmpty, usage, retrievalMode, QueryExpansion.none.name(), null, ChunkingStrategy.token.name(), CitationMode.none.name(), List.of(), null);
         }
 
         /** 第六期兼容：无 chunkingStrategy。 */
@@ -1003,9 +1200,31 @@ public class RagSampleService {
             String queryExpansion,
             String hypotheticalDocument
         ) {
-            this(answer, sources, retrievalEmpty, usage, retrievalMode, queryExpansion, hypotheticalDocument, ChunkingStrategy.token.name());
+            this(answer, sources, retrievalEmpty, usage, retrievalMode, queryExpansion, hypotheticalDocument, ChunkingStrategy.token.name(), CitationMode.none.name(), List.of(), null);
+        }
+
+        /** 第十期前兼容：无 citation 字段。 */
+        public RagQueryResult(
+            String answer,
+            List<SourceView> sources,
+            boolean retrievalEmpty,
+            TokenUsage usage,
+            String retrievalMode,
+            String queryExpansion,
+            String hypotheticalDocument,
+            String chunkingStrategy
+        ) {
+            this(answer, sources, retrievalEmpty, usage, retrievalMode, queryExpansion, hypotheticalDocument, chunkingStrategy, CitationMode.none.name(), List.of(), null);
         }
     }
+
+    /**
+     * 对外暴露的 citation 视图。
+     *
+     * @param sourceId 检索文档 id
+     * @param quote    摘录
+     */
+    public record CitationView(String sourceId, String quote) {}
 
     public record CompareResult(RagQueryResult vector, RagQueryResult hybrid) {}
 

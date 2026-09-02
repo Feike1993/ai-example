@@ -36,6 +36,7 @@ public class RagSampleController {
      * @param rewriteQuery      是否改写问题后再检索（兼容；等价 queryExpansion=rewrite）
      * @param queryExpansion    {@code none} / {@code rewrite} / {@code hyde}；优先于 rewriteQuery
      * @param chunkingStrategy  {@code token}（默认）或 {@code semantic}
+     * @param citationMode      {@code none}（默认）或 {@code required}
      */
     public record RagQueryRequest(
         @NotBlank String question,
@@ -44,7 +45,8 @@ public class RagSampleController {
         String retrievalMode,
         Boolean rewriteQuery,
         String queryExpansion,
-        String chunkingStrategy
+        String chunkingStrategy,
+        String citationMode
     ) {}
 
     public record RagIngestRequest(String strategy) {}
@@ -72,7 +74,8 @@ public class RagSampleController {
             parseMode(request.retrievalMode()),
             request.rewriteQuery(),
             request.queryExpansion(),
-            request.chunkingStrategy()
+            request.chunkingStrategy(),
+            request.citationMode()
         );
     }
 

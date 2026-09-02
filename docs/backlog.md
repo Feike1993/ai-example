@@ -34,6 +34,7 @@
 | RAG 空检索拒答 | 第二期 RAG 入门 | 已覆盖 | v0.2.0 补丁 A3 | `retrievalEmpty` + 短路；混合检索仍属第四期 |
 | Agent ReAct 最终答案流式 | 第二期后横切 | 已覆盖（最小） | v0.2.0 补丁 A4 | 仅 answer SSE；逐步见第十期 |
 | Agent 逐步 tool SSE + TokenUsage 累加 | A2/A4 后 | 已覆盖 | 第十期 | 见 [20](samples/20-agent-tool-sse.md)、[21](samples/21-stream-token-usage.md) |
+| 输出护栏 + RAG 强制 citation | 进阶候选 | 已覆盖 | 第十一期 | 见 [22](samples/22-output-guardrail.md)、[23](samples/23-rag-citation.md) |
 | 混合检索（向量 + 关键词 + RRF） | 第二期 | 已覆盖 | 第四期 Hybrid RAG | `retrievalMode=hybrid` + compare API |
 | 完整评测平台（golden / 回归） | 第三期 | 已覆盖（最小 harness） | 第四期 Eval | `POST /eval/run`；无看板 |
 | DB 持久会话（PostgreSQL） | 第三期 | 已覆盖 | 第五期 | `JdbcChatSessionStore`；Redis 仍为候选 |

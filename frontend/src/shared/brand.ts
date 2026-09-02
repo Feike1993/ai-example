@@ -19,7 +19,7 @@ export const brand = {
 export type PhaseId = 1 | 2 | 3
 
 /** 进阶期次（Playground advanced 区）。 */
-export type AdvancedPhaseId = 4 | 5 | 6 | 7 | 8 | 9 | 10
+export type AdvancedPhaseId = 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11
 
 export type LearningStage = 'baseline' | 'advanced'
 

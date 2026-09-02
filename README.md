@@ -54,8 +54,10 @@ Java：**Spring Boot 4.1 + Spring AI 2.0 + Gradle**；Python：**LangGraph / MCP
 | 9 | MCP Bearer | Server 校验 + Client 带凭证 | `MCP_BEARER_TOKEN` + `/mcp` | `samples.mcp_client_http` |
 | 10 | Agent 逐步 SSE | tool_call / tool_result 实时推送 | `GET /ai-example/agent/react/stream` | `samples.react_agent` |
 | 10 | Usage 累加 | 多轮 TokenUsage 合计 | `POST /ai-example/agent/react`（`usage`） | `samples.react_agent` |
+| 11 | 输出护栏 | 词表 + 结构校验 | `POST /ai-example/guardrail/chat` | `samples.guardrail_chat` |
+| 11 | RAG Citation | 强制可校验引用 | `POST /ai-example/rag/query`（`citationMode=required`） | `samples.rag_citation` |
 
-文档：[学习路径](docs/learning-path.md) · [基础补丁](docs/baseline-patches.md) · [集成说明](docs/integration.md) · [第二期](docs/phase2.md) · [第三期](docs/phase3.md) · [第四期](docs/phase4.md) · [第五期](docs/phase5.md) · [第六期](docs/phase6.md) · [第七期](docs/phase7.md) · [第八期](docs/phase8.md) · [第九期](docs/phase9.md) · [第十期](docs/phase10.md) · [CHANGELOG](CHANGELOG.md) · [刻意不做 backlog](docs/backlog.md)
+文档：[学习路径](docs/learning-path.md) · [基础补丁](docs/baseline-patches.md) · [集成说明](docs/integration.md) · [第二期](docs/phase2.md) · [第三期](docs/phase3.md) · [第四期](docs/phase4.md) · [第五期](docs/phase5.md) · [第六期](docs/phase6.md) · [第七期](docs/phase7.md) · [第八期](docs/phase8.md) · [第九期](docs/phase9.md) · [第十期](docs/phase10.md) · [第十一期](docs/phase11.md) · [CHANGELOG](CHANGELOG.md) · [刻意不做 backlog](docs/backlog.md)
 
 ## 环境
 

@@ -17,15 +17,31 @@ import { ResultBody } from '../components/ResultBody'
 import { SampleFrame } from '../components/SampleFrame'
 import { Workbench } from '../components/Workbench'
 import { ragGuide } from '../guides'
+import type { SampleGuideData } from '../guides'
 
 type Mode = 'sync' | 'sse'
 
 /**
- * 基础 RAG 样例：ingest、纯向量检索、SSE。
+ * RAG 样例：ingest、检索、SSE；进阶可默认 citationMode=required。
  */
-export function RagPanel({ provider }: { provider: string }) {
+export function RagPanel({
+  provider,
+  guide = ragGuide,
+  title = 'RAG',
+  hint = '先 ingest；纯向量检索。需要 Docker pgvector + DashScope Embedding。',
+  defaultCitationMode = 'none',
+  allowSse = true,
+}: {
+  provider: string
+  guide?: SampleGuideData
+  title?: string
+  hint?: string
+  defaultCitationMode?: 'none' | 'required'
+  allowSse?: boolean
+}) {
   const [question, setQuestion] = useState('本项目第一期学了什么？RAG 是什么？')
   const [mode, setMode] = useState<Mode>('sync')
+  const [citationMode, setCitationMode] = useState<'none' | 'required'>(defaultCitationMode)
   const [loading, setLoading] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [ingesting, setIngesting] = useState(false)
@@ -80,6 +96,7 @@ export function RagPanel({ provider }: { provider: string }) {
         question,
         provider,
         retrievalMode: 'vector',
+        citationMode,
       })
       setElapsedMs(Math.round(performance.now() - started))
       setResult(data)
@@ -139,6 +156,7 @@ export function RagPanel({ provider }: { provider: string }) {
           retrievalEmpty: latestEmpty,
           usage: null,
           retrievalMode: 'vector',
+          citationMode: 'none',
         })
       },
       (err) => {
@@ -172,6 +190,9 @@ export function RagPanel({ provider }: { provider: string }) {
         <div key={item.id}>
           <Group gap={6} mb={4}>
             <Badge variant="light">{item.source || 'unknown'}</Badge>
+            <Badge variant="outline" size="xs">
+              id={item.id}
+            </Badge>
           </Group>
           <Text size="sm" c="dimmed">
             {item.excerpt}
@@ -181,11 +202,18 @@ export function RagPanel({ provider }: { provider: string }) {
     </Stack>
   )
 
+  const transportData = allowSse
+    ? [
+        { value: 'sync', label: '同步 POST' },
+        { value: 'sse', label: 'SSE 流式' },
+      ]
+    : [{ value: 'sync', label: '同步 POST' }]
+
   return (
-    <SampleFrame guide={ragGuide}>
+    <SampleFrame guide={guide}>
       <Workbench
-        title="RAG"
-        hint="先 ingest；纯向量检索。需要 Docker pgvector + DashScope Embedding。"
+        title={title}
+        hint={hint}
         streaming={streaming}
         form={
           <Stack gap="md">
@@ -201,9 +229,15 @@ export function RagPanel({ provider }: { provider: string }) {
               fullWidth
               value={mode}
               onChange={(value) => setMode(value as Mode)}
+              data={transportData}
+            />
+            <SegmentedControl
+              fullWidth
+              value={citationMode}
+              onChange={(value) => setCitationMode(value as 'none' | 'required')}
               data={[
-                { value: 'sync', label: '同步 POST' },
-                { value: 'sse', label: 'SSE 流式' },
+                { value: 'none', label: 'citation none' },
+                { value: 'required', label: 'citation required' },
               ]}
             />
             <Textarea
@@ -235,6 +269,25 @@ export function RagPanel({ provider }: { provider: string }) {
                   <Badge color="orange" variant="light">
                     retrievalEmpty：无足够命中，已拒答
                   </Badge>
+                )}
+                {result?.citationMode === 'required' && (
+                  <Badge color={result.citationValid ? 'teal' : 'red'} variant="light">
+                    citationValid={String(result.citationValid)}
+                  </Badge>
+                )}
+                {result?.citations && result.citations.length > 0 && (
+                  <div>
+                    <Text size="sm" mb={6}>
+                      citations
+                    </Text>
+                    <Stack gap={6}>
+                      {result.citations.map((c, i) => (
+                        <Text key={`${c.sourceId}-${i}`} size="sm" c="dimmed">
+                          [{c.sourceId}] {c.quote}
+                        </Text>
+                      ))}
+                    </Stack>
+                  </div>
                 )}
                 {sources.length > 0 && (
                   <div>
