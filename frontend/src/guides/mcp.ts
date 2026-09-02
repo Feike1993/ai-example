@@ -5,9 +5,10 @@ export const mcpGuide: SampleGuideData = {
   title: 'MCP',
   concepts: [
     'Function Calling 是 LLM 能力；MCP 是工具接入协议；Agent 是 Loop + Tools 的系统概念。',
-    '默认 app.ai.mcp.mode=remote（仅初始值）：主应用作 Client，连 mcp-server:8081 的 Streamable HTTP `/mcp`。',
+    '默认 app.ai.mcp.mode=remote（仅初始值）：主应用作 Client，连 mcp-server:8081 的 Streamable HTTP `/mcp`，并自动带 MCP_BEARER_TOKEN。',
     '面板 / PUT /mcp/mode 可在 remote ↔ inprocess 间运行时切换（内存、不持久化）；启动不强连 8081。',
-    'mode=inprocess：同进程 MethodToolCallbackProvider 直挂 ChatClient，无需旁进程。',
+    'mode=inprocess：同进程 MethodToolCallbackProvider 直挂 ChatClient，无需旁进程与 Bearer。',
+    '第九期：mcp-server 校验 Authorization Bearer；无/错密钥 → 401。',
     'stdio 适合本地子进程；Streamable HTTP 适合远程/生产。',
   ],
   logic: {
@@ -50,17 +51,16 @@ export const mcpGuide: SampleGuideData = {
     {
       label: '软启动 Client — application.yml',
       language: 'yaml',
-      code: `app.ai.mcp.mode: remote  # 初始值，可被 PUT /mcp/mode 覆盖
-spring.ai.mcp.client.enabled: true
-spring.ai.mcp.client.initialized: false  # 启动不连 8081
+      code: `app.ai.mcp.mode: remote
+app.ai.mcp.remote-bearer-token: \${MCP_BEARER_TOKEN:dev-mcp-token}
+spring.ai.mcp.client.initialized: false
 spring.ai.mcp.client.streamable-http.connections.demo.url: http://localhost:8081`,
     },
     {
-      label: '样例聊天 — McpSampleService',
+      label: 'Client 注入 Bearer — McpClientAuthConfiguration',
       language: 'java',
-      code: `// remote → SyncMcpToolCallbackProvider（懒 initialize）
-// inprocess → @Qualifier("mcpServerTools")
-.tools(resolveTools())`,
+      code: `transportBuilder.httpRequestCustomizer((b, m, u, body, ctx) ->
+  b.setHeader("Authorization", "Bearer " + token));`,
     },
   ],
   frontend: [

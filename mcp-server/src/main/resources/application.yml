@@ -14,3 +14,9 @@ spring:
           mcp-endpoint: /mcp
       client:
         enabled: false
+
+# 与主应用 MCP_BEARER_TOKEN / app.ai.mcp.remote-bearer-token 保持一致
+app:
+  mcp:
+    auth:
+      bearer-token: ${MCP_BEARER_TOKEN:dev-mcp-token}

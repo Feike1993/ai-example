@@ -114,8 +114,8 @@ export function McpPanel({ provider }: { provider: string }) {
         title="MCP"
         hint={
           mode === 'remote'
-            ? 'mode=remote：请先启动 mcp-server（8081）。工具经 Streamable HTTP 拉取；可切到 inprocess 免旁进程。'
-            : 'mode=inprocess：同进程工具直挂 ChatClient，无需 mcp-server。'
+            ? 'mode=remote：请先启动 mcp-server（8081），两端 MCP_BEARER_TOKEN 须一致（默认 dev-mcp-token）。401 时优先查密钥。可切 inprocess 免旁进程。'
+            : 'mode=inprocess：同进程工具直挂 ChatClient，无需 mcp-server / Bearer。'
         }
         form={
           <Stack gap="md">

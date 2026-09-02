@@ -123,3 +123,15 @@ Hybrid RAG、golden 评测、Redis 持久会话、逐步 tool SSE、流式 token
 ### 文档
 
 - [phase8.md](docs/phase8.md)、[17-memory-extract.md](docs/samples/17-memory-extract.md)、[18-memory-recall-compare.md](docs/samples/18-memory-recall-compare.md)
+
+## [Unreleased] — 第九期进阶（MCP Bearer 鉴权）
+
+### MCP Bearer
+
+- `mcp-server`：`/mcp` 校验 `Authorization: Bearer`（`MCP_BEARER_TOKEN`，默认 `dev-mcp-token`）
+- 主应用 Client：`McpClientAuthConfiguration` 注入同密钥；inprocess 不要求 Bearer
+- 401 时 503 文案提示核对两端 token；前端 MCP Tab / Python `mcp_client_http` 同步说明
+
+### 文档
+
+- [phase9.md](docs/phase9.md)、[19-mcp-bearer.md](docs/samples/19-mcp-bearer.md)

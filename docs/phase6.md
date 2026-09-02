@@ -46,4 +46,4 @@ uv run python -m ai_example.samples.mcp_client_http
 uv run python -m ai_example.samples.hyde_rag
 ```
 
-刻意不做：MCP 鉴权、语义分块、Redis — 见 [backlog.md](backlog.md)。
+刻意不做（第六期）：语义分块、Redis。MCP HTTP Bearer 鉴权见第九期 [19-mcp-bearer.md](samples/19-mcp-bearer.md) / [phase9.md](phase9.md)。

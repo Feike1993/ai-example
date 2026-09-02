@@ -17,6 +17,9 @@ dependencies {
     implementation platform("org.springframework.ai:spring-ai-bom:${libs.versions.springAi.get()}")
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.ai:spring-ai-starter-mcp-server-webmvc'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 java {
@@ -28,6 +31,10 @@ java {
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
     options.release = 25
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
 }
 
 tasks.named('bootRun') {

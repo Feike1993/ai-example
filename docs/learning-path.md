@@ -85,12 +85,18 @@
 
 17. [自动抽记忆](samples/17-memory-extract.md)（分支 8a）→ 18. [召回策略对照](samples/18-memory-recall-compare.md)（分支 8b）
 
+## 第九期：MCP Bearer 鉴权（进阶）
+
+见 [phase9.md](phase9.md)：
+
+19. [MCP Bearer 鉴权](samples/19-mcp-bearer.md)
+
 基础 vs 进阶分层：
 
 | 层次 | 范围 | 状态 |
 | --- | --- | --- |
 | **基础** | 最小 Agent 闭环 + MCP/RAG 入门 + 进程内上下文 + 同进程多 Agent + 基础补丁 A1–A5 | **已完成**（tag `v0.2.0`） |
-| **进阶** | Hybrid、评测、持久会话、长期记忆、MCP 远端、HyDE、分块、抽记忆等 | **第四～八期** |
+| **进阶** | Hybrid、评测、持久会话、长期记忆、MCP 远端、HyDE、分块、抽记忆、MCP 鉴权等 | **第四～九期** |
 
 ## 刻意不做 / 后续候选
 

@@ -91,6 +91,8 @@ app:
       # 仅作启动初始值；运行时可被 PUT /mcp/mode 覆盖（内存、不持久化，重启回此配置）
       # remote=连 mcp-server:8081；inprocess=同进程 MethodToolCallbackProvider（不必开主应用 MCP Server HTTP）
       mode: ${MCP_MODE:remote}
+      # 与 mcp-server app.mcp.auth.bearer-token / MCP_BEARER_TOKEN 保持一致
+      remote-bearer-token: ${MCP_BEARER_TOKEN:dev-mcp-token}
     providers:
       deepseek:
         label: DeepSeek

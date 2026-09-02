@@ -44,7 +44,7 @@
 
 - **Server**：独立进程更常见；可直接参考仓库根目录 [`mcp-server/`](../mcp-server/)（STREAMABLE `/mcp`，端口 8081）
 - **Client**：业务应用加 `spring-ai-starter-mcp-client`，配置远端 `url`，把 `ToolCallbackProvider` 挂到 ChatClient
-- 本仓默认 `app.ai.mcp.mode=remote`；`inprocess` 保留二期同进程学习路径。生产务必给 HTTP MCP 加鉴权
+- 本仓默认 `app.ai.mcp.mode=remote`；`inprocess` 保留二期同进程学习路径。HTTP MCP 鉴权见 [19-mcp-bearer.md](samples/19-mcp-bearer.md)（`MCP_BEARER_TOKEN`）
 
 ### RAG
 
@@ -100,7 +100,7 @@ Python 对照：`context_memory.py`（可选 SQLite）、`long_term_memory.py`�
 #### MCP 远端拆分
 
 - 拷 [`mcp-server/`](../mcp-server/) + 主应用 `spring.ai.mcp.client` 配置
-- `app.ai.mcp.mode=remote|inprocess`；鉴权见 [backlog](backlog.md)
+- `app.ai.mcp.mode=remote|inprocess`；Bearer 见 [19-mcp-bearer.md](samples/19-mcp-bearer.md)
 
 #### 完整 HyDE
 

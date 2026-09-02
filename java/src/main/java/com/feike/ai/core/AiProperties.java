@@ -73,7 +73,7 @@ public record AiProperties(
             memory = new Memory(4, "demo", 0.92, 5);
         }
         if (mcp == null) {
-            mcp = new Mcp("remote");
+            mcp = new Mcp("remote", "dev-mcp-token");
         }
     }
 
@@ -246,12 +246,13 @@ public record AiProperties(
     }
 
     /**
-     * MCP 样例模式。
+     * MCP 样例模式与远端凭证。
      *
-     * @param mode {@code remote}（默认，连旁进程 Server）或 {@code inprocess}（同进程工具）；
-     *             仅绑定配置初始值，运行时切换见 {@code McpSampleService#setMode}
+     * @param mode               {@code remote}（默认，连旁进程 Server）或 {@code inprocess}（同进程工具）；
+     *                           仅绑定配置初始值，运行时切换见 {@code McpSampleService#setMode}
+     * @param remoteBearerToken  remote Client 请求携带的 Bearer 明文；与 mcp-server {@code MCP_BEARER_TOKEN} 一致
      */
-    public record Mcp(String mode) {
+    public record Mcp(String mode, String remoteBearerToken) {
         public Mcp {
             if (mode == null || mode.isBlank()) {
                 mode = "remote";
@@ -260,6 +261,11 @@ public record AiProperties(
                 if (!mode.equals("remote") && !mode.equals("inprocess")) {
                     mode = "remote";
                 }
+            }
+            if (remoteBearerToken == null || remoteBearerToken.isBlank()) {
+                remoteBearerToken = "dev-mcp-token";
+            } else {
+                remoteBearerToken = remoteBearerToken.trim();
             }
         }
 

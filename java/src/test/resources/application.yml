@@ -3,6 +3,7 @@ app:
   ai:
     mcp:
       mode: inprocess
+      remote-bearer-token: ${MCP_BEARER_TOKEN:dev-mcp-token}
     context:
       store: memory
 

@@ -186,9 +186,13 @@ public class McpSampleService {
                 }
             }
         } catch (Exception ex) {
+            String detail = ex.getMessage() == null ? ex.toString() : ex.getMessage();
+            String hint = detail.toLowerCase().contains("401") || detail.toLowerCase().contains("unauthorized")
+                ? "；若为 401，请检查主应用与 mcp-server 的 MCP_BEARER_TOKEN 是否一致（默认 dev-mcp-token）"
+                : "";
             throw new ResponseStatusException(
                 HttpStatus.SERVICE_UNAVAILABLE,
-                "无法连接 MCP Server（请先启动 mcp-server:8081）: " + ex.getMessage()
+                "无法连接 MCP Server（请先启动 mcp-server:8081）: " + detail + hint
             );
         }
     }

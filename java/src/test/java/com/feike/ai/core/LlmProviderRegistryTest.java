@@ -67,7 +67,7 @@ class LlmProviderRegistryTest {
             new AiProperties.ContextSettings(24, 2000, 6, "memory"),
             new AiProperties.MultiAgent(4, 6),
             new AiProperties.Memory(4, "demo", 0.92, 5),
-            new AiProperties.Mcp("inprocess")
+            new AiProperties.Mcp("inprocess", "dev-mcp-token")
         );
         return new LlmProviderRegistry(properties);
     }

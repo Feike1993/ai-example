@@ -51,7 +51,8 @@
 | Redis（会话外存 / Stream / 缓存） | 第二期 | 候选 | 控制基础设施面；cookbook 用内存即可讲清概念 | 第四期或业务项目 |
 | 语音 / ASR–TTS | 第二期 | 候选 | 与 Agent 主线正交 | 业务项目 |
 | MCP 独立第二进程 Server | 第二期 | 已覆盖 | 第六期 `mcp-server/` | 见 [13-mcp-remote.md](samples/13-mcp-remote.md) |
-| MCP Client 真连远端 Streamable HTTP | 第二期 | 已覆盖 | 第六期 `app.ai.mcp.mode=remote` | 鉴权仍为候选 |
+| MCP Client 真连远端 Streamable HTTP | 第二期 | 已覆盖 | 第六期 `app.ai.mcp.mode=remote` | 鉴权见第九期 |
+| MCP HTTP Bearer 鉴权（Server + Client） | 第六期刻意留白 | 已覆盖 | 第九期 | 见 [19-mcp-bearer.md](samples/19-mcp-bearer.md) |
 | RAG 知识库产品化（上传后台 / 权限 / 多租户） | 第二期 | 明确不做（本仓） | 样例不是知识库产品 | 业务项目 |
 | Provider 配置 DB 热更新 | 第一期 | 候选 | `.env` + `app.ai.providers` 足够学习 | 业务项目 |
 | 绑定 interview-guide 特殊环境变量 / 文案 | 维护期 | 明确不做（本仓） | 本仓独立 cookbook | — |

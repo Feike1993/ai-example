@@ -13,7 +13,7 @@ import java.util.Map;
 public class IndexController {
 
     /**
- * 返回样例清单，按基础闭环与进阶（第四至八期）分组。
+ * 返回样例清单，按基础闭环与进阶（第四至九期）分组。
  *
  * @return 项目名、baseline / advanced 样例路径
  */
@@ -31,7 +31,7 @@ public class IndexController {
             "tools", "POST /ai-example/tools",
             "agentReact", "POST /ai-example/agent/react  GET /ai-example/agent/react/stream?prompt=",
             "agentFramework", "POST /ai-example/agent/framework",
-            "mcp", "GET /ai-example/mcp/tools  POST /ai-example/mcp/chat（默认 remote 需 mcp-server:8081）",
+            "mcp", "GET /ai-example/mcp/tools  POST /ai-example/mcp/chat（默认 remote 需 mcp-server:8081 + Bearer）",
             "rag", "POST /ai-example/rag/ingest  POST /ai-example/rag/query  GET /ai-example/rag/query/stream",
             "context", "POST /ai-example/context/chat  GET|DELETE /ai-example/context/session/{id}",
             "multiagent", "POST /ai-example/multiagent/run"
@@ -39,7 +39,7 @@ public class IndexController {
         body.put("baseline", baseline);
 
         Map<String, Object> advanced = new LinkedHashMap<>();
-        advanced.put("phase", 8);
+        advanced.put("phase", 9);
         Map<String, String> advancedSamples = new LinkedHashMap<>();
         advancedSamples.put(
             "hybridRag",
@@ -70,6 +70,10 @@ public class IndexController {
         advancedSamples.put(
             "memoryCompare",
             "POST /ai-example/memory/recall/compare  POST /ai-example/memory/chat/compare"
+        );
+        advancedSamples.put(
+            "mcpBearer",
+            "mcp-server Bearer + 主应用 MCP_BEARER_TOKEN（见 docs/samples/19-mcp-bearer.md）"
         );
         advanced.put("samples", advancedSamples);
         body.put("advanced", advanced);

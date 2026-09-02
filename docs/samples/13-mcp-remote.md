@@ -53,8 +53,8 @@ MCP_MODE=inprocess
 
 - Host / Client / Server 真正分进程
 - Streamable HTTP URL 是协议入口，不是业务 `/mcp/chat`
-- cookbook 本地明文；生产务必鉴权
+- cookbook 本地明文；生产务必鉴权 → 第九期见 [19-mcp-bearer.md](19-mcp-bearer.md)
 
 ## 刻意不做
 
-鉴权、多 Server 注册中心 — 见 [backlog](../backlog.md)。
+多 Server 注册中心 — 见 [backlog](../backlog.md)。鉴权已由样例 19 覆盖。
