@@ -166,18 +166,22 @@ function App() {
         )}
         {sample === 'agentToolSse' && (
           <AgentPanel
+            key="agentToolSse"
             provider={provider}
             guide={agentToolSseGuide}
             title="Agent 逐步 SSE"
             defaultTransport="sse"
+            focus="sse"
           />
         )}
         {sample === 'agentUsage' && (
           <AgentPanel
+            key="agentUsage"
             provider={provider}
             guide={agentUsageGuide}
             title="Usage 累加"
             defaultTransport="sync"
+            focus="usage"
           />
         )}
       </AppShell.Main>
