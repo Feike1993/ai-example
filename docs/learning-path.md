@@ -91,12 +91,18 @@
 
 19. [MCP Bearer 鉴权](samples/19-mcp-bearer.md)
 
+## 第十期：可观测流式（进阶）
+
+见 [phase10.md](phase10.md)：
+
+20. [Agent 逐步 tool SSE](samples/20-agent-tool-sse.md) → 21. [流式 TokenUsage 累加](samples/21-stream-token-usage.md)
+
 基础 vs 进阶分层：
 
 | 层次 | 范围 | 状态 |
 | --- | --- | --- |
 | **基础** | 最小 Agent 闭环 + MCP/RAG 入门 + 进程内上下文 + 同进程多 Agent + 基础补丁 A1–A5 | **已完成**（tag `v0.2.0`） |
-| **进阶** | Hybrid、评测、持久会话、长期记忆、MCP 远端、HyDE、分块、抽记忆、MCP 鉴权等 | **第四～九期** |
+| **进阶** | Hybrid、评测、持久会话、长期记忆、MCP 远端、HyDE、分块、抽记忆、MCP 鉴权、可观测流式等 | **第四～十期** |
 
 ## 刻意不做 / 后续候选
 

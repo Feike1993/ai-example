@@ -1,4 +1,6 @@
 export { agentGuide } from './agent'
+export { agentToolSseGuide } from './agentToolSse'
+export { agentUsageGuide } from './agentUsage'
 export { chatGuide } from './chat'
 export { evalGuide } from './eval'
 export { hybridRagGuide } from './hybridRag'

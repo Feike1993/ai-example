@@ -1,11 +1,15 @@
-"""LangGraph ``create_react_agent`` 对照，对应 Java 的框架托管 tool-calling。"""
+"""LangGraph create_react_agent 对照 + 第十期可观测：逐步 tool 事件与假 usage 累加。"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
 
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 
-from ai_example.core.env import settings
 from ai_example.core.client import _versioned
+from ai_example.core.env import settings
 
 
 @tool
@@ -22,6 +26,54 @@ def get_weather(city: str) -> str:
 def add(a: float, b: float) -> str:
     """计算两个数字的和。"""
     return str(a + b)
+
+
+@dataclass
+class TokenUsage:
+    """对照 Java TokenUsage。"""
+
+    prompt: int | None = None
+    completion: int | None = None
+    total: int | None = None
+
+
+@dataclass
+class ToolEvent:
+    """逐步工具事件。"""
+
+    kind: str  # tool_call | tool_result
+    index: int
+    tool_name: str
+    tool_args: str = ""
+    tool_result: str = ""
+
+
+@dataclass
+class ObservableTrace:
+    """可观测运行结果。"""
+
+    final_answer: str
+    events: list[ToolEvent] = field(default_factory=list)
+    usage: TokenUsage | None = None
+    usage_calls: int = 0
+
+
+def sum_usage(left: TokenUsage | None, right: TokenUsage | None) -> TokenUsage | None:
+    """累加两次用量。"""
+    if left is None:
+        return right
+    if right is None:
+        return left
+    prompt = (left.prompt or 0) + (right.prompt or 0)
+    completion = (left.completion or 0) + (right.completion or 0)
+    total = (left.total or 0) + (right.total or 0)
+    if prompt == 0 and completion == 0 and total == 0:
+        return None
+    return TokenUsage(
+        prompt=prompt or None,
+        completion=completion or None,
+        total=total or (prompt + completion) or None,
+    )
 
 
 def build_agent():
@@ -50,6 +102,37 @@ def run(prompt: str) -> str:
     last = messages[-1]
     content = getattr(last, "content", last)
     return str(content)
+
+
+def run_observable_demo(
+    tool_plan: list[tuple[str, str, str]],
+    *,
+    final_answer: str,
+    per_call_usage: TokenUsage | None = None,
+) -> ObservableTrace:
+    """不连真模型：按计划发射 tool 事件并累加假 usage（单测 / 离线对照）。
+
+    tool_plan: [(tool_name, args, result), ...]
+    """
+    events: list[ToolEvent] = []
+    usage: TokenUsage | None = None
+    calls = 0
+    for index, (name, args, result) in enumerate(tool_plan, start=1):
+        events.append(ToolEvent("tool_call", index, name, tool_args=args))
+        events.append(ToolEvent("tool_result", index, name, tool_result=result))
+        # 每轮工具前一次 LLM call
+        call_usage = per_call_usage or TokenUsage(prompt=10, completion=5, total=15)
+        usage = sum_usage(usage, call_usage)
+        calls += 1
+    # 终答再一次 call
+    usage = sum_usage(usage, per_call_usage or TokenUsage(prompt=8, completion=12, total=20))
+    calls += 1
+    return ObservableTrace(
+        final_answer=final_answer,
+        events=events,
+        usage=usage,
+        usage_calls=calls,
+    )
 
 
 if __name__ == "__main__":

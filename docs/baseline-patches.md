@@ -52,7 +52,7 @@ curl -s http://localhost:8080/ai-example/chat \
 - 从 Spring AI `ChatResponse` metadata / usage 提取（提取失败则字段为 null，不阻断）
 - 前端 `ChatPanel` 展示用量；其他 Panel 可选
 
-**刻意不做**：SSE 流式累加 token、Agent 逐步 usage（见 [backlog](backlog.md)）。
+**刻意不做（A2 当时）**：SSE 流式累加 token、Agent 逐步 usage — 已由 [第十期](phase10.md) / [21](samples/21-stream-token-usage.md) 覆盖。
 
 **验收**：
 
@@ -111,7 +111,7 @@ curl -s http://localhost:8080/ai-example/rag/query \
 - `GET /agent/react/stream` — 仅在 **最终自然语言答案** 阶段 SSE（tool 步骤仍同步完成后一次性返回 steps，或首包 JSON steps + 后续 answer 流）
 - `AgentPanel` 增加 SSE 模式开关
 
-**刻意不做**：逐步 tool_call 的实时 SSE（复杂度高，留 [backlog](backlog.md)）。
+**刻意不做（A4 当时）**：逐步 tool_call 的实时 SSE — 已由 [第十期](phase10.md) / [20](samples/20-agent-tool-sse.md) 覆盖（多跳 `tool_call`/`tool_result` + `usage`/`done`）。
 
 **验收**：
 
@@ -121,7 +121,7 @@ curl -s http://localhost:8080/ai-example/agent/react \
   -H 'Content-Type: application/json' \
   -d '{"prompt":"查一下北京天气"}' | jq '.steps, .finalAnswer'
 
-# 流式：首段 event:steps，后续为 answer token
+# 流式（第十期起）：逐步 tool → 终答 → usage → done；仍可有聚合 event:steps
 curl -N 'http://localhost:8080/ai-example/agent/react/stream?prompt=查一下北京天气'
 ```
 

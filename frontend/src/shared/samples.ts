@@ -22,6 +22,8 @@ export type AdvancedSampleId =
   | 'memoryExtract'
   | 'memoryCompare'
   | 'mcpBearer'
+  | 'agentToolSse'
+  | 'agentUsage'
 
 /** Playground 全部 Tab id。 */
 export type PlaygroundSampleId = BaselineSampleId | AdvancedSampleId
@@ -274,6 +276,32 @@ export const samples: readonly SampleMeta[] = [
     concepts: ['Bearer', '401', '同密钥约定'],
     endpoint: 'GET /ai-example/mcp/tools（remote + Bearer）',
     docPath: 'docs/samples/19-mcp-bearer.md',
+  },
+  {
+    id: 'agentToolSse',
+    index: 18,
+    label: 'Agent 逐步 SSE',
+    description: 'tool_call 实时推送',
+    stage: 'advanced',
+    phase: 10,
+    tagline: '边跑边看工具轨迹',
+    body: 'GET /agent/react/stream 推送 tool_call / tool_result；支持多跳；Timeline 增量更新。',
+    concepts: ['tool_call', 'tool_result', '多跳'],
+    endpoint: 'GET /ai-example/agent/react/stream',
+    docPath: 'docs/samples/20-agent-tool-sse.md',
+  },
+  {
+    id: 'agentUsage',
+    index: 19,
+    label: 'Usage 累加',
+    description: '多轮 TokenUsage',
+    stage: 'advanced',
+    phase: 10,
+    tagline: 'Agent 多跳用量合计',
+    body: '同步 Trace.usage / usageCalls；流式 event:usage（含 calls）。网关未返回则为 null。',
+    concepts: ['TokenUsage.sum', 'usageCalls', 'event:usage'],
+    endpoint: 'POST /ai-example/agent/react',
+    docPath: 'docs/samples/21-stream-token-usage.md',
   },
 ] as const
 

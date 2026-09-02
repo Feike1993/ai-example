@@ -7,8 +7,10 @@ import {
   streamAgentReact,
   API_BASE,
   type AgentStep,
+  type AgentStreamUsage,
   type AgentTrace,
   type FrameworkResponse,
+  type TokenUsage,
 } from '../api'
 import { MarkdownBody } from '../components/MarkdownBody'
 import { RawJsonAccordion } from '../components/RawJsonAccordion'
@@ -17,18 +19,29 @@ import { ResultBody } from '../components/ResultBody'
 import { SampleFrame } from '../components/SampleFrame'
 import { Workbench } from '../components/Workbench'
 import { agentGuide } from '../guides'
+import type { SampleGuideData } from '../guides'
 
 type Mode = 'react' | 'framework'
 type Transport = 'sync' | 'sse'
 
 /**
- * Agent 样例：显式 ReAct Loop 与框架托管 tool-calling 对照；ReAct 可选 SSE 终答。
+ * Agent 样例：显式 ReAct Loop 与框架托管对照；ReAct 支持 SSE 逐步 tool 事件与 usage。
  */
-export function AgentPanel({ provider }: { provider: string }) {
+export function AgentPanel({
+  provider,
+  guide = agentGuide,
+  title = 'Agent Loop',
+  defaultTransport = 'sync',
+}: {
+  provider: string
+  guide?: SampleGuideData
+  title?: string
+  defaultTransport?: Transport
+}) {
   const [prompt, setPrompt] = useState('北京天气怎么样？再算 3+5')
   const [maxSteps, setMaxSteps] = useState<number | string>(8)
   const [mode, setMode] = useState<Mode>('react')
-  const [transport, setTransport] = useState<Transport>('sync')
+  const [transport, setTransport] = useState<Transport>(defaultTransport)
   const [loading, setLoading] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -39,7 +52,9 @@ export function AgentPanel({ provider }: { provider: string }) {
   const [reachedMaxSteps, setReachedMaxSteps] = useState(false)
   const [elapsedMs, setElapsedMs] = useState<number | null>(null)
   const [ttftMs, setTtftMs] = useState<number | null>(null)
+  const [streamUsage, setStreamUsage] = useState<AgentStreamUsage | null>(null)
   const stopRef = useRef<(() => void) | null>(null)
+  const pendingCalls = useRef<Map<string, AgentStep>>(new Map())
 
   useEffect(() => {
     return () => {
@@ -56,6 +71,7 @@ export function AgentPanel({ provider }: { provider: string }) {
     setReachedMaxSteps(false)
     setElapsedMs(null)
     setTtftMs(null)
+    setStreamUsage(null)
     setLoading(true)
     const started = performance.now()
     try {
@@ -81,6 +97,21 @@ export function AgentPanel({ provider }: { provider: string }) {
     }
   }
 
+  const upsertStep = (partial: Partial<AgentStep> & { index: number; toolName: string }) => {
+    const key = `${partial.index}:${partial.toolName}`
+    const prev = pendingCalls.current.get(key)
+    const next: AgentStep = {
+      index: partial.index,
+      assistantText: partial.assistantText ?? prev?.assistantText ?? '',
+      toolName: partial.toolName,
+      toolArgs: partial.toolArgs ?? prev?.toolArgs ?? '',
+      toolResult: partial.toolResult ?? prev?.toolResult ?? '',
+    }
+    pendingCalls.current.set(key, next)
+    const list = Array.from(pendingCalls.current.values()).sort((a, b) => a.index - b.index)
+    setStreamSteps(list)
+  }
+
   const runSse = () => {
     setError(null)
     setTrace(null)
@@ -90,6 +121,8 @@ export function AgentPanel({ provider }: { provider: string }) {
     setReachedMaxSteps(false)
     setElapsedMs(null)
     setTtftMs(null)
+    setStreamUsage(null)
+    pendingCalls.current = new Map()
     setLoading(true)
     setStreaming(true)
     const started = performance.now()
@@ -97,19 +130,36 @@ export function AgentPanel({ provider }: { provider: string }) {
     let acc = ''
     let latestSteps: AgentStep[] = []
     let latestReached = false
+    let latestUsage: TokenUsage | null = null
+    let latestCalls = 0
     const stepsLimit = typeof maxSteps === 'number' ? maxSteps : undefined
 
-    stopRef.current = streamAgentReact(
-      prompt,
-      provider,
-      stepsLimit,
-      (steps, reached) => {
+    stopRef.current = streamAgentReact(prompt, provider, stepsLimit, {
+      onSteps: (steps, reached) => {
         latestSteps = steps
         latestReached = reached
         setStreamSteps(steps)
         setReachedMaxSteps(reached)
+        for (const step of steps) {
+          pendingCalls.current.set(`${step.index}:${step.toolName}`, step)
+        }
       },
-      (chunk) => {
+      onToolCall: (payload) => {
+        upsertStep({
+          index: payload.index,
+          toolName: payload.toolName,
+          assistantText: payload.assistantText,
+          toolArgs: payload.toolArgs,
+        })
+      },
+      onToolResult: (payload) => {
+        upsertStep({
+          index: payload.index,
+          toolName: payload.toolName,
+          toolResult: payload.toolResult,
+        })
+      },
+      onChunk: (chunk) => {
         if (first) {
           first = false
           setTtftMs(Math.round(performance.now() - started))
@@ -117,25 +167,44 @@ export function AgentPanel({ provider }: { provider: string }) {
         acc += chunk
         setStreamText(acc)
       },
-      () => {
+      onUsage: (usage) => {
+        latestUsage = {
+          prompt: usage.prompt ?? null,
+          completion: usage.completion ?? null,
+          total: usage.total ?? null,
+        }
+        latestCalls = usage.calls ?? 0
+        setStreamUsage(usage)
+      },
+      onDone: (reached) => {
+        latestReached = reached
+        setReachedMaxSteps(reached)
+      },
+      onComplete: () => {
         stopRef.current = null
         setStreaming(false)
         setLoading(false)
         setElapsedMs(Math.round(performance.now() - started))
+        const steps =
+          pendingCalls.current.size > 0
+            ? Array.from(pendingCalls.current.values()).sort((a, b) => a.index - b.index)
+            : latestSteps
         setTrace({
           finalAnswer: acc,
-          steps: latestSteps,
+          steps,
           reachedMaxSteps: latestReached,
+          usage: latestUsage,
+          usageCalls: latestCalls,
         })
       },
-      (err) => {
+      onError: (err) => {
         stopRef.current = null
         setStreaming(false)
         setLoading(false)
         setError(err.message)
         notifications.show({ color: 'red', title: 'Agent SSE 失败', message: err.message })
       },
-    )
+    })
   }
 
   const onSubmit = () => {
@@ -156,12 +225,13 @@ export function AgentPanel({ provider }: { provider: string }) {
   const displaySteps = trace?.steps ?? streamSteps
   const displayAnswer = streaming ? streamText : (trace?.finalAnswer ?? streamText)
   const displayReached = trace?.reachedMaxSteps ?? reachedMaxSteps
+  const displayUsage = mode === 'framework' ? framework?.usage : (trace?.usage ?? streamUsage)
 
   return (
-    <SampleFrame guide={agentGuide}>
+    <SampleFrame guide={guide}>
       <Workbench
-        title="Agent Loop"
-        hint="ReAct 带工具轨迹（可 SSE 终答）；Framework 是 Spring AI 自动执行 tool_calls。"
+        title={title}
+        hint="ReAct 可同步或 SSE 逐步 tool；Framework 为托管 tool-calling。第十期展示 usage 累加。"
         streaming={streaming}
         form={
           <Stack gap="md">
@@ -181,7 +251,7 @@ export function AgentPanel({ provider }: { provider: string }) {
                 onChange={(value) => setTransport(value as Transport)}
                 data={[
                   { value: 'sync', label: '同步' },
-                  { value: 'sse', label: 'SSE 终答' },
+                  { value: 'sse', label: 'SSE 逐步' },
                 ]}
               />
             )}
@@ -217,7 +287,13 @@ export function AgentPanel({ provider }: { provider: string }) {
                 <RequestMeta
                   elapsedMs={transport === 'sse' ? ttftMs : elapsedMs}
                   elapsedLabel={transport === 'sse' ? 'TTFT' : '耗时'}
+                  usage={displayUsage ?? null}
                 />
+                {(trace?.usageCalls != null || streamUsage?.calls != null) && (
+                  <Text size="sm" c="dimmed">
+                    usageCalls={trace?.usageCalls ?? streamUsage?.calls}
+                  </Text>
+                )}
                 <Stack gap={6}>
                   <Text size="sm" c="dimmed">
                     finalAnswer
@@ -232,7 +308,7 @@ export function AgentPanel({ provider }: { provider: string }) {
                 {displaySteps.length > 0 && (
                   <Timeline active={displaySteps.length - 1} bulletSize={18} lineWidth={2} color="seaweed">
                     {displaySteps.map((step) => (
-                      <Timeline.Item key={step.index} title={`${step.index}. ${step.toolName}`}>
+                      <Timeline.Item key={`${step.index}-${step.toolName}`} title={`${step.index}. ${step.toolName}`}>
                         {step.assistantText && (
                           <Text size="sm" mb={6}>
                             {step.assistantText}
@@ -240,7 +316,7 @@ export function AgentPanel({ provider }: { provider: string }) {
                         )}
                         <Code block>{step.toolArgs}</Code>
                         <Text size="sm" mt={6} c="dimmed">
-                          {step.toolResult}
+                          {step.toolResult || (streaming ? '…' : '')}
                         </Text>
                       </Timeline.Item>
                     ))}

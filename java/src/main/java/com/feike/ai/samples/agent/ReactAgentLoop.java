@@ -1,5 +1,7 @@
 package com.feike.ai.samples.agent;
 
+import com.feike.ai.core.TokenUsage;
+import com.feike.ai.core.TokenUsageExtractor;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -13,7 +15,12 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * 以 ReAct 框架为模板，自行实现显式循环，对比 {@code ChatClient.tools(...).call()} 的框架托管循环。
@@ -21,6 +28,8 @@ import java.util.*;
  * <p>
  * Spring AI 2.0 的 {@code ChatModel.call()} 只返回 tool_calls，不自动执行工具；
  * 本类自行执行、限制 {@code maxSteps}，对照 {@code ChatClient.tools(...).call()} 的框架托管循环。
+ * <p>
+ * 第十期：同步与流式共用完整多跳循环；可选 {@link Progress} 推送逐步 tool 事件并累加 {@link TokenUsage}。
  */
 public final class ReactAgentLoop {
 
@@ -41,26 +50,36 @@ public final class ReactAgentLoop {
      * @param finalAnswer      最终给用户的文本；触达步数上限时为熔断说明
      * @param steps            已执行的工具步骤
      * @param reachedMaxSteps  是否因 maxSteps 强制结束
+     * @param usage            各轮 LLM call 累加用量；网关未返回时为 {@code null}
+     * @param usageCalls       计入用量的 LLM 调用次数
      */
-    public record Trace(String finalAnswer, List<Step> steps, boolean reachedMaxSteps) {}
-
-    /**
-     * 流式终答前的准备结果（工具轮已同步完成）。
-     * <p>
-     * {@code finalAnswer} 非空：首轮即终答或触达 maxSteps，直接 SSE 推送。
-     * {@code messages} 非空：至少完成一轮工具，由调用方不挂 tools 地 stream 终答。
-     *
-     * @param steps            已执行的工具步骤
-     * @param reachedMaxSteps  是否因 maxSteps 强制结束
-     * @param finalAnswer      可直接推送的终答；与 {@code messages} 互斥
-     * @param messages         待流式补全的消息；与 {@code finalAnswer} 互斥
-     */
-    public record StreamPrep(
+    public record Trace(
+        String finalAnswer,
         List<Step> steps,
         boolean reachedMaxSteps,
-        String finalAnswer,
-        List<Message> messages
+        TokenUsage usage,
+        int usageCalls
     ) {}
+
+    /**
+     * 循环进度回调（流式 SSE 用）；同步 {@link #run} 可传 {@code null}。
+     */
+    public interface Progress {
+        /** 即将执行 / 已解析到某次 tool_call。 */
+        void onToolCall(int index, String assistantText, String toolName, String toolArgs);
+
+        /** 工具已执行完毕。 */
+        void onToolResult(int index, String toolName, String toolResult);
+
+        /**
+         * 单次 LLM call 后的用量快照。
+         *
+         * @param callUsage 本轮用量，可能为 null
+         * @param calls     已累计调用次数
+         * @param totalUsage 累计用量
+         */
+        default void onLlmUsage(TokenUsage callUsage, int calls, TokenUsage totalUsage) {}
+    }
 
     private ReactAgentLoop() {}
 
@@ -81,62 +100,22 @@ public final class ReactAgentLoop {
         String userPrompt,
         int maxSteps
     ) {
-        ToolCallback[] callbacks = MethodToolCallbackProvider.builder()
-            .toolObjects(toolObject)
-            .build()
-            .getToolCallbacks();
-        Map<String, ToolCallback> byName = new LinkedHashMap<>();
-        Arrays.stream(callbacks).forEach(cb -> byName.put(cb.getToolDefinition().name(), cb));
-
-        List<Message> messages = new ArrayList<>();
-        messages.add(new SystemMessage(systemPrompt));
-        messages.add(new UserMessage(userPrompt));
-
-        List<Step> steps = new ArrayList<>();
-        int limit = Math.max(1, maxSteps);
-        for (int i = 1; i <= limit; i++) {
-            ChatResponse response = chatModel.call(new Prompt(messages, toolOptions(chatModel, callbacks)));
-            AssistantMessage assistant = Objects.requireNonNull(response.getResult()).getOutput();
-            messages.add(assistant);
-
-            List<AssistantMessage.ToolCall> toolCalls = assistant.getToolCalls();
-            if (toolCalls.isEmpty()) {
-                return new Trace(textOf(assistant), List.copyOf(steps), false);
-            }
-
-            List<ToolResponseMessage.ToolResponse> toolResponses = new ArrayList<>();
-            for (AssistantMessage.ToolCall call : toolCalls) {
-                String result = executeTool(byName, call);
-                steps.add(new Step(i, textOf(assistant), call.name(), call.arguments(), result));
-                toolResponses.add(new ToolResponseMessage.ToolResponse(call.id(), call.name(), result));
-            }
-            messages.add(ToolResponseMessage.builder().responses(toolResponses).build());
-        }
-        return new Trace("已达到最大步数 " + limit + "，已停止以防无限循环。", List.copyOf(steps), true);
+        return run(chatModel, toolObject, systemPrompt, userPrompt, maxSteps, null);
     }
 
     /**
-     * 为 SSE 准备：同步跑工具轮；有工具观察且仍有步数额度时把终答交给调用方 stream。
-     * <p>
-     * 与 {@link #run} 的差异：完成一轮 tool 执行后不再同步 call 终答，而是返回 {@code messages}
-     * 供不挂 tools 的流式补全（演示终答 TTFT）。并行 tool_calls（一轮内多个工具）完全覆盖；
-     * 需要「工具→再工具」多轮时请用同步 {@code /react}。
+     * 完整多跳 ReAct；{@code progress} 非空时逐步回调（供 SSE）。
      *
-     * @param chatModel    底层聊天模型
-     * @param toolObject   带 {@code @Tool} 的实例
-     * @param systemPrompt 角色与工具使用约束
-     * @param userPrompt   用户任务
-     * @param maxSteps     熔断步数，至少为 1
-     * @return 流式准备结果
+     * @param progress 可为 {@code null}
      */
-    public static StreamPrep prepareStream(
+    public static Trace run(
         ChatModel chatModel,
         Object toolObject,
         String systemPrompt,
         String userPrompt,
-        int maxSteps
+        int maxSteps,
+        Progress progress
     ) {
-        // 准备工具回调
         ToolCallback[] callbacks = MethodToolCallbackProvider.builder()
             .toolObjects(toolObject)
             .build()
@@ -148,42 +127,47 @@ public final class ReactAgentLoop {
         messages.add(new SystemMessage(systemPrompt));
         messages.add(new UserMessage(userPrompt));
 
-        // 准备工具执行轮次
         List<Step> steps = new ArrayList<>();
-        // 准备最大步数
+        TokenUsage usageAcc = null;
+        int usageCalls = 0;
         int limit = Math.max(1, maxSteps);
-        // 循环执行工具
         for (int i = 1; i <= limit; i++) {
-            // 调用模型
             ChatResponse response = chatModel.call(new Prompt(messages, toolOptions(chatModel, callbacks)));
-            // 获取模型回复
-            AssistantMessage assistant = Objects.requireNonNull(response.getResult()).getOutput();
-            List<AssistantMessage.ToolCall> toolCalls = assistant.getToolCalls();
-
-            if (toolCalls.isEmpty()) {
-                return new StreamPrep(List.copyOf(steps), false, textOf(assistant), null);
+            TokenUsage callUsage = TokenUsageExtractor.from(response);
+            usageAcc = TokenUsageExtractor.sum(usageAcc, callUsage);
+            usageCalls++;
+            if (progress != null) {
+                progress.onLlmUsage(callUsage, usageCalls, usageAcc);
             }
 
+            AssistantMessage assistant = Objects.requireNonNull(response.getResult()).getOutput();
             messages.add(assistant);
-            // 准备本轮工具调用
+
+            List<AssistantMessage.ToolCall> toolCalls = assistant.getToolCalls();
+            if (toolCalls.isEmpty()) {
+                return new Trace(textOf(assistant), List.copyOf(steps), false, usageAcc, usageCalls);
+            }
+
             List<ToolResponseMessage.ToolResponse> toolResponses = new ArrayList<>();
             for (AssistantMessage.ToolCall call : toolCalls) {
+                if (progress != null) {
+                    progress.onToolCall(i, textOf(assistant), call.name(), call.arguments());
+                }
                 String result = executeTool(byName, call);
                 steps.add(new Step(i, textOf(assistant), call.name(), call.arguments(), result));
+                if (progress != null) {
+                    progress.onToolResult(i, call.name(), result);
+                }
                 toolResponses.add(new ToolResponseMessage.ToolResponse(call.id(), call.name(), result));
             }
-            // 准备本轮工具调用结果
             messages.add(ToolResponseMessage.builder().responses(toolResponses).build());
-            // 如果还有工具调用则返回本轮消息供 SSE 流式补全
-            if (i < limit) {
-                return new StreamPrep(List.copyOf(steps), false, null, List.copyOf(messages));
-            }
         }
-        return new StreamPrep(
+        return new Trace(
+            "已达到最大步数 " + limit + "，已停止以防无限循环。",
             List.copyOf(steps),
             true,
-            "已达到最大步数 " + limit + "，已停止以防无限循环。",
-            null
+            usageAcc,
+            usageCalls
         );
     }
 
@@ -223,6 +207,7 @@ public final class ReactAgentLoop {
 
     /**
      * 从 AssistantMessage 中提取纯文本，可能为空。
+     *
      * @param message 模型回复
      * @return 文本内容
      */

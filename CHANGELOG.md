@@ -135,3 +135,20 @@ Hybrid RAG、golden 评测、Redis 持久会话、逐步 tool SSE、流式 token
 ### 文档
 
 - [phase9.md](docs/phase9.md)、[19-mcp-bearer.md](docs/samples/19-mcp-bearer.md)
+
+## [Unreleased] — 第十期进阶（可观测流式）
+
+### Agent 逐步 tool SSE
+
+- `ReactAgentLoop` 同步 / 流式共用完整多跳；`Progress` 推送 `tool_call` / `tool_result`
+- `GET /agent/react/stream`：逐步事件 + 终答 + `usage` + `done`（可选聚合 `steps`）
+- 前端进阶 **AgentToolSse**；Python `run_observable_demo`
+
+### TokenUsage 累加
+
+- 同步 `Trace.usage` / `usageCalls`；`TokenUsageExtractor.sum`
+- SSE `event:usage` 给最终合计；前端 **AgentUsage**
+
+### 文档
+
+- [phase10.md](docs/phase10.md)、[20-agent-tool-sse.md](docs/samples/20-agent-tool-sse.md)、[21-stream-token-usage.md](docs/samples/21-stream-token-usage.md)

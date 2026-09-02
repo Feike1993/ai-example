@@ -12,10 +12,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
-import tools.jackson.databind.json.JsonMapper;
-
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 /**
  * Agent Loop 样例 HTTP 入口：显式 ReAct 与框架托管两条路径。
@@ -39,19 +35,16 @@ public class AgentSampleController {
     public record FrameworkResponse(String content, TokenUsage usage) {}
 
     private final AgentSampleService agentSampleService;
-    private final JsonMapper jsonMapper;
 
     /**
      * @param agentSampleService 显式 / 框架两种运行方式
-     * @param jsonMapper         序列化 steps 首包（Spring Boot 4 / Jackson 3）
      */
-    public AgentSampleController(AgentSampleService agentSampleService, JsonMapper jsonMapper) {
+    public AgentSampleController(AgentSampleService agentSampleService) {
         this.agentSampleService = agentSampleService;
-        this.jsonMapper = jsonMapper;
     }
 
     /**
-     * 显式 ReAct Loop，响应里带工具轨迹。
+     * 显式 ReAct Loop，响应里带工具轨迹与累加 usage。
      *
      * @param request 任务与可选 maxSteps
      * @return 最终答案与步骤
@@ -62,14 +55,14 @@ public class AgentSampleController {
     }
 
     /**
-     * ReAct 最小流式：工具轮同步完成后推送 {@code event:steps}，再 SSE 终答增量。
+     * ReAct 可观测流式：逐步 {@code tool_call}/{@code tool_result}，再终答、{@code usage}、{@code done}。
      * <p>
-     * 刻意不做逐步 tool_call 实时 SSE。
+     * 仍推送聚合 {@code event:steps} 以兼容旧客户端；完整多跳与同步 {@code /react} 一致。
      *
      * @param prompt   用户任务
      * @param maxSteps 可选熔断步数
      * @param provider 可选 Provider id
-     * @return SSE：首包 steps，后续为 finalAnswer token
+     * @return SSE 事件流
      */
     @GetMapping(value = "/react/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<String>> reactStream(
@@ -77,26 +70,7 @@ public class AgentSampleController {
         @RequestParam(required = false) Integer maxSteps,
         @RequestParam(required = false) String provider
     ) {
-        return agentSampleService.prepareReactStream(prompt, maxSteps, provider)
-                // 准备工作完成后，开始生成步骤
-            .flatMapMany(prep -> {
-                // 首包 steps
-                ServerSentEvent<String> stepsEvent = ServerSentEvent.<String>builder()
-                    .event("steps")
-                    .data(stepsPayload(prep))
-                    .build();
-                Flux<ServerSentEvent<String>> answerEvents;
-                if (prep.messages() != null) {
-                    answerEvents = agentSampleService
-                        .streamFinalAnswer(prep.messages(), provider)
-                        .map(chunk -> ServerSentEvent.<String>builder().data(chunk).build());
-                } else {
-                    String answer = prep.finalAnswer() == null ? "" : prep.finalAnswer();
-                    answerEvents = Flux.just(ServerSentEvent.<String>builder().data(answer).build());
-                }
-                // 首包 steps 后接最终答案
-                return Flux.concat(Flux.just(stepsEvent), answerEvents);
-            });
+        return agentSampleService.reactStream(prompt, maxSteps, provider);
     }
 
     /**
@@ -110,16 +84,5 @@ public class AgentSampleController {
         AgentSampleService.FrameworkResult result =
             agentSampleService.framework(request.prompt(), request.provider());
         return new FrameworkResponse(result.content(), result.usage());
-    }
-
-    private String stepsPayload(ReactAgentLoop.StreamPrep prep) {
-        try {
-            Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("steps", prep.steps());
-            payload.put("reachedMaxSteps", prep.reachedMaxSteps());
-            return jsonMapper.writeValueAsString(payload);
-        } catch (Exception ex) {
-            return "{\"steps\":[],\"reachedMaxSteps\":false}";
-        }
     }
 }

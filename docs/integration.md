@@ -120,4 +120,18 @@ Python 对照：`mcp_client_http.py`、`hyde_rag.py`。
 
 Python：`semantic_chunk.py`、`parent_child_rag.py`。
 
+### 第九期
+
+#### MCP Bearer
+
+- 见 [19-mcp-bearer.md](samples/19-mcp-bearer.md)；两端同 `MCP_BEARER_TOKEN`
+
+### 第十期
+
+#### 可观测流式
+
+- 扩 `ReactAgentLoop` + `GET /agent/react/stream`（逐步 tool SSE + usage）
+- 同步 `POST /agent/react` 的 Trace 带 `usage` / `usageCalls`
+- 前端进阶 AgentToolSse / AgentUsage；Python `react_agent.run_observable_demo`
+
 刻意不做总表：[backlog.md](backlog.md)。

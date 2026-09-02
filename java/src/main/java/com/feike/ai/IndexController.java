@@ -13,7 +13,7 @@ import java.util.Map;
 public class IndexController {
 
     /**
- * 返回样例清单，按基础闭环与进阶（第四至九期）分组。
+ * 返回样例清单，按基础闭环与进阶（第四至十期）分组。
  *
  * @return 项目名、baseline / advanced 样例路径
  */
@@ -39,7 +39,7 @@ public class IndexController {
         body.put("baseline", baseline);
 
         Map<String, Object> advanced = new LinkedHashMap<>();
-        advanced.put("phase", 9);
+        advanced.put("phase", 10);
         Map<String, String> advancedSamples = new LinkedHashMap<>();
         advancedSamples.put(
             "hybridRag",
@@ -74,6 +74,14 @@ public class IndexController {
         advancedSamples.put(
             "mcpBearer",
             "mcp-server Bearer + 主应用 MCP_BEARER_TOKEN（见 docs/samples/19-mcp-bearer.md）"
+        );
+        advancedSamples.put(
+            "agentToolSse",
+            "GET /ai-example/agent/react/stream（tool_call / tool_result / usage / done）"
+        );
+        advancedSamples.put(
+            "agentUsage",
+            "POST /ai-example/agent/react（Trace.usage + usageCalls）"
         );
         advanced.put("samples", advancedSamples);
         body.put("advanced", advanced);

@@ -13,7 +13,7 @@ import { McpPanel } from './panels/McpPanel'
 import { MemoryPanel } from './panels/MemoryPanel'
 import { MemoryExtractPanel } from './panels/MemoryExtractPanel'
 import { MemoryComparePanel } from './panels/MemoryComparePanel'
-import { mcpBearerGuide } from './guides'
+import { mcpBearerGuide, agentToolSseGuide, agentUsageGuide } from './guides'
 import { MultiAgentPanel } from './panels/MultiAgentPanel'
 import { RagPanel } from './panels/RagPanel'
 import { StructuredPanel } from './panels/StructuredPanel'
@@ -163,6 +163,22 @@ function App() {
         {sample === 'memoryCompare' && <MemoryComparePanel provider={provider} />}
         {sample === 'mcpBearer' && (
           <McpPanel provider={provider} guide={mcpBearerGuide} title="MCP Bearer" />
+        )}
+        {sample === 'agentToolSse' && (
+          <AgentPanel
+            provider={provider}
+            guide={agentToolSseGuide}
+            title="Agent 逐步 SSE"
+            defaultTransport="sse"
+          />
+        )}
+        {sample === 'agentUsage' && (
+          <AgentPanel
+            provider={provider}
+            guide={agentUsageGuide}
+            title="Usage 累加"
+            defaultTransport="sync"
+          />
         )}
       </AppShell.Main>
     </AppShell>

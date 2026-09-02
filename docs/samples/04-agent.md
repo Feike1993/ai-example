@@ -25,8 +25,8 @@ Agent = LLM + Planning + Memory + Tools。第一期 Memory 只用当轮消息列
 
 | 方式 | 入口 | 适合 |
 | --- | --- | --- |
-| 显式 Loop | `POST /ai-example/agent/react` | 要审计每一步、限制步数 |
-| 显式 Loop SSE | `GET /ai-example/agent/react/stream` | 工具轮同步后流式终答 |
+| 显式 Loop | `POST /ai-example/agent/react` | 要审计每一步、限制步数；响应含 `usage` |
+| 显式 Loop SSE | `GET /ai-example/agent/react/stream` | 多跳 `tool_call`/`tool_result` + 终答 + `usage`/`done` |
 | Spring AI 自动执行 | `POST /ai-example/agent/framework` | 业务里快速接入 |
 | LangGraph | `python -m ai_example.samples.react_agent` | 产业界主流图编排 |
 
@@ -35,26 +35,24 @@ Agent = LLM + Planning + Memory + Tools。第一期 Memory 只用当轮消息列
 ```bash
 curl -s http://localhost:8080/ai-example/agent/react \
   -H 'Content-Type: application/json' \
-  -d '{"prompt":"北京天气怎么样？再算 3+5","maxSteps":8}'
+  -d '{"prompt":"北京天气怎么样？再算 3+5","maxSteps":8}' | jq '.steps, .usage, .finalAnswer'
 
-# 最小 SSE：首包 event:steps，后续为 finalAnswer 增量（不做逐步 tool SSE）
+# SSE：逐步 tool 事件 →（可选聚合 steps）→ 终答 → usage → done
 curl -N 'http://localhost:8080/ai-example/agent/react/stream?prompt=北京天气怎么样？再算%203%2B5&maxSteps=8'
 ```
 
-流式路径在完成一轮 tool 执行后用不挂 tools 的 stream 生成终答（并行 tool_calls 一轮即可覆盖常见演示）；需要「工具→再工具」多轮时用同步 `/react`。
+流式与同步共用同一完整多跳循环（第十期）；细节见 [20-agent-tool-sse.md](20-agent-tool-sse.md)、[21-stream-token-usage.md](21-stream-token-usage.md)。
 
-## SSE 与 Mono（为何这样包）
+## SSE 与 boundedElastic（为何这样包）
 
 | 类型 | 语义 | 本样例用法 |
 | --- | --- | --- |
-| **Mono** | 最多发出 **1** 个元素就结束 | `prepareReactStream`：整段工具轮准备 → 一份 `StreamPrep` |
-| **Flux** | 发出 **0～N** 个元素 | SSE 响应、终答 token 增量 |
+| **Flux.create** | 主动向 sink 推多个 SSE | `reactStream`：边跑 Loop 边 `onToolCall` / `onToolResult` |
+| **subscribeOn(boundedElastic)** | 阻塞型多跳丢到弹性池 | 避免占住 SSE / Netty 事件循环 |
 
-底层都是 **订阅驱动**：没人 `subscribe`，流水线不跑。`Mono.fromCallable(…)` 把同步的 `prepareStream`（多次 `chatModel.call` + 执行工具）变成「被订阅时才执行」的延迟计算；再 `.subscribeOn(Schedulers.boundedElastic())` 丢到弹性线程池，避免占住处理 SSE 的事件循环线程。Controller 用 `flatMapMany`：拿到那一份 `StreamPrep` 后，再拼成「先 `event:steps`、后 answer」的 `Flux<ServerSentEvent>`。
-
-不选 `Flux.fromCallable`：准备结果不是一串元素；且 Reactor 3.8 起 Flux 侧已不再提供 `fromCallable`，阻塞型单次计算惯例用 `Mono.fromCallable`。
+A4 曾用「先 `prepareStream` 再只流终答」；第十期改为 `Progress` 回调 + 同一 `run()`，可选仍发聚合 `event:steps` 兼容旧客户端。
 
 ## 对照 / 拷贝
 
-- Java：`ReactAgentLoop`（`ChatModel.call()` 只返回 tool_calls，由本类执行工具并限制步数）；流式见 `prepareStream` + `Mono.fromCallable` + `GET /agent/react/stream`
-- Python：`langgraph.prebuilt.create_react_agent`
+- Java：`ReactAgentLoop`（同步 `run` + 可选 `Progress`）；`AgentSampleService.reactStream` → `GET /agent/react/stream`
+- Python：`langgraph.prebuilt.create_react_agent`；离线对照 `run_observable_demo`（逐步事件 + 假 usage）

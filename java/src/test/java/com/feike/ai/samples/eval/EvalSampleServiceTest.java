@@ -88,7 +88,9 @@ class EvalSampleServiceTest {
         when(agent.react(anyString(), anyInt(), isNull())).thenReturn(new ReactAgentLoop.Trace(
             "北京 25 度",
             List.of(new ReactAgentLoop.Step(1, "", "getWeather", "{}", "ok")),
-            false
+            false,
+            null,
+            0
         ));
 
         EvalSampleService service = new EvalSampleService(

@@ -45,7 +45,11 @@ export type AgentTrace = {
   finalAnswer: string
   steps: AgentStep[]
   reachedMaxSteps: boolean
+  usage?: TokenUsage | null
+  usageCalls?: number
 }
+
+export type AgentStreamUsage = TokenUsage & { calls?: number }
 
 export type FrameworkResponse = { content: string; usage: TokenUsage | null }
 
@@ -396,16 +400,23 @@ export function streamChat(
 }
 
 /**
- * 订阅 Agent ReAct SSE。先处理 event:steps，再追加终答增量。
+ * 订阅 Agent ReAct SSE：逐步 tool_call/tool_result、终答、usage、done。
+ * 仍兼容聚合 event:steps。
  */
 export function streamAgentReact(
   prompt: string,
   provider: string,
   maxSteps: number | undefined,
-  onSteps: (steps: AgentStep[], reachedMaxSteps: boolean) => void,
-  onChunk: (text: string) => void,
-  onDone: () => void,
-  onError: (error: Error) => void,
+  handlers: {
+    onSteps?: (steps: AgentStep[], reachedMaxSteps: boolean) => void
+    onToolCall?: (step: Partial<AgentStep> & { index: number; toolName: string }) => void
+    onToolResult?: (step: Partial<AgentStep> & { index: number; toolName: string }) => void
+    onChunk: (text: string) => void
+    onUsage?: (usage: AgentStreamUsage) => void
+    onDone?: (reachedMaxSteps: boolean) => void
+    onComplete: () => void
+    onError: (error: Error) => void
+  },
 ): () => void {
   const params = new URLSearchParams({ prompt })
   if (provider) {
@@ -426,9 +437,9 @@ export function streamAgentReact(
     closed = true
     source.close()
     if (error) {
-      onError(error)
+      handlers.onError(error)
     } else {
-      onDone()
+      handlers.onComplete()
     }
   }
 
@@ -439,9 +450,58 @@ export function streamAgentReact(
         steps?: AgentStep[]
         reachedMaxSteps?: boolean
       }
-      onSteps(payload.steps ?? [], payload.reachedMaxSteps === true)
+      handlers.onSteps?.(payload.steps ?? [], payload.reachedMaxSteps === true)
     } catch {
-      onSteps([], false)
+      handlers.onSteps?.([], false)
+    }
+  })
+
+  source.addEventListener('tool_call', (event) => {
+    received = true
+    try {
+      const payload = JSON.parse((event as MessageEvent).data) as {
+        index: number
+        assistantText?: string
+        toolName: string
+        toolArgs?: string
+      }
+      handlers.onToolCall?.(payload)
+    } catch {
+      /* ignore malformed */
+    }
+  })
+
+  source.addEventListener('tool_result', (event) => {
+    received = true
+    try {
+      const payload = JSON.parse((event as MessageEvent).data) as {
+        index: number
+        toolName: string
+        toolResult?: string
+      }
+      handlers.onToolResult?.(payload)
+    } catch {
+      /* ignore malformed */
+    }
+  })
+
+  source.addEventListener('usage', (event) => {
+    received = true
+    try {
+      const payload = JSON.parse((event as MessageEvent).data) as AgentStreamUsage
+      handlers.onUsage?.(payload)
+    } catch {
+      /* ignore */
+    }
+  })
+
+  source.addEventListener('done', (event) => {
+    received = true
+    try {
+      const payload = JSON.parse((event as MessageEvent).data) as { reachedMaxSteps?: boolean }
+      handlers.onDone?.(payload.reachedMaxSteps === true)
+    } catch {
+      handlers.onDone?.(false)
     }
   })
 
@@ -450,7 +510,7 @@ export function streamAgentReact(
       return
     }
     received = true
-    onChunk(decodeSseData(event.data))
+    handlers.onChunk(decodeSseData(event.data))
   }
 
   source.onerror = () => {

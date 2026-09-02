@@ -48,4 +48,16 @@ class TokenUsageExtractorTest {
         assertEquals(45, extracted.completion());
         assertEquals(165, extracted.total());
     }
+
+    @Test
+    void shouldSumUsages() {
+        TokenUsage left = new TokenUsage(10, 5, 15);
+        TokenUsage right = new TokenUsage(8, 12, 20);
+        TokenUsage sum = TokenUsageExtractor.sum(left, right);
+        assertEquals(18, sum.prompt());
+        assertEquals(17, sum.completion());
+        assertEquals(35, sum.total());
+        assertEquals(left, TokenUsageExtractor.sum(left, null));
+        assertNull(TokenUsageExtractor.sum(null, null));
+    }
 }
