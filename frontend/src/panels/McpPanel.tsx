@@ -18,6 +18,7 @@ import { ResultBody } from '../components/ResultBody'
 import { SampleFrame } from '../components/SampleFrame'
 import { Workbench } from '../components/Workbench'
 import { mcpGuide } from '../guides'
+import type { SampleGuideData } from '../guides'
 
 type McpMode = 'remote' | 'inprocess'
 
@@ -26,8 +27,17 @@ type McpMode = 'remote' | 'inprocess'
  *
  * SegmentedControl ↔ `PUT /mcp/mode`：切换进程内全局模式（不重启）。
  * remote 列工具失败时仍更新本地 mode、清空工具列表，主应用其它样例不受影响。
+ * 第九期进阶菜单可传入 {@link guide} 聚焦 Bearer 讲解。
  */
-export function McpPanel({ provider }: { provider: string }) {
+export function McpPanel({
+  provider,
+  guide = mcpGuide,
+  title = 'MCP',
+}: {
+  provider: string
+  guide?: SampleGuideData
+  title?: string
+}) {
   const [prompt, setPrompt] = useState('北京天气怎么样？再算 3+5')
   const [loading, setLoading] = useState(false)
   const [modeSwitching, setModeSwitching] = useState(false)
@@ -109,9 +119,9 @@ export function McpPanel({ provider }: { provider: string }) {
   }
 
   return (
-    <SampleFrame guide={mcpGuide}>
+    <SampleFrame guide={guide}>
       <Workbench
-        title="MCP"
+        title={title}
         hint={
           mode === 'remote'
             ? 'mode=remote：请先启动 mcp-server（8081），两端 MCP_BEARER_TOKEN 须一致（默认 dev-mcp-token）。401 时优先查密钥。可切 inprocess 免旁进程。'

@@ -13,6 +13,7 @@ import { McpPanel } from './panels/McpPanel'
 import { MemoryPanel } from './panels/MemoryPanel'
 import { MemoryExtractPanel } from './panels/MemoryExtractPanel'
 import { MemoryComparePanel } from './panels/MemoryComparePanel'
+import { mcpBearerGuide } from './guides'
 import { MultiAgentPanel } from './panels/MultiAgentPanel'
 import { RagPanel } from './panels/RagPanel'
 import { StructuredPanel } from './panels/StructuredPanel'
@@ -160,6 +161,9 @@ function App() {
         {sample === 'parentChild' && <ParentChildPanel provider={provider} />}
         {sample === 'memoryExtract' && <MemoryExtractPanel provider={provider} />}
         {sample === 'memoryCompare' && <MemoryComparePanel provider={provider} />}
+        {sample === 'mcpBearer' && (
+          <McpPanel provider={provider} guide={mcpBearerGuide} title="MCP Bearer" />
+        )}
       </AppShell.Main>
     </AppShell>
   )

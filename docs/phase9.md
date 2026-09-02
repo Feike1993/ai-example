@@ -11,7 +11,7 @@
 1. 起 `mcp-server`（默认校验 `Authorization: Bearer`）
 2. 无 token curl `/mcp` → **401**
 3. 主应用 remote 模式列工具（Client 自动带同密钥）
-4. Playground **MCP** Tab：remote 提示两端同 `MCP_BEARER_TOKEN`
+4. Playground 进阶 Tab **MCP Bearer**（或基础区 **MCP**）：remote 提示两端同 `MCP_BEARER_TOKEN`
 
 ## 怎么跑（摘要）
 

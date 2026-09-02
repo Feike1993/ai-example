@@ -21,6 +21,7 @@ export type AdvancedSampleId =
   | 'parentChild'
   | 'memoryExtract'
   | 'memoryCompare'
+  | 'mcpBearer'
 
 /** Playground 全部 Tab id。 */
 export type PlaygroundSampleId = BaselineSampleId | AdvancedSampleId
@@ -260,6 +261,19 @@ export const samples: readonly SampleMeta[] = [
     concepts: ['topK 宽窄', 'similarityThreshold', 'with vs without'],
     endpoint: 'POST /ai-example/memory/recall/compare',
     docPath: 'docs/samples/18-memory-recall-compare.md',
+  },
+  {
+    id: 'mcpBearer',
+    index: 17,
+    label: 'MCP Bearer',
+    description: '共享密钥鉴权',
+    stage: 'advanced',
+    phase: 9,
+    tagline: 'Server 校验 + Client 带凭证',
+    body: 'mcp-server 校验 Authorization Bearer；主应用 remote 自动带同 MCP_BEARER_TOKEN。inprocess 不要求鉴权。',
+    concepts: ['Bearer', '401', '同密钥约定'],
+    endpoint: 'GET /ai-example/mcp/tools（remote + Bearer）',
+    docPath: 'docs/samples/19-mcp-bearer.md',
   },
 ] as const
 
