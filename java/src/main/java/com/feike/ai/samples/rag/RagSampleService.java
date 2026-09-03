@@ -62,10 +62,18 @@ public class RagSampleService {
         回答用简体中文。
         """;
 
+    /**
+     * citation 路径专用 system：与 none 的自由文本不同，必须强制可机器校验的引用。
+     * <p>
+     * 为何用 C1..Cn 而非向量库 UUID：不同模型常把「文件名 / 序号」当成 sourceId；
+     * 短别名 + allowlist 是唯一清晰信号，再由 resolve 映回真实 id。
+     */
     private static final String SYSTEM_CITED = """
         你是助手。只根据「检索上下文」回答用户问题；上下文不足时明确说不知道，不要编造。
         必须返回 JSON：answer（简体中文答案）与 citations（数组，每项含 sourceId、quote）。
-        sourceId 必须是检索上下文中给出的文档 id；每条关键主张至少对应一条 citation。
+        sourceId 只能取上下文中 [id=...] 标注或「可用 sourceId」列表中的值（如 C1、C2），必须原样复制。
+        禁止使用文件名、Markdown 标题、正文序号或自造 id。
+        每条关键主张至少对应一条 citation。
         不要输出 Markdown 代码块。
         """;
 
@@ -672,8 +680,10 @@ public class RagSampleService {
         String context = buildContext(contextDocs);
 
         if (mode == CitationMode.required) {
+            // 与 none 分流：citation 不能再用 buildContext 的 [n] source=filename，
+            // 否则模型会抄文件名导致校验失败；全文 toSources 只用于拼 prompt，UI 仍用短摘录
             return answerWithCitations(
-                question, provider, context, sources, empty, retrievalMode, bundle, chunkingName
+                question, provider, toSources(hits, 0), sources, empty, retrievalMode, bundle, chunkingName
             );
         }
 
@@ -697,10 +707,19 @@ public class RagSampleService {
         );
     }
 
+    /**
+     * citationMode=required：短别名上下文 → 结构化输出 → 归一化 → 严格校验。
+     * <p>
+     * 为何先 resolve 再 validate：prompt 已消歧，但仍有模型回退填文件名/序号；
+     * 归一化是安全网，不编造缺失 citation，同文件多 chunk 的文件名仍故意失败以保可追溯。
+     *
+     * @param fullSources 全文 SourceView（拼 prompt）
+     * @param sources     对外返回的摘录 sources（与 UI 一致）
+     */
     private RagQueryResult answerWithCitations(
         String question,
         String provider,
-        String context,
+        List<SourceView> fullSources,
         List<SourceView> sources,
         boolean empty,
         RetrievalMode retrievalMode,
@@ -710,8 +729,9 @@ public class RagSampleService {
         if (structuredOutputInvoker == null) {
             throw new IllegalStateException("citationMode=required 需要 StructuredOutputInvoker");
         }
-        String userPrompt = "检索上下文（每段以 [id=...] 开头）：\n" + contextWithIds(sources, context)
-            + "\n\n用户问题：" + question;
+        // 别名与对外 sources 对齐：校验/响应里的 id 必须是 sources[].id，不能是 C1 留在 API 里
+        Map<String, String> aliases = CitationValidator.aliasMap(sources);
+        String userPrompt = buildCitedUserPrompt(fullSources, aliases, question);
         try {
             StructuredOutputInvoker.InvokeResult<CitationValidator.GroundedAnswer> invoke =
                 structuredOutputInvoker.invoke(
@@ -721,10 +741,12 @@ public class RagSampleService {
                     CitationValidator.GroundedAnswer.class
                 );
             CitationValidator.GroundedAnswer grounded = invoke.value();
-            List<CitationValidator.Citation> citations =
+            List<CitationValidator.Citation> raw =
                 grounded == null || grounded.citations() == null ? List.of() : grounded.citations();
+            // 对外 citations 返回归一化后的真实 id，便于 UI 与 sources[].id 对齐
+            List<CitationValidator.Citation> citations =
+                CitationValidator.resolveCitations(raw, aliases, sources);
             Set<String> allowed = CitationValidator.idsOf(sources);
-            // 校验引用
             CitationValidator.Result validation = CitationValidator.validate(citations, allowed);
             if (!validation.valid()) {
                 log.info("RAG citation 校验失败: {}", validation.detail());
@@ -789,16 +811,58 @@ public class RagSampleService {
     }
 
     /**
-     * 在 user prompt 里强调 id；上下文正文仍用 buildContext 结果，并在前附加 id 列表。
+     * citation 专用上下文：只用 C1..Cn 作为 sourceId 信号。
+     * <p>
+     * 为何不拼 source=filename / [1]：旧路径前缀 UUID + 正文序号文件名互相冲突，
+     * 模型几乎总抄 03-rag.md；此处正文只保留 [id=C#] + 文本，allowlist 再钉死可选集合。
+     * <p>
+     * 父子策略下若 metadata 含 parentText，用父全文作生成依据，但 sourceId 仍指向子块 id（与 sources 一致）。
      */
-    private static String contextWithIds(List<SourceView> sources, String context) {
-        StringBuilder sb = new StringBuilder();
-        for (SourceView source : sources) {
-            sb.append("[id=").append(source.id()).append("] source=")
-                .append(source.source() == null ? "" : source.source()).append('\n');
+    private String buildCitedUserPrompt(
+        List<SourceView> fullSources,
+        Map<String, String> aliases,
+        String question
+    ) {
+        StringBuilder allowlist = new StringBuilder();
+        for (String alias : aliases.keySet()) {
+            if (allowlist.length() > 0) {
+                allowlist.append(", ");
+            }
+            allowlist.append(alias);
         }
-        sb.append('\n').append(context);
-        return sb.toString();
+        StringBuilder body = new StringBuilder();
+        int index = 1;
+        List<SourceView> list = fullSources == null ? List.of() : fullSources;
+        for (SourceView source : list) {
+            if (source == null || source.id() == null || source.id().isBlank()) {
+                continue;
+            }
+            // 与 aliasMap 同序生成 C#，避免 allowlist 与正文 [id=] 错位
+            String alias = "C" + index;
+            body.append("[id=").append(alias).append("]\n");
+            body.append(citedChunkText(source)).append("\n\n");
+            index++;
+        }
+        return "检索上下文（每段以 [id=C#] 开头；sourceId 只能从 allowlist 原样复制）：\n"
+            + "可用 sourceId（必须原样复制，禁止用文件名或序号）：" + allowlist + "\n\n"
+            + body
+            + "用户问题：" + question;
+    }
+
+    /**
+     * 优先父全文：expandParent 开启时生成应看父段，但引用 id 仍是子块（sources 展示子块命中）。
+     */
+    private String citedChunkText(SourceView source) {
+        if (ragSettings.chunking().expandParent() && source.metadata() != null) {
+            Object parentText = source.metadata().get("parentText");
+            if (parentText != null) {
+                String text = String.valueOf(parentText);
+                if (!text.isBlank()) {
+                    return text;
+                }
+            }
+        }
+        return source.excerpt() == null ? "" : source.excerpt();
     }
 
     static CitationMode parseCitationMode(String value) {
