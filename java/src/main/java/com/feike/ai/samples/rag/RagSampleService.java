@@ -349,9 +349,13 @@ public class RagSampleService {
         String chunkingStrategy,
         String citationMode
     ) {
+        // 分块策略
         ChunkingStrategy chunking = parseChunkingStrategy(chunkingStrategy);
+        // 检索扩展
         QueryExpansion expansion = resolveExpansion(queryExpansion, rewriteQuery);
+        // 引用模式
         CitationMode citations = parseCitationMode(citationMode);
+        // 检索
         RetrievalBundle bundle = retrieveExpanded(
             question, topK, retrievalMode, expansion, provider, corpusFor(chunking)
         );
@@ -720,6 +724,7 @@ public class RagSampleService {
             List<CitationValidator.Citation> citations =
                 grounded == null || grounded.citations() == null ? List.of() : grounded.citations();
             Set<String> allowed = CitationValidator.idsOf(sources);
+            // 校验引用
             CitationValidator.Result validation = CitationValidator.validate(citations, allowed);
             if (!validation.valid()) {
                 log.info("RAG citation 校验失败: {}", validation.detail());
