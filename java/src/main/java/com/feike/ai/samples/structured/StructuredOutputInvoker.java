@@ -119,20 +119,22 @@ public class StructuredOutputInvoker {
         String userPrompt,
         BeanOutputConverter<T> converter
     ) {
-        var call = chatClient.prompt()
+        // CallResponseSpec 只能消费一次：先取 ChatResponse，再从中抽正文
+        var chatResponse = chatClient.prompt()
             .system(systemPrompt)
             .user("<data-boundary>\n" + userPrompt + "\n</data-boundary>")
-            .call();
-        TokenUsage usage = TokenUsageExtractor.from(call.chatResponse());
-        if (config.schemaValidationEnabled()) {
-            // 1. 模型输出直接带 schema，尝试直接解析
-            return new InvokeResult<>(
-                call.entity(converter, ChatClient.EntityParamSpec::validateSchema),
-                usage
-            );
+            .call()
+            .chatResponse();
+        TokenUsage usage = TokenUsageExtractor.from(chatResponse);
+        String content = "";
+        if (chatResponse != null
+            && chatResponse.getResult() != null
+            && chatResponse.getResult().getOutput() != null
+            && chatResponse.getResult().getOutput().getText() != null) {
+            content = chatResponse.getResult().getOutput().getText();
         }
-        // 2. 模型输出不带 schema，尝试修复 JSON 后解析
-        return new InvokeResult<>(convertWithRepair(call.content(), converter), usage);
+        // schemaValidationEnabled 时原先走 call.entity；因 CallResponseSpec 不可二次消费，统一本地解析
+        return new InvokeResult<>(convertWithRepair(content, converter), usage);
     }
 
     /**

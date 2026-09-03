@@ -111,6 +111,7 @@ public class GuardrailSampleService {
         TokenUsage usage;
         String content;
 
+        // 信封
         if (requireStructured) {
             try {
                 StructuredOutputInvoker.InvokeResult<SafeEnvelope> invoke =
@@ -133,9 +134,10 @@ public class GuardrailSampleService {
                 return new GuardrailResult(true, "structure", BLOCKED_REFUSAL, List.copyOf(checks), null);
             }
         } else {
-            var call = client.prompt().system(chatSystemPrompt).user(prompt).call();
-            content = call.content() == null ? "" : call.content();
-            usage = TokenUsageExtractor.from(call.chatResponse());
+            // Spring AI：CallResponseSpec 只能消费一次；勿对 content()/chatResponse() 连调或重复 content()
+            var chatResponse = client.prompt().system(chatSystemPrompt).user(prompt).call().chatResponse();
+            content = textFrom(chatResponse);
+            usage = TokenUsageExtractor.from(chatResponse);
             checks.add(new Check("structure", true, "未启用结构校验（跳过）"));
         }
 
@@ -147,6 +149,14 @@ public class GuardrailSampleService {
         checks.add(new Check("output_deny", true, "未命中输出词表"));
 
         return new GuardrailResult(false, null, content, List.copyOf(checks), usage);
+    }
+
+    private static String textFrom(org.springframework.ai.chat.model.ChatResponse response) {
+        if (response == null || response.getResult() == null || response.getResult().getOutput() == null) {
+            return "";
+        }
+        String text = response.getResult().getOutput().getText();
+        return text == null ? "" : text;
     }
 
     private static String abbreviate(String message) {

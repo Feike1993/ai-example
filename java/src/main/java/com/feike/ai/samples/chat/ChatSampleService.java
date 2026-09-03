@@ -54,7 +54,16 @@ public class ChatSampleService {
             spec = spec.options(OpenAiChatOptions.builder().temperature(temperature));
         }
         var call = spec.call();
-        return new ChatResult(call.content(), TokenUsageExtractor.from(call.chatResponse()));
+        // CallResponseSpec 只能消费一次：勿 content() 后再 chatResponse()
+        var chatResponse = call.chatResponse();
+        String content = "";
+        if (chatResponse != null
+            && chatResponse.getResult() != null
+            && chatResponse.getResult().getOutput() != null
+            && chatResponse.getResult().getOutput().getText() != null) {
+            content = chatResponse.getResult().getOutput().getText();
+        }
+        return new ChatResult(content, TokenUsageExtractor.from(chatResponse));
     }
 
     /**

@@ -12,6 +12,7 @@ import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
@@ -105,12 +106,15 @@ public class RagSampleService {
     private final StructuredOutputInvoker structuredOutputInvoker;
 
     /**
+     * Spring 注入入口。多构造器时必须标 {@link Autowired}，否则容器会找无参构造器并失败。
+     *
      * @param vectorStore              pgvector
      * @param registry                 Chat / Embedding
      * @param ragSettings              topK / chunkSize / 空检索 / Hybrid / chunking
      * @param keywordRetriever         关键词路；测试可传 {@code null}（Hybrid 回退向量）
      * @param structuredOutputInvoker  citationMode=required 时使用；测试可传 {@code null}
      */
+    @Autowired
     public RagSampleService(
         VectorStore vectorStore,
         LlmProviderRegistry registry,
