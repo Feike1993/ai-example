@@ -77,6 +77,17 @@ public class LlmProviderRegistry {
     }
 
     /**
+     * 返回已解析 Provider 的静态配置（不含密钥用途的对外暴露；仅供同进程合并 options）。
+     *
+     * @param providerId 已 {@link #resolveProviderId(String)} 的 id，或原始 id
+     * @return 配置；未知 id 时为 {@code null}
+     */
+    public AiProperties.Provider providerConfig(String providerId) {
+        String id = resolveProviderId(providerId);
+        return properties.providers().get(id);
+    }
+
+    /**
      * 返回不挂默认 Tools 的 ChatClient。
      *
      * @param providerId 空或 {@code default} 时回退到默认 Provider
@@ -164,19 +175,35 @@ public class LlmProviderRegistry {
         if (apiKey.isBlank()) {
             log.warn("Provider '{}' 未配置 API Key，进程可继续，但真实调用会失败", providerId);
         }
+        boolean bypassProxy = Boolean.TRUE.equals(cfg.bypassProxy());
         // 创建 OpenAiClient 实例
         OpenAIClient openAiClient = ApiPathResolver.buildOpenAiClient(
             cfg.baseUrl(),
-            apiKey.isBlank() ? "missing-key" : apiKey
+            apiKey.isBlank() ? "missing-key" : apiKey,
+            bypassProxy
         );
         // temperature的作用 是控制生成结果的随机性，值越小结果越确定，值越大结果越随机
         Double temperature = cfg.temperature() != null ? cfg.temperature() : properties.temperature();
         // 创建 OpenAiChatOptions 实例
-        OpenAiChatOptions options = OpenAiChatOptions.builder()
+        var optionsBuilder = OpenAiChatOptions.builder()
             .model(cfg.model())
-            .temperature(temperature)
-            .build();
-        log.info("Building ChatModel provider={} baseUrl={} model={}", providerId, cfg.baseUrl(), cfg.model());
+            .temperature(temperature);
+        // Qwen3.5/vLLM：默认 thinking 会占满 token 且 content=null；显式关掉才能被 Spring AI 读到正文
+        if (cfg.enableThinking() != null) {
+            optionsBuilder.extraBody(Map.of(
+                "chat_template_kwargs",
+                Map.of("enable_thinking", cfg.enableThinking())
+            ));
+        }
+        OpenAiChatOptions options = optionsBuilder.build();
+        log.info(
+            "Building ChatModel provider={} baseUrl={} model={} enableThinking={} bypassProxy={}",
+            providerId,
+            cfg.baseUrl(),
+            cfg.model(),
+            cfg.enableThinking(),
+            bypassProxy
+        );
         return OpenAiChatModel.builder()
             .openAiClient(openAiClient)
             .openAiClientAsync(openAiClient.async()) // 添加 async 客户端 作用：提高请求处理效率
@@ -204,7 +231,8 @@ public class LlmProviderRegistry {
         }
         OpenAIClient openAiClient = ApiPathResolver.buildOpenAiClient(
             cfg.baseUrl(),
-            apiKey.isBlank() ? "missing-key" : apiKey
+            apiKey.isBlank() ? "missing-key" : apiKey,
+            Boolean.TRUE.equals(cfg.bypassProxy())
         );
         AiProperties.Embedding emb = properties.embedding();
         OpenAiEmbeddingOptions options = OpenAiEmbeddingOptions.builder()

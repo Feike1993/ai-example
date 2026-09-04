@@ -26,6 +26,8 @@ export type AdvancedSampleId =
   | 'agentUsage'
   | 'guardrail'
   | 'ragCitation'
+  | 'memoryInformedRag'
+  | 'ragMemoryCompare'
 
 /** Playground 全部 Tab id。 */
 export type PlaygroundSampleId = BaselineSampleId | AdvancedSampleId
@@ -330,6 +332,32 @@ export const samples: readonly SampleMeta[] = [
     concepts: ['citationMode', 'citationValid', 'sourceId'],
     endpoint: 'POST /ai-example/rag/query (citationMode=required)',
     docPath: 'docs/samples/23-rag-citation.md',
+  },
+  {
+    id: 'memoryInformedRag',
+    index: 22,
+    label: '记忆辅助改写',
+    description: 'memory_rewrite',
+    stage: 'advanced',
+    phase: 12,
+    tagline: '记忆作查询先验',
+    body: '先 recall 个人事实，再改写检索短句查知识库；memoryHints 不进 RAG sources。',
+    concepts: ['memory_rewrite', 'memoryHints', 'rewrittenQuery'],
+    endpoint: 'POST /ai-example/rag/query (queryExpansion=memory_rewrite)',
+    docPath: 'docs/samples/24-memory-informed-rewrite.md',
+  },
+  {
+    id: 'ragMemoryCompare',
+    index: 23,
+    label: 'RAG vs 记忆',
+    description: '双路对照',
+    stage: 'advanced',
+    phase: 12,
+    tagline: '同问看清语料边界',
+    body: '并排知识库 vs 个人事实；generateAnswers=false 只比 sources。',
+    concepts: ['compare-memory', 'corpus 隔离', 'generateAnswers'],
+    endpoint: 'POST /ai-example/rag/query/compare-memory',
+    docPath: 'docs/samples/25-rag-vs-memory-compare.md',
   },
 ] as const
 

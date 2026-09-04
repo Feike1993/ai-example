@@ -7,6 +7,7 @@ import com.openai.core.Timeout;
 import com.openai.credential.BearerTokenCredential;
 import org.springframework.ai.openai.http.okhttp.SpringAiOpenAiHttpClient;
 
+import java.net.Proxy;
 import java.time.Duration;
 import java.util.regex.Pattern;
 
@@ -27,23 +28,42 @@ public final class ApiPathResolver {
     /**
      * 按 baseUrl / apiKey 创建官方 OpenAI Java 客户端（Spring AI 2.0 底层依赖）。
      *
-     * @param baseUrl 网关根地址，可省略末尾 {@code /v1}
-     * @param apiKey  Bearer Token
+     * @param baseUrl     网关根地址，可省略末尾 {@code /v1}
+     * @param apiKey      Bearer Token
+     * @param bypassProxy 为 true 时强制直连，忽略 JVM {@code https.proxyHost}
      * @return 可用于 {@code OpenAiChatModel} 的同步客户端
      */
-    public static OpenAIClient buildOpenAiClient(String baseUrl, String apiKey) {
+    public static OpenAIClient buildOpenAiClient(String baseUrl, String apiKey, boolean bypassProxy) {
         Timeout timeout = Timeout.builder()
             .connect(DEFAULT_CONNECT_TIMEOUT)
             .read(DEFAULT_READ_TIMEOUT)
             .build();
+        // 为何可按 Provider 关代理：IDEA 常设 https.proxyHost；公网域名若解析到 RFC1918，
+        // nonProxyHosts 只匹配主机名不匹配解析后 IP，请求会进代理并在 connect 超时（约 10s）失败。
+        // true: 忽略 JVM 代理设置，直连 false: 按 JVM 代理设置代理
+        var httpBuilder = SpringAiOpenAiHttpClient.builder().timeout(timeout);
+        if (bypassProxy) {
+            httpBuilder.proxy(Proxy.NO_PROXY);
+        }
         ClientOptions options = ClientOptions.Companion.builder()
             .apiKey(apiKey)
             .credential(BearerTokenCredential.create(apiKey))
             .baseUrl(resolveVersionedBaseUrl(baseUrl))
             .timeout(timeout)
-            .httpClient(SpringAiOpenAiHttpClient.builder().timeout(timeout).build())
+            .httpClient(httpBuilder.build())
             .build();
         return new OpenAIClientImpl(options);
+    }
+
+    /**
+     * 默认遵循 JVM 代理设置（与历史行为一致）。
+     *
+     * @param baseUrl 网关根地址
+     * @param apiKey  Bearer Token
+     * @return 同步客户端
+     */
+    public static OpenAIClient buildOpenAiClient(String baseUrl, String apiKey) {
+        return buildOpenAiClient(baseUrl, apiKey, false);
     }
 
     /**

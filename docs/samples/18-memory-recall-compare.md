@@ -46,4 +46,4 @@ curl -s http://localhost:8080/ai-example/memory/chat/compare \
 
 ## 刻意不做
 
-评测看板、分布式记忆、查询改写链。
+评测看板、分布式记忆、查询改写链（已由 [第十二期](../phase12.md) / [24](24-memory-informed-rewrite.md) 覆盖）。

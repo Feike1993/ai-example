@@ -103,12 +103,18 @@
 
 22. [输出护栏](samples/22-output-guardrail.md) → 23. [RAG 强制 citation](samples/23-rag-citation.md)
 
+## 第十二期：记忆×检索闭环（进阶）
+
+见 [phase12.md](phase12.md)：
+
+24. [记忆辅助改写](samples/24-memory-informed-rewrite.md) → 25. [RAG vs 记忆对照](samples/25-rag-vs-memory-compare.md)
+
 基础 vs 进阶分层：
 
 | 层次 | 范围 | 状态 |
 | --- | --- | --- |
 | **基础** | 最小 Agent 闭环 + MCP/RAG 入门 + 进程内上下文 + 同进程多 Agent + 基础补丁 A1–A5 | **已完成**（tag `v0.2.0`） |
-| **进阶** | Hybrid、评测、持久会话、长期记忆、MCP 远端、HyDE、分块、抽记忆、MCP 鉴权、可观测流式、护栏与引用等 | **第四～十一期** |
+| **进阶** | Hybrid、评测、持久会话、长期记忆、MCP 远端、HyDE、分块、抽记忆、MCP 鉴权、可观测流式、护栏与引用、记忆×检索闭环等 | **第四～十二期** |
 
 ## 刻意不做 / 后续候选
 

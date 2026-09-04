@@ -1,5 +1,6 @@
 package com.feike.ai.samples.chat;
 
+import com.feike.ai.core.AiProperties;
 import com.feike.ai.core.LlmProviderRegistry;
 import com.feike.ai.core.PromptLoader;
 import com.feike.ai.core.TokenUsage;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
 import java.io.IOException;
+import java.util.Map;
 
 /**
  * Chat 样例：同步补全与 token 流，对应学习路径里的 Token / 采样参数 / TTFT。
@@ -46,12 +48,21 @@ public class ChatSampleService {
      * @return 回复正文与 token 用量
      */
     public ChatResult chat(String prompt, Double temperature, String provider) {
+        String resolved = registry.resolveProviderId(provider);
         ChatClient chatClient = registry.plainClient(provider);
         // 1. 构建 Prompt
         var spec = chatClient.prompt().system(systemPrompt).user(prompt);
-        // 2. 可选：设置温度参数
+        // 2. 可选温度：须合并 Provider extraBody，否则会冲掉 enable_thinking
         if (temperature != null) {
-            spec = spec.options(OpenAiChatOptions.builder().temperature(temperature));
+            var optionsBuilder = OpenAiChatOptions.builder().temperature(temperature);
+            AiProperties.Provider cfg = registry.providerConfig(resolved);
+            if (cfg != null && cfg.enableThinking() != null) {
+                optionsBuilder.extraBody(Map.of(
+                    "chat_template_kwargs",
+                    Map.of("enable_thinking", cfg.enableThinking())
+                ));
+            }
+            spec = spec.options(optionsBuilder);
         }
         var call = spec.call();
         // CallResponseSpec 只能消费一次：勿 content() 后再 chatResponse()

@@ -85,18 +85,24 @@ public record AiProperties(
     /**
      * 单个 OpenAI 兼容网关。
      *
-     * @param label       前端展示名；空则用 provider id
-     * @param baseUrl     网关地址，可带或不带 {@code /v1}
-     * @param apiKey      调用密钥
-     * @param model       聊天模型名
-     * @param temperature 覆盖全局温度；为空则用 {@link AiProperties#temperature()}
+     * @param label          前端展示名；空则用 provider id
+     * @param baseUrl        网关地址，可带或不带 {@code /v1}
+     * @param apiKey         调用密钥
+     * @param model          聊天模型名
+     * @param temperature    覆盖全局温度；为空则用 {@link AiProperties#temperature()}
+     * @param enableThinking Qwen3 等思考模型：{@code false} 时经 extraBody 关闭 thinking，
+     *                       否则默认开思考会把正文写进 {@code reasoning}、{@code content} 为空
+     * @param bypassProxy    {@code true} 时 OkHttp 使用 {@link java.net.Proxy#NO_PROXY}，
+     *                       避免 IDE/系统 HTTPS 代理把「公网域名解析到内网 IP」的网关打到代理上超时
      */
     public record Provider(
         String label,
         String baseUrl,
         String apiKey,
         String model,
-        Double temperature
+        Double temperature,
+        Boolean enableThinking,
+        Boolean bypassProxy
     ) {}
 
     /**

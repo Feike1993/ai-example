@@ -90,6 +90,8 @@ export type RagQueryResponse = {
   citationMode?: string
   citations?: RagCitation[]
   citationValid?: boolean | null
+  rewrittenQuery?: string | null
+  memoryHints?: RagSource[]
 }
 
 export type RagCitation = {
@@ -122,6 +124,27 @@ export type RagExpansionView = {
   retrievalEmpty: boolean
   hypotheticalDocument?: string | null
   rewrittenQuery?: string | null
+  memoryHints?: RagSource[]
+}
+
+export type RagMemoryRewriteCompareResponse = {
+  none: RagExpansionView
+  rewrite: RagExpansionView
+  memoryRewrite: RagExpansionView
+}
+
+export type RagMemoryPathView = {
+  answer: string
+  sources: RagSource[]
+  retrievalEmpty: boolean
+  userId: string
+  usage: TokenUsage | null
+}
+
+export type RagMemoryCompareResponse = {
+  rag: RagQueryResponse
+  memory: RagMemoryPathView
+  generateAnswers: boolean
 }
 
 export type RagExpansionCompareResponse = {
