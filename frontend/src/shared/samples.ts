@@ -35,6 +35,18 @@ export type PlaygroundSampleId = BaselineSampleId | AdvancedSampleId
 /** @deprecated 宣传页仍用 BaselineSampleId；保留别名减少改动面。 */
 export type SampleId = BaselineSampleId
 
+/** 进阶侧栏主题分组（第十三期 IA；不含新样例）。 */
+export type AdvancedNavGroupId = 'rag' | 'memory' | 'mcp' | 'agentObs' | 'quality'
+
+/** 进阶侧栏分组顺序与标题。 */
+export const advancedNavGroups: readonly { id: AdvancedNavGroupId; label: string }[] = [
+  { id: 'rag', label: '检索进阶' },
+  { id: 'memory', label: '记忆' },
+  { id: 'mcp', label: 'MCP' },
+  { id: 'agentObs', label: 'Agent·可观测' },
+  { id: 'quality', label: '质量与护栏' },
+] as const
+
 export type SampleMeta = {
   id: PlaygroundSampleId
   index: number
@@ -42,6 +54,8 @@ export type SampleMeta = {
   description: string
   stage: LearningStage
   phase: PhaseId | AdvancedPhaseId
+  /** 进阶侧栏主题分组；仅 advanced 必填 */
+  navGroup?: AdvancedNavGroupId
   /** 宣传页主标题（不与侧栏 label/description 重复） */
   tagline: string
   /** 宣传页一段讲解：学什么、为什么 */
@@ -56,6 +70,7 @@ export type AdvancedSampleMeta = SampleMeta & {
   id: AdvancedSampleId
   stage: 'advanced'
   phase: AdvancedPhaseId
+  navGroup: AdvancedNavGroupId
 }
 
 /** 样例元数据：Playground 侧栏与宣传页（基础 8 项）单一数据源。 */
@@ -171,6 +186,7 @@ export const samples: readonly SampleMeta[] = [
     description: '向量 + 全文 + RRF',
     stage: 'advanced',
     phase: 4,
+    navGroup: 'rag',
     tagline: '向量与关键词双路召回',
     body: '在纯向量之上增加 PostgreSQL 全文检索路，用 RRF 融合排名；compare 接口并排对照 vector / hybrid。',
     concepts: ['PG 全文检索', 'RRF 融合', 'vector vs hybrid 对照'],
@@ -184,6 +200,7 @@ export const samples: readonly SampleMeta[] = [
     description: 'golden suite',
     stage: 'advanced',
     phase: 4,
+    navGroup: 'quality',
     tagline: 'golden 用例回归',
     body: '跑 classpath eval/golden/*.json，统计通过率、步数、工具失败率与 Token 用量。',
     concepts: ['golden 用例', '通过率报告', '多 target 覆盖'],
@@ -197,6 +214,7 @@ export const samples: readonly SampleMeta[] = [
     description: 'pgvector 事实库',
     stage: 'advanced',
     phase: 5,
+    navGroup: 'memory',
     tagline: '跨会话写入与召回事实',
     body: '与 RAG 演示语料隔离的 corpus；remember → recall → chat。空召回拒答，不编造。',
     concepts: ['独立 corpus', 'remember / recall', '与会话窗口区分'],
@@ -210,6 +228,7 @@ export const samples: readonly SampleMeta[] = [
     description: '假想文档检索',
     stage: 'advanced',
     phase: 6,
+    navGroup: 'rag',
     tagline: '用假想段落拉近问题与文档',
     body: 'Chat 生成假想知识库段落再 Embedding 检索；对照 none / rewrite；假想正文不得进 sources。',
     concepts: ['Hypothetical Document', 'queryExpansion', 'grounded sources'],
@@ -223,6 +242,7 @@ export const samples: readonly SampleMeta[] = [
     description: 'token vs 结构切',
     stage: 'advanced',
     phase: 7,
+    navGroup: 'rag',
     tagline: '切块边界改变召回单元',
     body: '对照 TokenTextSplitter 与 Markdown 标题/段落语义切；两套 corpus 并存。',
     concepts: ['结构感知分块', 'corpus 隔离', 'compare-chunking'],
@@ -236,6 +256,7 @@ export const samples: readonly SampleMeta[] = [
     description: '子检索父上下文',
     stage: 'advanced',
     phase: 7,
+    navGroup: 'rag',
     tagline: '小块检索，大块生成',
     body: '子块 Embedding 检索；命中后展开 parentText 去重拼上下文。',
     concepts: ['parent-child', 'expand-parent', '粒度解耦'],
@@ -249,6 +270,7 @@ export const samples: readonly SampleMeta[] = [
     description: '对话抽事实写入',
     stage: 'advanced',
     phase: 8,
+    navGroup: 'memory',
     tagline: '从对话抽出短事实再 remember',
     body: '显式 POST /memory/extract；Chat 抽 JSON 事实列表后走现有 remember（去重/合并）。不静默塞进 context/chat。',
     concepts: ['extract', 'facts → remember', 'session 快照可选'],
@@ -262,6 +284,7 @@ export const samples: readonly SampleMeta[] = [
     description: 'topK / 阈值 / 有无记忆',
     stage: 'advanced',
     phase: 8,
+    navGroup: 'memory',
     tagline: '并排看清召回与答案差异',
     body: 'recall/compare 三路 sources；chat/compare 有记忆 vs 纯 Chat。阈值依赖 score。',
     concepts: ['topK 宽窄', 'similarityThreshold', 'with vs without'],
@@ -275,6 +298,7 @@ export const samples: readonly SampleMeta[] = [
     description: '共享密钥鉴权',
     stage: 'advanced',
     phase: 9,
+    navGroup: 'mcp',
     tagline: 'Server 校验 + Client 带凭证',
     body: 'mcp-server 校验 Authorization Bearer；主应用 remote 自动带同 MCP_BEARER_TOKEN。inprocess 不要求鉴权。',
     concepts: ['Bearer', '401', '同密钥约定'],
@@ -288,6 +312,7 @@ export const samples: readonly SampleMeta[] = [
     description: 'tool_call 实时推送',
     stage: 'advanced',
     phase: 10,
+    navGroup: 'agentObs',
     tagline: '边跑边看工具轨迹',
     body: 'GET /agent/react/stream 推送 tool_call / tool_result；支持多跳；Timeline 增量更新。',
     concepts: ['tool_call', 'tool_result', '多跳'],
@@ -301,6 +326,7 @@ export const samples: readonly SampleMeta[] = [
     description: '多轮 TokenUsage',
     stage: 'advanced',
     phase: 10,
+    navGroup: 'agentObs',
     tagline: 'Agent 多跳用量合计',
     body: '同步 Trace.usage / usageCalls；流式 event:usage（含 calls）。网关未返回则为 null。',
     concepts: ['TokenUsage.sum', 'usageCalls', 'event:usage'],
@@ -314,6 +340,7 @@ export const samples: readonly SampleMeta[] = [
     description: '词表 + 结构校验',
     stage: 'advanced',
     phase: 11,
+    navGroup: 'quality',
     tagline: '答前答后硬约束',
     body: 'input/output deny-words 短路；可选 SafeEnvelope；响应带回 checks。',
     concepts: ['input_deny', 'output_deny', 'structure'],
@@ -327,6 +354,7 @@ export const samples: readonly SampleMeta[] = [
     description: '强制可校验引用',
     stage: 'advanced',
     phase: 11,
+    navGroup: 'rag',
     tagline: '有出处才答',
     body: 'citationMode=required：结构化 citations，sourceId 必须落在 sources。',
     concepts: ['citationMode', 'citationValid', 'sourceId'],
@@ -340,6 +368,7 @@ export const samples: readonly SampleMeta[] = [
     description: 'memory_rewrite',
     stage: 'advanced',
     phase: 12,
+    navGroup: 'rag',
     tagline: '记忆作查询先验',
     body: '先 recall 个人事实，再改写检索短句查知识库；memoryHints 不进 RAG sources。',
     concepts: ['memory_rewrite', 'memoryHints', 'rewrittenQuery'],
@@ -353,6 +382,7 @@ export const samples: readonly SampleMeta[] = [
     description: '双路对照',
     stage: 'advanced',
     phase: 12,
+    navGroup: 'rag',
     tagline: '同问看清语料边界',
     body: '并排知识库 vs 个人事实；generateAnswers=false 只比 sources。',
     concepts: ['compare-memory', 'corpus 隔离', 'generateAnswers'],
@@ -368,8 +398,22 @@ export const baselineSamples: readonly BaselineSampleMeta[] = samples.filter(
 
 /** 进阶样例（仅 Playground）。 */
 export const advancedSamples: readonly AdvancedSampleMeta[] = samples.filter(
-  (s): s is AdvancedSampleMeta => s.stage === 'advanced',
+  (s): s is AdvancedSampleMeta => s.stage === 'advanced' && s.navGroup != null,
 )
+
+/** 按主题分组的进阶样例（侧栏顺序固定）。 */
+export function groupAdvancedSamples(): {
+  group: (typeof advancedNavGroups)[number]
+  items: AdvancedSampleMeta[]
+}[] {
+  return advancedNavGroups.map((group) => ({
+    group,
+    items: advancedSamples
+      .filter((s) => s.navGroup === group.id)
+      .slice()
+      .sort((a, b) => a.index - b.index),
+  }))
+}
 
 export function getSampleById(id: BaselineSampleId): BaselineSampleMeta {
   const found = baselineSamples.find((s) => s.id === id)

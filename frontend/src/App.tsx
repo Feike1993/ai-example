@@ -31,6 +31,7 @@ import { stageHints, stageLabels, type LearningStage } from './shared/brand'
 import {
   advancedSamples,
   baselineSamples,
+  groupAdvancedSamples,
   type AdvancedSampleMeta,
   type BaselineSampleMeta,
   type PlaygroundSampleId,
@@ -51,10 +52,7 @@ function App() {
   const [providers, setProviders] = useState<ProviderView[]>([])
 
   const stage = sampleStage(sample)
-  const visibleSamples = useMemo(
-    () => (stage === 'baseline' ? baselineSamples : advancedSamples),
-    [stage],
-  )
+  const advancedGroups = useMemo(() => groupAdvancedSamples(), [])
 
   useEffect(() => {
     void listProviders()
@@ -126,15 +124,30 @@ function App() {
             {stageHints[stage]}
           </Text>
           <Stack gap={2} mb="md">
-            {visibleSamples.map((item) => (
-              <CompactNavItem
-                key={item.id}
-                item={item}
-                active={sample === item.id}
-                advanced={stage === 'advanced'}
-                onSelect={() => setSample(item.id)}
-              />
-            ))}
+            {stage === 'baseline'
+              ? baselineSamples.map((item) => (
+                  <CompactNavItem
+                    key={item.id}
+                    item={item}
+                    active={sample === item.id}
+                    advanced={false}
+                    onSelect={() => setSample(item.id)}
+                  />
+                ))
+              : advancedGroups.map(({ group, items }) => (
+                  <Stack key={group.id} gap={2} className="nav-group">
+                    <Text className="nav-group-label">{group.label}</Text>
+                    {items.map((item) => (
+                      <CompactNavItem
+                        key={item.id}
+                        item={item}
+                        active={sample === item.id}
+                        advanced
+                        onSelect={() => setSample(item.id)}
+                      />
+                    ))}
+                  </Stack>
+                ))}
           </Stack>
           <Select
             label="模型"

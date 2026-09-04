@@ -1,6 +1,6 @@
 # AI Agent 学习样例
 
-独立的 Agent 学习 cookbook。**基础闭环 v0.2.0**（一至三期 + 基础补丁）；进阶至**第十二期**：记忆辅助改写 + RAG/记忆对照（Hybrid / 评测 / 记忆 / MCP / HyDE / 分块 / 护栏与引用等见各 phase 文档）。
+独立的 Agent 学习 cookbook。**基础闭环 v0.2.0**（一至三期 + 基础补丁）；进阶至**第十三期**：Playground 进阶侧栏按主题分组（第十二期记忆×检索闭环等能力见各 phase 文档）。
 
 **宣传**：[基础闭环宣传页](frontend/promo.html) · [方版宣传图](frontend/public/promo/opensource-poster-1080.png)（源文件 [poster.html](frontend/poster.html)，导出 `cd frontend && pnpm poster:export`）
 
@@ -17,6 +17,7 @@
 - **第十期**：Agent 逐步 tool SSE → TokenUsage 累加（见 [phase10](docs/phase10.md)）
 - **第十一期**：输出护栏 → RAG 强制 citation（见 [phase11](docs/phase11.md)）
 - **第十二期**：记忆辅助改写 → RAG vs 记忆对照（见 [phase12](docs/phase12.md)）
+- **第十三期**：进阶侧栏主题分组（见 [phase13](docs/phase13.md)）
 
 Java：**Spring Boot 4.1 + Spring AI 2.0 + Gradle**；Python：**LangGraph / MCP SDK**；前端：**Vite + React playground**。
 
@@ -62,7 +63,7 @@ Java：**Spring Boot 4.1 + Spring AI 2.0 + Gradle**；Python：**LangGraph / MCP
 | 12 | 记忆辅助改写 | memory_rewrite | `POST /ai-example/rag/query`（`queryExpansion=memory_rewrite`） | `samples.memory_informed_rag` |
 | 12 | RAG vs 记忆 | 双路对照 | `POST /ai-example/rag/query/compare-memory` | `samples.rag_memory_compare` |
 
-文档：[学习路径](docs/learning-path.md) · [基础补丁](docs/baseline-patches.md) · [集成说明](docs/integration.md) · [第二期](docs/phase2.md) · [第三期](docs/phase3.md) · [第四期](docs/phase4.md) · [第五期](docs/phase5.md) · [第六期](docs/phase6.md) · [第七期](docs/phase7.md) · [第八期](docs/phase8.md) · [第九期](docs/phase9.md) · [第十期](docs/phase10.md) · [第十一期](docs/phase11.md) · [第十二期](docs/phase12.md) · [CHANGELOG](CHANGELOG.md) · [刻意不做 backlog](docs/backlog.md)
+文档：[学习路径](docs/learning-path.md) · [基础补丁](docs/baseline-patches.md) · [集成说明](docs/integration.md) · [第二期](docs/phase2.md) · [第三期](docs/phase3.md) · [第四期](docs/phase4.md) · [第五期](docs/phase5.md) · [第六期](docs/phase6.md) · [第七期](docs/phase7.md) · [第八期](docs/phase8.md) · [第九期](docs/phase9.md) · [第十期](docs/phase10.md) · [第十一期](docs/phase11.md) · [第十二期](docs/phase12.md) · [第十三期](docs/phase13.md) · [CHANGELOG](CHANGELOG.md) · [刻意不做 backlog](docs/backlog.md)
 
 ## 环境
 

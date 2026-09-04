@@ -55,7 +55,7 @@ uv run pytest tests/test_memory_informed_rag.py tests/test_rag_memory_compare.py
 
 ## 前端 / 索引
 
-- Playground 进阶样例 index 22–23；`AdvancedPhaseId` 含 `12`
-- 根索引 `GET /` → `advanced.phase=12`，含 `memoryInformedRag` / `ragMemoryCompare`
+- Playground 进阶样例 index 22–23；`AdvancedPhaseId` 含 `12`（第十三期起侧栏按主题分组，见 [phase13.md](phase13.md)）
+- 根索引 `GET /` → `advanced.phase` 随最新期更新；含 `memoryInformedRag` / `ragMemoryCompare`
 
 刻意不做：记忆并入 RAG corpus、Redis、静默 extract→rewrite、自动融合双路答案 — 见 [backlog.md](backlog.md)。

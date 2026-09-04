@@ -150,4 +150,11 @@ Python：`semantic_chunk.py`、`parent_child_rag.py`。
 - `POST /rag/query/compare-memory-rewrite`、`POST /rag/query/compare-memory`
 - 前端 MemoryInformedRag / RagMemoryCompare；Python `memory_informed_rag` / `rag_memory_compare`
 
+### 第十三期
+
+#### Playground 进阶侧栏
+
+- 进阶样例 `navGroup` 主题分组（检索 / 记忆 / MCP / 可观测 / 护栏）；无新 API
+- 见 [phase13.md](phase13.md)
+
 刻意不做总表：[backlog.md](backlog.md)。

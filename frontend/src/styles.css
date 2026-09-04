@@ -162,6 +162,23 @@ body::before {
   line-height: 1.2;
 }
 
+.nav-group {
+  margin-top: 0.45rem;
+}
+
+.nav-group:first-child {
+  margin-top: 0;
+}
+
+.nav-group-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: rgba(20, 36, 28, 0.48);
+  padding: 0.15rem 0.5rem 0.2rem;
+  line-height: 1.2;
+}
+
 .nav-item--advanced[data-active] {
   background: #1e4d42;
 }

@@ -13,10 +13,10 @@ import java.util.Map;
 public class IndexController {
 
     /**
- * 返回样例清单，按基础闭环与进阶（第四至十二期）分组。
- *
- * @return 项目名、baseline / advanced 样例路径
- */
+     * 返回样例清单，按基础闭环与进阶（第四至十二期能力 + 第十三期导航整理）分组。
+     *
+     * @return 项目名、baseline / advanced 样例路径
+     */
     @GetMapping("/")
     public Map<String, Object> index() {
         Map<String, Object> body = new LinkedHashMap<>();
@@ -39,7 +39,7 @@ public class IndexController {
         body.put("baseline", baseline);
 
         Map<String, Object> advanced = new LinkedHashMap<>();
-        advanced.put("phase", 12);
+        advanced.put("phase", 13);
         Map<String, String> advancedSamples = new LinkedHashMap<>();
         advancedSamples.put(
             "hybridRag",

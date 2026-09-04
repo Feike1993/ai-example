@@ -185,3 +185,15 @@ Hybrid RAG、golden 评测、Redis 持久会话、逐步 tool SSE、流式 token
 ### 文档
 
 - [phase12.md](docs/phase12.md)、[24-memory-informed-rewrite.md](docs/samples/24-memory-informed-rewrite.md)、[25-rag-vs-memory-compare.md](docs/samples/25-rag-vs-memory-compare.md)
+
+## [Unreleased] — 第十三期（Playground 进阶侧栏整理）
+
+### 导航 IA
+
+- 进阶侧栏按主题常显分组：检索进阶 / 记忆 / MCP / Agent·可观测 / 质量与护栏
+- `navGroup` + `groupAdvancedSamples()`；不新增样例、不改 API
+- `GET /` → `advanced.phase=13`
+
+### 文档
+
+- [phase13.md](docs/phase13.md)

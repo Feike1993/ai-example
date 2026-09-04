@@ -36,6 +36,7 @@
 | Agent 逐步 tool SSE + TokenUsage 累加 | A2/A4 后 | 已覆盖 | 第十期 | 见 [20](samples/20-agent-tool-sse.md)、[21](samples/21-stream-token-usage.md) |
 | 输出护栏 + RAG 强制 citation | 进阶候选 | 已覆盖 | 第十一期 | 见 [22](samples/22-output-guardrail.md)、[23](samples/23-rag-citation.md) |
 | 记忆辅助改写 + RAG/记忆对照 | 样例 18 刻意留白 | 已覆盖 | 第十二期 | 见 [24](samples/24-memory-informed-rewrite.md)、[25](samples/25-rag-vs-memory-compare.md) |
+| Playground 进阶侧栏主题分组 | 进阶项平铺难扫 | 已覆盖 | 第十三期 | 见 [phase13.md](phase13.md)；无新样例 |
 | 混合检索（向量 + 关键词 + RRF） | 第二期 | 已覆盖 | 第四期 Hybrid RAG | `retrievalMode=hybrid` + compare API |
 | 完整评测平台（golden / 回归） | 第三期 | 已覆盖（最小 harness） | 第四期 Eval | `POST /eval/run`；无看板 |
 | DB 持久会话（PostgreSQL） | 第三期 | 已覆盖 | 第五期 | `JdbcChatSessionStore`；Redis 仍为候选 |
