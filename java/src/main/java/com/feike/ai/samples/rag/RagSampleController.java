@@ -34,9 +34,12 @@ public class RagSampleController {
      * @param topK              可选覆盖默认 topK
      * @param retrievalMode     {@code vector}（默认）或 {@code hybrid}
      * @param rewriteQuery      是否改写问题后再检索（兼容；等价 queryExpansion=rewrite）
-     * @param queryExpansion    {@code none} / {@code rewrite} / {@code hyde}；优先于 rewriteQuery
+     * @param queryExpansion    {@code none} / {@code rewrite} / {@code hyde} / {@code memory_rewrite}
      * @param chunkingStrategy  {@code token}（默认）或 {@code semantic}
      * @param citationMode      {@code none}（默认）或 {@code required}
+     * @param userId            memory_rewrite / compare-memory 用
+     * @param memoryTopK        记忆召回条数
+     * @param generateAnswers   compare-memory 是否生成答案
      */
     public record RagQueryRequest(
         @NotBlank String question,
@@ -46,7 +49,10 @@ public class RagSampleController {
         Boolean rewriteQuery,
         String queryExpansion,
         String chunkingStrategy,
-        String citationMode
+        String citationMode,
+        String userId,
+        Integer memoryTopK,
+        Boolean generateAnswers
     ) {}
 
     public record RagIngestRequest(String strategy) {}
@@ -75,7 +81,9 @@ public class RagSampleController {
             request.rewriteQuery(),
             request.queryExpansion(),
             request.chunkingStrategy(),
-            request.citationMode()
+            request.citationMode(),
+            request.userId(),
+            request.memoryTopK()
         );
     }
 
@@ -98,6 +106,39 @@ public class RagSampleController {
             request.provider(),
             request.topK(),
             parseMode(request.retrievalMode())
+        );
+    }
+
+    /**
+     * none / rewrite / memory_rewrite 三路检索对照（默认只比 sources）。
+     */
+    @PostMapping("/query/compare-memory-rewrite")
+    public RagSampleService.MemoryRewriteCompareResult queryCompareMemoryRewrite(
+        @RequestBody @Validated RagQueryRequest request
+    ) {
+        return ragSampleService.queryCompareMemoryRewrite(
+            request.question(),
+            request.provider(),
+            request.topK(),
+            request.userId(),
+            request.memoryTopK()
+        );
+    }
+
+    /**
+     * RAG vs 记忆双路对照。
+     */
+    @PostMapping("/query/compare-memory")
+    public RagSampleService.MemoryRagCompareResult queryCompareMemory(
+        @RequestBody @Validated RagQueryRequest request
+    ) {
+        return ragSampleService.queryCompareMemory(
+            request.question(),
+            request.provider(),
+            request.topK(),
+            request.userId(),
+            request.memoryTopK(),
+            request.generateAnswers()
         );
     }
 

@@ -62,3 +62,5 @@ cd python && uv run python -m ai_example.samples.long_term_memory
 ## 刻意不做
 
 自动从对话抽取记忆的 Agent、多租户权限、异步索引 — 见 [backlog](../backlog.md)。
+
+记忆辅助的 **查询改写**（`memory_rewrite`）与 RAG/记忆双路对照不在本样例：见 [第十二期](../phase12.md) / [24](24-memory-informed-rewrite.md) / [25](25-rag-vs-memory-compare.md)。

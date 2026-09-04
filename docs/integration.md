@@ -142,4 +142,12 @@ Python：`semantic_chunk.py`、`parent_child_rag.py`。
 - RAG `citationMode=required` + `CitationValidator`
 - 前端 Guardrail / RagCitation；Python `guardrail_chat` / `rag_citation`
 
+### 第十二期
+
+#### 记忆×检索闭环
+
+- RAG `queryExpansion=memory_rewrite` + `memoryHints` / `rewrittenQuery`（hints 不进 sources）
+- `POST /rag/query/compare-memory-rewrite`、`POST /rag/query/compare-memory`
+- 前端 MemoryInformedRag / RagMemoryCompare；Python `memory_informed_rag` / `rag_memory_compare`
+
 刻意不做总表：[backlog.md](backlog.md)。

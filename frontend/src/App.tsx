@@ -14,7 +14,15 @@ import { MemoryPanel } from './panels/MemoryPanel'
 import { MemoryExtractPanel } from './panels/MemoryExtractPanel'
 import { MemoryComparePanel } from './panels/MemoryComparePanel'
 import { GuardrailPanel } from './panels/GuardrailPanel'
-import { mcpBearerGuide, agentToolSseGuide, agentUsageGuide, guardrailGuide, ragCitationGuide } from './guides'
+import { MemoryInformedRagPanel } from './panels/MemoryInformedRagPanel'
+import { RagMemoryComparePanel } from './panels/RagMemoryComparePanel'
+import {
+  mcpBearerGuide,
+  agentToolSseGuide,
+  agentUsageGuide,
+  guardrailGuide,
+  ragCitationGuide,
+} from './guides'
 import { MultiAgentPanel } from './panels/MultiAgentPanel'
 import { RagPanel } from './panels/RagPanel'
 import { StructuredPanel } from './panels/StructuredPanel'
@@ -196,6 +204,8 @@ function App() {
             allowSse={false}
           />
         )}
+        {sample === 'memoryInformedRag' && <MemoryInformedRagPanel provider={provider} />}
+        {sample === 'ragMemoryCompare' && <RagMemoryComparePanel provider={provider} />}
       </AppShell.Main>
     </AppShell>
   )

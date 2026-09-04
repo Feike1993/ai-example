@@ -103,7 +103,7 @@ app:
         label: 阿里云百炼
         base-url: https://dashscope.aliyuncs.com/compatible-mode
         api-key: ${PROVIDER_DASHSCOPE_API_KEY:}
-        model: ${PROVIDER_DASHSCOPE_MODEL:qwen3.5-flash}
+        model: ${PROVIDER_DASHSCOPE_MODEL:qwen3.8-max}
       kimi:
         label: Kimi
         base-url: https://api.moonshot.cn/v1
@@ -115,6 +115,17 @@ app:
         base-url: https://open.bigmodel.cn/api/coding/paas/v4
         api-key: ${PROVIDER_GLM_API_KEY:}
         model: ${PROVIDER_GLM_MODEL:glm-5}
+      # id 不用 qwen3.5：YAML/Spring 会把点当成嵌套路径
+      qwen35:
+        label: qwen3.5
+        base-url: https://vllm.naradapower.com
+        api-key: ${PROVIDER_QWEN35_API_KEY:}
+        model: ${PROVIDER_QWEN35_MODEL:qwennaradav1}
+        # 默认 thinking 时 OpenAI 兼容响应 content=null、正文在 reasoning，本仓读不到
+        enable-thinking: false
+        # 域名常解析到内网 IP；IDEA https.proxyHost 不会因 10.0.0.0/8 nonProxy 规则绕过主机名
+        # true: 忽略 JVM 代理设置，直连 false: 按 JVM 代理设置代理
+        bypass-proxy: true
     # 结构化输入参数
     structured:
       # 重试次数

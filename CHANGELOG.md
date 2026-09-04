@@ -168,3 +168,20 @@ Hybrid RAG、golden 评测、Redis 持久会话、逐步 tool SSE、流式 token
 ### 文档
 
 - [phase11.md](docs/phase11.md)、[22-output-guardrail.md](docs/samples/22-output-guardrail.md)、[23-rag-citation.md](docs/samples/23-rag-citation.md)
+
+## [Unreleased] — 第十二期进阶（记忆×检索闭环）
+
+### 记忆辅助改写
+
+- `queryExpansion=memory_rewrite`：recall → 改写 → RAG；响应 `memoryHints` / `rewrittenQuery`
+- `POST /rag/query/compare-memory-rewrite`：none / rewrite / memory_rewrite 三路
+- 前端 **MemoryInformedRag**；Python `memory_informed_rag`
+
+### RAG vs 记忆对照
+
+- `POST /rag/query/compare-memory`：同问双路；`generateAnswers` 可只比 sources
+- 前端 **RagMemoryCompare**；Python `rag_memory_compare`
+
+### 文档
+
+- [phase12.md](docs/phase12.md)、[24-memory-informed-rewrite.md](docs/samples/24-memory-informed-rewrite.md)、[25-rag-vs-memory-compare.md](docs/samples/25-rag-vs-memory-compare.md)

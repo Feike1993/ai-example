@@ -4,6 +4,7 @@ import com.feike.ai.core.AiProperties;
 import com.feike.ai.core.LlmProviderRegistry;
 import com.feike.ai.core.TokenUsage;
 import com.feike.ai.core.TokenUsageExtractor;
+import com.feike.ai.samples.memory.MemorySampleService;
 import com.feike.ai.samples.structured.StructuredOutputInvoker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,6 +13,7 @@ import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.Resource;
@@ -58,7 +60,10 @@ public class RagSampleService {
             + "请重试，或改用 citationMode=none。";
 
     private static final String SYSTEM_GROUNDED = """
-        你是助手。只根据「检索上下文」回答用户问题；上下文不足或为空时明确说不知道，不要编造。
+        你是助手。只根据「检索上下文」回答用户问题；不要编造，也不要用上下文之外的知识补全。
+        若用户一题多问：分别处理各子问——上下文能支撑的子问先给出正面简要回答；不能支撑的子问再单独标明不知道。
+        禁止因某一个子问无法回答，就对整题只回复「不知道」。
+        上下文整体为空或与全部子问都无关时，才可以说不知道。
         回答用简体中文。
         """;
 
@@ -69,13 +74,22 @@ public class RagSampleService {
      * 短别名 + allowlist 是唯一清晰信号，再由 resolve 映回真实 id。
      */
     private static final String SYSTEM_CITED = """
-        你是助手。只根据「检索上下文」回答用户问题；上下文不足时明确说不知道，不要编造。
+        你是助手。只根据「检索上下文」回答用户问题；不要编造，也不要用上下文之外的知识补全。
+        若用户一题多问：分别处理各子问——上下文能支撑的子问先在 answer 中给出正面简要回答；不能支撑的子问再单独标明不知道。
+        禁止因某一个子问无法回答，就对整题只回复「不知道」。
+        上下文整体为空或与全部子问都无关时，才可以说不知道。
         必须返回 JSON：answer（简体中文答案）与 citations（数组，每项含 sourceId、quote）。
         sourceId 只能取上下文中 [id=...] 标注或「可用 sourceId」列表中的值（如 C1、C2），必须原样复制。
         禁止使用文件名、Markdown 标题、正文序号或自造 id。
         每条关键主张至少对应一条 citation。
         不要输出 Markdown 代码块。
         """;
+
+    /** 拼进 user 消息，强化复合问偏答（部分模型仅靠 system 仍会整题拒答）。 */
+    private static final String PARTIAL_ANSWER_HINT =
+        "作答要求：若问题含多个子问，分别处理——"
+            + "上下文能支撑的子问必须先正面简要回答；不能支撑的子问再标明不知道；"
+            + "禁止对整题只回复「不知道」。";
 
     /** 检索模式：纯向量或 Hybrid RRF。 */
     public enum RetrievalMode {
@@ -85,11 +99,13 @@ public class RagSampleService {
         hybrid
     }
 
-    /** 查询扩展：无 / 改写短句 / HyDE 假想文档。 */
+    /** 查询扩展：无 / 改写短句 / HyDE 假想文档 / 记忆辅助改写。 */
     public enum QueryExpansion {
         none,
         rewrite,
-        hyde
+        hyde,
+        /** 先 recall 记忆再改写查询（第十二期）；记忆不进 RAG sources */
+        memory_rewrite
     }
 
     /** 分块策略：固定 token、结构语义、或父子文档（7b）。 */
@@ -108,10 +124,12 @@ public class RagSampleService {
     private final VectorStore vectorStore;
     private final LlmProviderRegistry registry;
     private final AiProperties.Rag ragSettings;
+    private final AiProperties.Memory memorySettings;
     private final TokenTextSplitter splitter;
     private final SemanticMarkdownSplitter semanticSplitter;
     private final RagKeywordRetriever keywordRetriever;
     private final StructuredOutputInvoker structuredOutputInvoker;
+    private final MemorySampleService memorySampleService;
 
     /**
      * Spring 注入入口。多构造器时必须标 {@link Autowired}，否则容器会找无参构造器并失败。
@@ -121,6 +139,8 @@ public class RagSampleService {
      * @param ragSettings              topK / chunkSize / 空检索 / Hybrid / chunking
      * @param keywordRetriever         关键词路；测试可传 {@code null}（Hybrid 回退向量）
      * @param structuredOutputInvoker  citationMode=required 时使用；测试可传 {@code null}
+     * @param memorySampleService      记忆召回（与 RAG 同开关联动）
+     * @param properties               读取 memory 默认 userId / topK
      */
     @Autowired
     public RagSampleService(
@@ -128,13 +148,17 @@ public class RagSampleService {
         LlmProviderRegistry registry,
         AiProperties.Rag ragSettings,
         RagKeywordRetriever keywordRetriever,
-        StructuredOutputInvoker structuredOutputInvoker
+        StructuredOutputInvoker structuredOutputInvoker,
+        ObjectProvider<MemorySampleService> memorySampleService,
+        AiProperties properties
     ) {
         this.vectorStore = vectorStore;
         this.registry = registry;
         this.ragSettings = ragSettings;
+        this.memorySettings = properties.memory();
         this.keywordRetriever = keywordRetriever;
         this.structuredOutputInvoker = structuredOutputInvoker;
+        this.memorySampleService = memorySampleService.getIfAvailable();
         this.splitter = TokenTextSplitter.builder()
             .withChunkSize(ragSettings.chunkSize())
             .build();
@@ -142,7 +166,34 @@ public class RagSampleService {
     }
 
     /**
-     * 测试兼容：无 structured invoker。
+     * 测试兼容：直接传 Rag 配置与可选 Memory。
+     */
+    public RagSampleService(
+        VectorStore vectorStore,
+        LlmProviderRegistry registry,
+        AiProperties.Rag ragSettings,
+        RagKeywordRetriever keywordRetriever,
+        StructuredOutputInvoker structuredOutputInvoker,
+        MemorySampleService memorySampleService,
+        AiProperties.Memory memorySettings
+    ) {
+        this.vectorStore = vectorStore;
+        this.registry = registry;
+        this.ragSettings = ragSettings;
+        this.memorySettings = memorySettings == null
+            ? new AiProperties.Memory(4, "demo", 0.92, 5)
+            : memorySettings;
+        this.keywordRetriever = keywordRetriever;
+        this.structuredOutputInvoker = structuredOutputInvoker;
+        this.memorySampleService = memorySampleService;
+        this.splitter = TokenTextSplitter.builder()
+            .withChunkSize(ragSettings.chunkSize())
+            .build();
+        this.semanticSplitter = new SemanticMarkdownSplitter(ragSettings.chunkSize());
+    }
+
+    /**
+     * 测试兼容：无 structured / memory。
      */
     public RagSampleService(
         VectorStore vectorStore,
@@ -150,7 +201,36 @@ public class RagSampleService {
         AiProperties.Rag ragSettings,
         RagKeywordRetriever keywordRetriever
     ) {
-        this(vectorStore, registry, ragSettings, keywordRetriever, null);
+        this(
+            vectorStore,
+            registry,
+            ragSettings,
+            keywordRetriever,
+            (StructuredOutputInvoker) null,
+            (MemorySampleService) null,
+            (AiProperties.Memory) null
+        );
+    }
+
+    /**
+     * 测试兼容：无 memory。
+     */
+    public RagSampleService(
+        VectorStore vectorStore,
+        LlmProviderRegistry registry,
+        AiProperties.Rag ragSettings,
+        RagKeywordRetriever keywordRetriever,
+        StructuredOutputInvoker structuredOutputInvoker
+    ) {
+        this(
+            vectorStore,
+            registry,
+            ragSettings,
+            keywordRetriever,
+            structuredOutputInvoker,
+            (MemorySampleService) null,
+            (AiProperties.Memory) null
+        );
     }
 
     /** 幂等重建演示索引（默认 token corpus，与二期一致）。 */
@@ -357,15 +437,35 @@ public class RagSampleService {
         String chunkingStrategy,
         String citationMode
     ) {
-        // 分块策略
+        return query(
+            question, provider, topK, retrievalMode, rewriteQuery, queryExpansion,
+            chunkingStrategy, citationMode, null, null
+        );
+    }
+
+    /**
+     * 检索 + 同步生成；支持 memory_rewrite 的 userId / memoryTopK。
+     *
+     * @param userId      记忆用户；空则用配置默认
+     * @param memoryTopK  记忆召回条数；空则用配置默认
+     */
+    public RagQueryResult query(
+        String question,
+        String provider,
+        Integer topK,
+        RetrievalMode retrievalMode,
+        Boolean rewriteQuery,
+        String queryExpansion,
+        String chunkingStrategy,
+        String citationMode,
+        String userId,
+        Integer memoryTopK
+    ) {
         ChunkingStrategy chunking = parseChunkingStrategy(chunkingStrategy);
-        // 检索扩展
         QueryExpansion expansion = resolveExpansion(queryExpansion, rewriteQuery);
-        // 引用模式
         CitationMode citations = parseCitationMode(citationMode);
-        // 检索
         RetrievalBundle bundle = retrieveExpanded(
-            question, topK, retrievalMode, expansion, provider, corpusFor(chunking)
+            question, topK, retrievalMode, expansion, provider, corpusFor(chunking), userId, memoryTopK
         );
         return answerFromHits(question, provider, bundle, retrievalMode, chunking, citations);
     }
@@ -397,6 +497,122 @@ public class RagSampleService {
             toExpansionView(rewrite),
             toExpansionView(hyde)
         );
+    }
+
+    /**
+     * none / rewrite / memory_rewrite 三路对照（默认只比 sources）。
+     */
+    public MemoryRewriteCompareResult queryCompareMemoryRewrite(
+        String question,
+        String provider,
+        Integer topK,
+        String userId,
+        Integer memoryTopK
+    ) {
+        RetrievalBundle none = retrieveExpanded(
+            question, topK, RetrievalMode.vector, QueryExpansion.none, provider, CORPUS_DEMO, userId, memoryTopK
+        );
+        RetrievalBundle rewrite = retrieveExpanded(
+            question, topK, RetrievalMode.vector, QueryExpansion.rewrite, provider, CORPUS_DEMO, userId, memoryTopK
+        );
+        RetrievalBundle memoryRewrite = retrieveExpanded(
+            question, topK, RetrievalMode.vector, QueryExpansion.memory_rewrite, provider, CORPUS_DEMO, userId, memoryTopK
+        );
+        return new MemoryRewriteCompareResult(
+            toExpansionView(none),
+            toExpansionView(rewrite),
+            toExpansionView(memoryRewrite)
+        );
+    }
+
+    /**
+     * RAG vs 记忆双路对照。
+     *
+     * @param generateAnswers 默认 true；false 时两侧只返回 sources / 空标志
+     */
+    public MemoryRagCompareResult queryCompareMemory(
+        String question,
+        String provider,
+        Integer topK,
+        String userId,
+        Integer memoryTopK,
+        Boolean generateAnswers
+    ) {
+        boolean generate = generateAnswers == null || generateAnswers;
+        RagQueryResult rag;
+        if (generate) {
+            rag = query(
+                question, provider, topK, RetrievalMode.vector, null, "none", null, null, userId, memoryTopK
+            );
+        } else {
+            RetrievalBundle bundle = retrieveExpanded(
+                question, topK, RetrievalMode.vector, QueryExpansion.none, provider, CORPUS_DEMO, userId, memoryTopK
+            );
+            rag = withBundleMeta(
+                new RagQueryResult(
+                    "（generateAnswers=false，跳过生成）",
+                    toSources(bundle.hits()),
+                    isRetrievalEmpty(bundle.hits()),
+                    null,
+                    RetrievalMode.vector.name(),
+                    QueryExpansion.none.name(),
+                    null,
+                    ChunkingStrategy.token.name(),
+                    CitationMode.none.name(),
+                    List.of(),
+                    null
+                ),
+                bundle
+            );
+        }
+
+        MemoryPathView memoryPath;
+        if (memorySampleService == null) {
+            memoryPath = new MemoryPathView(
+                "MemorySampleService 不可用",
+                List.of(),
+                true,
+                userId == null || userId.isBlank() ? memorySettings.userIdDefault() : userId,
+                null
+            );
+        } else if (generate) {
+            MemorySampleService.MemoryChatResult chat =
+                memorySampleService.chat(question, userId, provider, memoryTopK);
+            memoryPath = new MemoryPathView(
+                chat.answer(),
+                mapMemorySources(chat.sources()),
+                chat.retrievalEmpty(),
+                chat.userId(),
+                chat.usage()
+            );
+        } else {
+            MemorySampleService.RecallResult recalled =
+                memorySampleService.recall(question, userId, memoryTopK);
+            memoryPath = new MemoryPathView(
+                recalled.empty() ? MemorySampleService.EMPTY_REFUSAL : "（generateAnswers=false，跳过生成）",
+                mapMemorySources(recalled.sources()),
+                recalled.empty(),
+                recalled.userId(),
+                null
+            );
+        }
+        return new MemoryRagCompareResult(rag, memoryPath, generate);
+    }
+
+    private static List<SourceView> mapMemorySources(List<MemorySampleService.SourceView> sources) {
+        if (sources == null || sources.isEmpty()) {
+            return List.of();
+        }
+        List<SourceView> out = new ArrayList<>();
+        for (MemorySampleService.SourceView src : sources) {
+            out.add(new SourceView(
+                src.id(),
+                "memory",
+                src.excerpt(),
+                src.metadata() == null ? Map.of() : src.metadata()
+            ));
+        }
+        return List.copyOf(out);
     }
 
     /**
@@ -481,7 +697,7 @@ public class RagSampleService {
         return registry.plainClient(provider)
             .prompt()
             .system(SYSTEM_GROUNDED)
-            .user("检索上下文：\n" + context + "\n\n用户问题：" + question)
+            .user(buildGroundedUserMessage(context, question))
             .stream()
             .content();
     }
@@ -555,12 +771,15 @@ public class RagSampleService {
      */
     static QueryExpansion resolveExpansion(String queryExpansion, Boolean rewriteQuery) {
         if (queryExpansion != null && !queryExpansion.isBlank()) {
-            String value = queryExpansion.trim().toLowerCase();
+            String value = queryExpansion.trim().toLowerCase().replace('-', '_');
             if ("hyde".equals(value)) {
                 return QueryExpansion.hyde;
             }
             if ("rewrite".equals(value)) {
                 return QueryExpansion.rewrite;
+            }
+            if ("memory_rewrite".equals(value) || "memoryrewrite".equals(value)) {
+                return QueryExpansion.memory_rewrite;
             }
             return QueryExpansion.none;
         }
@@ -581,6 +800,22 @@ public class RagSampleService {
         String provider,
         String corpus
     ) {
+        return retrieveExpanded(question, topK, retrievalMode, expansion, provider, corpus, null, null);
+    }
+
+    /**
+     * 按扩展策略检索；{@code memory_rewrite} 时先召回记忆再改写。
+     */
+    RetrievalBundle retrieveExpanded(
+        String question,
+        Integer topK,
+        RetrievalMode retrievalMode,
+        QueryExpansion expansion,
+        String provider,
+        String corpus,
+        String userId,
+        Integer memoryTopK
+    ) {
         RetrievalMode mode = retrievalMode == null ? RetrievalMode.vector : retrievalMode;
         QueryExpansion effective = expansion == null ? QueryExpansion.none : expansion;
         int k = topK != null && topK > 0 ? topK : ragSettings.topK();
@@ -590,29 +825,34 @@ public class RagSampleService {
             if (!ragSettings.hyde().enabled()) {
                 log.warn("HyDE 已关闭，回退为 none");
                 List<Document> hits = retrieveByMode(question, k, mode, effectiveCorpus);
-                return new RetrievalBundle(hits, QueryExpansion.none, null, null);
+                return new RetrievalBundle(hits, QueryExpansion.none, null, null, List.of());
             }
             String hypo = generateHypotheticalDocument(question, provider);
             List<Document> hydeHits = vectorRetrieve(hypo, k, effectiveCorpus);
             List<Document> hits;
-            // 是否融合原始检索结果
             if (ragSettings.hyde().fuseWithOriginal()) {
                 List<Document> originalHits = vectorRetrieve(question, k, effectiveCorpus);
                 hits = fuseDocumentLists(hydeHits, originalHits, k);
             } else {
                 hits = hydeHits;
             }
-            // 是否进行关键词检索融合
             if (mode == RetrievalMode.hybrid && ragSettings.hybrid().enabled() && keywordRetriever != null) {
                 hits = fuseWithKeyword(hits, question, k, effectiveCorpus);
             }
-            return new RetrievalBundle(hits, QueryExpansion.hyde, hypo, null);
+            return new RetrievalBundle(hits, QueryExpansion.hyde, hypo, null, List.of());
+        }
+
+        if (effective == QueryExpansion.memory_rewrite) {
+            List<SourceView> hints = recallMemoryHints(question, userId, memoryTopK);
+            String rewritten = rewriteWithMemoryHints(question, provider, hints);
+            List<Document> hits = retrieveByMode(rewritten, k, mode, effectiveCorpus);
+            return new RetrievalBundle(hits, QueryExpansion.memory_rewrite, null, rewritten, hints);
         }
 
         if (effective == QueryExpansion.rewrite) {
             String rewritten = rewriteQueryAlways(question, provider);
             List<Document> hits = retrieveByMode(rewritten, k, mode, effectiveCorpus);
-            return new RetrievalBundle(hits, QueryExpansion.rewrite, null, rewritten);
+            return new RetrievalBundle(hits, QueryExpansion.rewrite, null, rewritten, List.of());
         }
 
         String effectiveQuestion = maybeRewriteQuery(question, provider, false);
@@ -622,8 +862,70 @@ public class RagSampleService {
             hits,
             rewritten == null ? QueryExpansion.none : QueryExpansion.rewrite,
             null,
-            rewritten
+            rewritten,
+            List.of()
         );
+    }
+
+    private List<SourceView> recallMemoryHints(String question, String userId, Integer memoryTopK) {
+        if (memorySampleService == null) {
+            log.warn("MemorySampleService 不可用，memory_rewrite 无记忆先验");
+            return List.of();
+        }
+        int k = memoryTopK != null && memoryTopK > 0 ? memoryTopK : memorySettings.topK();
+        MemorySampleService.RecallResult recalled = memorySampleService.recall(question, userId, k);
+        if (recalled == null || recalled.sources() == null || recalled.sources().isEmpty()) {
+            return List.of();
+        }
+        List<SourceView> hints = new ArrayList<>();
+        for (MemorySampleService.SourceView src : recalled.sources()) {
+            hints.add(new SourceView(
+                src.id(),
+                "memory",
+                src.excerpt(),
+                src.metadata() == null ? Map.of() : src.metadata()
+            ));
+        }
+        return List.copyOf(hints);
+    }
+
+    private String rewriteWithMemoryHints(String question, String provider, List<SourceView> hints) {
+        if (question == null || question.isBlank()) {
+            return question;
+        }
+        if (hints == null || hints.isEmpty()) {
+            return rewriteQueryAlways(question, provider);
+        }
+        StringBuilder hintBlock = new StringBuilder();
+        for (SourceView hint : hints) {
+            hintBlock.append("- ").append(hint.excerpt() == null ? "" : hint.excerpt()).append('\n');
+        }
+        try {
+            // CallResponseSpec 只消费一次
+            var chatResponse = registry.plainClient(provider)
+                .prompt()
+                .system("""
+                    把用户问题改写成适合知识库检索的短句。可参考「用户记忆」消歧实体与意图，但不要把记忆原文抄进检索句。
+                    只输出一行改写结果，不要解释。
+                    """)
+                .user("用户记忆：\n" + hintBlock + "\n用户问题：" + question)
+                .call()
+                .chatResponse();
+            String rewritten = "";
+            if (chatResponse != null
+                && chatResponse.getResult() != null
+                && chatResponse.getResult().getOutput() != null
+                && chatResponse.getResult().getOutput().getText() != null) {
+                rewritten = chatResponse.getResult().getOutput().getText().trim();
+            }
+            if (!rewritten.isBlank()) {
+                log.debug("RAG memory_rewrite: {} -> {}", question, rewritten);
+                return rewritten;
+            }
+        } catch (Exception ex) {
+            log.warn("memory_rewrite 失败，回退普通改写: {}", ex.toString());
+        }
+        return rewriteQueryAlways(question, provider);
     }
 
     private List<Document> retrieveByMode(String query, int k, RetrievalMode mode, String corpus) {
@@ -663,18 +965,21 @@ public class RagSampleService {
         if (empty && ragSettings.skipLlmWhenEmpty()) {
             log.info("RAG 空检索短路拒答: question={}, hits={}, mode={}, expansion={}, chunking={}",
                 question, hits.size(), retrievalMode, bundle.expansion(), chunkingName);
-            return new RagQueryResult(
-                EMPTY_REFUSAL,
-                sources,
-                true,
-                null,
-                retrievalMode.name(),
-                bundle.expansion().name(),
-                bundle.hypotheticalDocument(),
-                chunkingName,
-                mode.name(),
-                List.of(),
-                mode == CitationMode.required ? Boolean.FALSE : null
+            return withBundleMeta(
+                new RagQueryResult(
+                    EMPTY_REFUSAL,
+                    sources,
+                    true,
+                    null,
+                    retrievalMode.name(),
+                    bundle.expansion().name(),
+                    bundle.hypotheticalDocument(),
+                    chunkingName,
+                    mode.name(),
+                    List.of(),
+                    mode == CitationMode.required ? Boolean.FALSE : null
+                ),
+                bundle
             );
         }
         String context = buildContext(contextDocs);
@@ -687,23 +992,54 @@ public class RagSampleService {
             );
         }
 
-        var call = registry.plainClient(provider)
+        // CallResponseSpec 只消费一次
+        var chatResponse = registry.plainClient(provider)
             .prompt()
             .system(SYSTEM_GROUNDED)
-            .user("检索上下文：\n" + context + "\n\n用户问题：" + question)
-            .call();
+            .user(buildGroundedUserMessage(context, question))
+            .call()
+            .chatResponse();
+        String answer = "";
+        if (chatResponse != null
+            && chatResponse.getResult() != null
+            && chatResponse.getResult().getOutput() != null
+            && chatResponse.getResult().getOutput().getText() != null) {
+            answer = chatResponse.getResult().getOutput().getText();
+        }
+        return withBundleMeta(
+            new RagQueryResult(
+                answer,
+                sources,
+                empty,
+                TokenUsageExtractor.from(chatResponse),
+                retrievalMode.name(),
+                bundle.expansion().name(),
+                bundle.hypotheticalDocument(),
+                chunkingName,
+                CitationMode.none.name(),
+                List.of(),
+                null
+            ),
+            bundle
+        );
+    }
+
+    private static RagQueryResult withBundleMeta(RagQueryResult base, RetrievalBundle bundle) {
+        List<SourceView> hints = bundle.memoryHints() == null ? List.of() : bundle.memoryHints();
         return new RagQueryResult(
-            call.content(),
-            sources,
-            empty,
-            TokenUsageExtractor.from(call.chatResponse()),
-            retrievalMode.name(),
-            bundle.expansion().name(),
-            bundle.hypotheticalDocument(),
-            chunkingName,
-            CitationMode.none.name(),
-            List.of(),
-            null
+            base.answer(),
+            base.sources(),
+            base.retrievalEmpty(),
+            base.usage(),
+            base.retrievalMode(),
+            base.queryExpansion(),
+            base.hypotheticalDocument(),
+            base.chunkingStrategy(),
+            base.citationMode(),
+            base.citations(),
+            base.citationValid(),
+            bundle.rewrittenQuery(),
+            hints
         );
     }
 
@@ -750,8 +1086,27 @@ public class RagSampleService {
             CitationValidator.Result validation = CitationValidator.validate(citations, allowed);
             if (!validation.valid()) {
                 log.info("RAG citation 校验失败: {}", validation.detail());
-                return new RagQueryResult(
-                    CITATION_REFUSAL,
+                return withBundleMeta(
+                    new RagQueryResult(
+                        CITATION_REFUSAL,
+                        sources,
+                        empty,
+                        invoke.usage(),
+                        retrievalMode.name(),
+                        bundle.expansion().name(),
+                        bundle.hypotheticalDocument(),
+                        chunkingName,
+                        CitationMode.required.name(),
+                        toCitationViews(citations),
+                        false
+                    ),
+                    bundle
+                );
+            }
+            String answer = grounded.answer() == null ? "" : grounded.answer();
+            return withBundleMeta(
+                new RagQueryResult(
+                    answer,
                     sources,
                     empty,
                     invoke.usage(),
@@ -761,37 +1116,27 @@ public class RagSampleService {
                     chunkingName,
                     CitationMode.required.name(),
                     toCitationViews(citations),
-                    false
-                );
-            }
-            String answer = grounded.answer() == null ? "" : grounded.answer();
-            return new RagQueryResult(
-                answer,
-                sources,
-                empty,
-                invoke.usage(),
-                retrievalMode.name(),
-                bundle.expansion().name(),
-                bundle.hypotheticalDocument(),
-                chunkingName,
-                CitationMode.required.name(),
-                toCitationViews(citations),
-                true
+                    true
+                ),
+                bundle
             );
         } catch (RuntimeException ex) {
             log.warn("RAG citation 结构化失败: {}", ex.getMessage());
-            return new RagQueryResult(
-                CITATION_REFUSAL,
-                sources,
-                empty,
-                null,
-                retrievalMode.name(),
-                bundle.expansion().name(),
-                bundle.hypotheticalDocument(),
-                chunkingName,
-                CitationMode.required.name(),
-                List.of(),
-                false
+            return withBundleMeta(
+                new RagQueryResult(
+                    CITATION_REFUSAL,
+                    sources,
+                    empty,
+                    null,
+                    retrievalMode.name(),
+                    bundle.expansion().name(),
+                    bundle.hypotheticalDocument(),
+                    chunkingName,
+                    CitationMode.required.name(),
+                    List.of(),
+                    false
+                ),
+                bundle
             );
         }
     }
@@ -846,7 +1191,19 @@ public class RagSampleService {
         return "检索上下文（每段以 [id=C#] 开头；sourceId 只能从 allowlist 原样复制）：\n"
             + "可用 sourceId（必须原样复制，禁止用文件名或序号）：" + allowlist + "\n\n"
             + body
-            + "用户问题：" + question;
+            + "用户问题：" + question + "\n\n"
+            + PARTIAL_ANSWER_HINT;
+    }
+
+    /**
+     * grounded（citationMode=none）路径的 user 消息：上下文 + 问题 + 复合问偏答约束。
+     *
+     * @param context  已拼好的检索上下文
+     * @param question 用户问题
+     * @return user 消息全文
+     */
+    private static String buildGroundedUserMessage(String context, String question) {
+        return "检索上下文：\n" + context + "\n\n用户问题：" + question + "\n\n" + PARTIAL_ANSWER_HINT;
     }
 
     /**
@@ -985,7 +1342,8 @@ public class RagSampleService {
             toSources(bundle.hits()),
             isRetrievalEmpty(bundle.hits()),
             bundle.hypotheticalDocument(),
-            bundle.rewrittenQuery()
+            bundle.rewrittenQuery(),
+            bundle.memoryHints() == null ? List.of() : bundle.memoryHints()
         );
     }
 
@@ -1217,22 +1575,36 @@ public class RagSampleService {
 
     /**
      * 一次检索的中间结果（含扩展策略与假想文档预览）。
+     *
+     * @param memoryHints 记忆先验；仅 memory_rewrite 非空，不进 RAG sources
      */
     record RetrievalBundle(
         List<Document> hits,
         QueryExpansion expansion,
         String hypotheticalDocument,
-        String rewrittenQuery
-    ) {}
+        String rewrittenQuery,
+        List<SourceView> memoryHints
+    ) {
+        RetrievalBundle(
+            List<Document> hits,
+            QueryExpansion expansion,
+            String hypotheticalDocument,
+            String rewrittenQuery
+        ) {
+            this(hits, expansion, hypotheticalDocument, rewrittenQuery, List.of());
+        }
+    }
 
     /**
      * @param retrievalMode          实际使用的检索模式：{@code vector} 或 {@code hybrid}
-     * @param queryExpansion         none / rewrite / hyde
+     * @param queryExpansion         none / rewrite / hyde / memory_rewrite
      * @param hypotheticalDocument   HyDE 生成的假想段落（仅预览；不在 sources 中）
      * @param chunkingStrategy       token / semantic
      * @param citationMode           none / required
      * @param citations              结构化引用；none 时为空列表
      * @param citationValid          required 时校验结果；none 时为 {@code null}
+     * @param rewrittenQuery         改写后的检索句；无则 null
+     * @param memoryHints            记忆先验；不进 sources
      */
     public record RagQueryResult(
         String answer,
@@ -1245,11 +1617,13 @@ public class RagSampleService {
         String chunkingStrategy,
         String citationMode,
         List<CitationView> citations,
-        Boolean citationValid
+        Boolean citationValid,
+        String rewrittenQuery,
+        List<SourceView> memoryHints
     ) {
         /** 二期兼容：无 retrievalMode 字段时视为 vector。 */
         public RagQueryResult(String answer, List<SourceView> sources, boolean retrievalEmpty, TokenUsage usage) {
-            this(answer, sources, retrievalEmpty, usage, RetrievalMode.vector.name(), QueryExpansion.none.name(), null, ChunkingStrategy.token.name(), CitationMode.none.name(), List.of(), null);
+            this(answer, sources, retrievalEmpty, usage, RetrievalMode.vector.name(), QueryExpansion.none.name(), null, ChunkingStrategy.token.name(), CitationMode.none.name(), List.of(), null, null, List.of());
         }
 
         /** 第四期兼容：无 queryExpansion 字段。 */
@@ -1260,7 +1634,7 @@ public class RagSampleService {
             TokenUsage usage,
             String retrievalMode
         ) {
-            this(answer, sources, retrievalEmpty, usage, retrievalMode, QueryExpansion.none.name(), null, ChunkingStrategy.token.name(), CitationMode.none.name(), List.of(), null);
+            this(answer, sources, retrievalEmpty, usage, retrievalMode, QueryExpansion.none.name(), null, ChunkingStrategy.token.name(), CitationMode.none.name(), List.of(), null, null, List.of());
         }
 
         /** 第六期兼容：无 chunkingStrategy。 */
@@ -1273,7 +1647,7 @@ public class RagSampleService {
             String queryExpansion,
             String hypotheticalDocument
         ) {
-            this(answer, sources, retrievalEmpty, usage, retrievalMode, queryExpansion, hypotheticalDocument, ChunkingStrategy.token.name(), CitationMode.none.name(), List.of(), null);
+            this(answer, sources, retrievalEmpty, usage, retrievalMode, queryExpansion, hypotheticalDocument, ChunkingStrategy.token.name(), CitationMode.none.name(), List.of(), null, null, List.of());
         }
 
         /** 第十期前兼容：无 citation 字段。 */
@@ -1287,7 +1661,24 @@ public class RagSampleService {
             String hypotheticalDocument,
             String chunkingStrategy
         ) {
-            this(answer, sources, retrievalEmpty, usage, retrievalMode, queryExpansion, hypotheticalDocument, chunkingStrategy, CitationMode.none.name(), List.of(), null);
+            this(answer, sources, retrievalEmpty, usage, retrievalMode, queryExpansion, hypotheticalDocument, chunkingStrategy, CitationMode.none.name(), List.of(), null, null, List.of());
+        }
+
+        /** 第十二期前兼容：无 rewrittenQuery / memoryHints。 */
+        public RagQueryResult(
+            String answer,
+            List<SourceView> sources,
+            boolean retrievalEmpty,
+            TokenUsage usage,
+            String retrievalMode,
+            String queryExpansion,
+            String hypotheticalDocument,
+            String chunkingStrategy,
+            String citationMode,
+            List<CitationView> citations,
+            Boolean citationValid
+        ) {
+            this(answer, sources, retrievalEmpty, usage, retrievalMode, queryExpansion, hypotheticalDocument, chunkingStrategy, citationMode, citations, citationValid, null, List.of());
         }
     }
 
@@ -1307,10 +1698,43 @@ public class RagSampleService {
         List<SourceView> sources,
         boolean retrievalEmpty,
         String hypotheticalDocument,
-        String rewrittenQuery
-    ) {}
+        String rewrittenQuery,
+        List<SourceView> memoryHints
+    ) {
+        public ExpansionView(
+            String queryExpansion,
+            List<SourceView> sources,
+            boolean retrievalEmpty,
+            String hypotheticalDocument,
+            String rewrittenQuery
+        ) {
+            this(queryExpansion, sources, retrievalEmpty, hypotheticalDocument, rewrittenQuery, List.of());
+        }
+    }
 
     public record ExpansionCompareResult(ExpansionView none, ExpansionView rewrite, ExpansionView hyde) {}
+
+    /** none / rewrite / memory_rewrite 三路对照（第十二期）。 */
+    public record MemoryRewriteCompareResult(
+        ExpansionView none,
+        ExpansionView rewrite,
+        ExpansionView memoryRewrite
+    ) {}
+
+    /** RAG vs 记忆双路（第十二期）。 */
+    public record MemoryPathView(
+        String answer,
+        List<SourceView> sources,
+        boolean retrievalEmpty,
+        String userId,
+        TokenUsage usage
+    ) {}
+
+    public record MemoryRagCompareResult(
+        RagQueryResult rag,
+        MemoryPathView memory,
+        boolean generateAnswers
+    ) {}
 
     /** 分块策略对照单路（7a：sources 为完整 chunk 正文，便于对照切分差异）。 */
     public record ChunkingView(

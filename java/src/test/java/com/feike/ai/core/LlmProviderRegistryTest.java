@@ -49,11 +49,11 @@ class LlmProviderRegistryTest {
         Map<String, AiProperties.Provider> providers = new LinkedHashMap<>();
         providers.put(
             "deepseek",
-            new AiProperties.Provider("DeepSeek", "https://api.deepseek.com", "sk-test", "deepseek-v4-flash", null)
+            new AiProperties.Provider("DeepSeek", "https://api.deepseek.com", "sk-test", "deepseek-v4-flash", null, null, null)
         );
         providers.put(
             "dashscope",
-            new AiProperties.Provider("通义", "https://dashscope.aliyuncs.com/compatible-mode", "", "qwen3.5-flash", null)
+            new AiProperties.Provider("通义", "https://dashscope.aliyuncs.com/compatible-mode", "", "qwen3.5-flash", null, null, null)
         );
         AiProperties properties = new AiProperties(
             "deepseek",
