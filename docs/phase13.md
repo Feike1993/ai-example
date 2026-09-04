@@ -25,7 +25,25 @@ cd frontend && npx tsc --noEmit
 
 根索引：`GET /` → `advanced.phase=13`（样例 map 无新 key）。
 
+## 宣传图（底层逻辑）
+
+宣传页基础 Journey 之后有「进阶 · 五组逻辑」图墙（锚点 `#advanced-groups`）。静态图路径：
+
+| 组 | 文件 |
+| --- | --- |
+| 检索进阶 | [`frontend/public/promo/advanced/rag.png`](../frontend/public/promo/advanced/rag.png) |
+| 记忆 | [`frontend/public/promo/advanced/memory.png`](../frontend/public/promo/advanced/memory.png) |
+| MCP | [`frontend/public/promo/advanced/mcp.png`](../frontend/public/promo/advanced/mcp.png) |
+| Agent·可观测 | [`frontend/public/promo/advanced/agent-obs.png`](../frontend/public/promo/advanced/agent-obs.png) |
+| 质量与护栏 | [`frontend/public/promo/advanced/quality.png`](../frontend/public/promo/advanced/quality.png) |
+
+```bash
+cd frontend && pnpm dev
+# 打开 /promo.html#advanced-groups
+```
+
 ## 刻意不做
 
 - 不删样例、不合并枢纽 Panel、不重排文档号 / API
+- 不为 15 个进阶样例各做 SampleSection 动效
 - 不加 Redis、不新开学习主题 — 见 [backlog.md](backlog.md)

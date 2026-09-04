@@ -194,6 +194,11 @@ Hybrid RAG、golden 评测、Redis 持久会话、逐步 tool SSE、流式 token
 - `navGroup` + `groupAdvancedSamples()`；不新增样例、不改 API
 - `GET /` → `advanced.phase=13`
 
+### 宣传图
+
+- 五组底层逻辑静态图：`frontend/public/promo/advanced/{rag,memory,mcp,agent-obs,quality}.png`
+- 宣传页 `#advanced-groups` 图墙（`AdvancedGroupsGallery`）
+
 ### 文档
 
 - [phase13.md](docs/phase13.md)

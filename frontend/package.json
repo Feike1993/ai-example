@@ -9,7 +9,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "poster:export": "node scripts/export-poster.mjs"
+    "poster:export": "node scripts/export-poster.mjs",
+    "endcard:export": "node scripts/export-poster.mjs endcard"
   },
   "dependencies": {
     "@mantine/code-highlight": "^9.5.1",

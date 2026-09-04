@@ -29,6 +29,13 @@ export function FooterCta() {
         >
           下载宣传图
         </a>
+        <a
+          className="promo-btn promo-btn--ghost"
+          href="/promo/repo-endcard-1080x1920.png"
+          download="ai-example-repo-endcard-1080x1920.png"
+        >
+          下载结尾卡
+        </a>
       </div>
       <nav className="promo-footer-docs" aria-label="样例文档">
         {baselineSamples.map((s) => (

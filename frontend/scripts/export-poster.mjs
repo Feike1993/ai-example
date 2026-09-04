@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /**
- * 将 poster.html 导出为 1080×1080 PNG（deviceScaleFactor=2 → 2160 高清）。
- * 需本机已安装 Google Chrome，或已运行 vite dev（5173）。
+ * 导出宣传图 PNG。
+ * 用法：
+ *   node scripts/export-poster.mjs              # 方版开源图
+ *   node scripts/export-poster.mjs endcard      # 竖版仓库结尾卡
  */
 import { execFileSync, spawn } from 'node:child_process'
 import { mkdirSync, existsSync } from 'node:fs'
@@ -11,9 +13,25 @@ import { fileURLToPath } from 'node:url'
 const root = path.dirname(fileURLToPath(import.meta.url))
 const frontendRoot = path.join(root, '..')
 const outDir = path.join(frontendRoot, 'public', 'promo')
-const outPath = path.join(outDir, 'opensource-poster-1080.png')
-const posterUrl = 'http://127.0.0.1:5173/poster.html'
 const port = 5173
+
+const targets = {
+  poster: {
+    url: `http://127.0.0.1:${port}/poster.html`,
+    outPath: path.join(outDir, 'opensource-poster-1080.png'),
+    width: 1080,
+    height: 1080,
+  },
+  endcard: {
+    url: `http://127.0.0.1:${port}/endcard.html`,
+    outPath: path.join(outDir, 'repo-endcard-1080x1920.png'),
+    width: 1080,
+    height: 1920,
+  },
+}
+
+const kind = process.argv[2] === 'endcard' ? 'endcard' : 'poster'
+const target = targets[kind]
 
 const chromeCandidates = [
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -31,7 +49,7 @@ function findChrome() {
 
 async function isServerUp() {
   try {
-    const res = await fetch(posterUrl, { signal: AbortSignal.timeout(2000) })
+    const res = await fetch(target.url, { signal: AbortSignal.timeout(2000) })
     return res.ok
   } catch {
     return false
@@ -69,10 +87,10 @@ function screenshot(chromePath) {
       '--headless=new',
       '--disable-gpu',
       '--hide-scrollbars',
-      `--window-size=1080,1080`,
+      `--window-size=${target.width},${target.height}`,
       '--force-device-scale-factor=2',
-      `--screenshot=${outPath}`,
-      posterUrl,
+      `--screenshot=${target.outPath}`,
+      target.url,
     ],
     { stdio: 'inherit' },
   )
@@ -81,10 +99,8 @@ function screenshot(chromePath) {
 async function main() {
   const chrome = findChrome()
   if (!chrome) {
-    console.error(
-      '未找到 Chrome。请安装 Google Chrome 或 Chromium。',
-    )
-    console.error('也可手动打开 poster.html 后截图保存为 public/promo/opensource-poster-1080.png')
+    console.error('未找到 Chrome。请安装 Google Chrome 或 Chromium。')
+    console.error(`也可手动打开对应 HTML 后截图保存为 ${target.outPath}`)
     process.exit(1)
   }
 
@@ -92,7 +108,7 @@ async function main() {
   try {
     viteChild = await ensureServer()
     screenshot(chrome)
-    console.log(`\n已导出 → ${outPath}`)
+    console.log(`\n已导出 → ${target.outPath}`)
   } finally {
     if (viteChild?.pid) {
       try {

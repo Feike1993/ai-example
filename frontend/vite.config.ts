@@ -13,10 +13,13 @@ export default defineConfig({
         main: 'index.html',
         promo: 'promo.html',
         poster: 'poster.html',
+        endcard: 'endcard.html',
       },
     },
   },
   server: {
+    /** 显式绑 IPv4，避免仅监听 ::1 时 127.0.0.1 打不开 */
+    host: '127.0.0.1',
     port: 5173,
     /** 启动 dev 时用系统默认浏览器打开（非 IDE 内嵌预览） */
     open: true,

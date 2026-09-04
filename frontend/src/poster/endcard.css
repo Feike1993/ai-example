@@ -1,0 +1,102 @@
+/* 竖版仓库结尾卡：1080×1920，抖音片尾定格 */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #0f1a14;
+  overflow: hidden;
+}
+
+#root {
+  width: 1080px;
+  height: 1920px;
+  overflow: hidden;
+}
+
+.endcard-canvas {
+  position: relative;
+  width: 1080px;
+  height: 1920px;
+  box-sizing: border-box;
+  overflow: hidden;
+  color: #f3f8f5;
+  font-family: Figtree, 'Noto Sans SC', system-ui, sans-serif;
+}
+
+.endcard-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 90% 50% at 50% 38%, rgba(42, 111, 95, 0.4), transparent 70%);
+  pointer-events: none;
+}
+
+.endcard-inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 120px 64px;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.endcard-wordmark {
+  font-family: Syne, 'Noto Sans SC', sans-serif;
+  font-size: 64px;
+  font-weight: 800;
+  letter-spacing: -1.5px;
+  margin-bottom: 72px;
+}
+
+.endcard-wordmark-ai {
+  color: #2a6f5f;
+}
+
+.endcard-hint {
+  margin: 0 0 28px;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: 8px;
+  text-indent: 8px;
+  color: rgba(123, 184, 163, 0.9);
+  text-transform: none;
+}
+
+.endcard-repo {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  line-height: 1.15;
+}
+
+.endcard-repo-host {
+  font-size: 36px;
+  font-weight: 600;
+  color: rgba(243, 248, 245, 0.72);
+  letter-spacing: 0.2px;
+  word-break: break-all;
+}
+
+.endcard-repo-name {
+  font-family: Syne, 'Noto Sans SC', sans-serif;
+  font-size: 72px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  background: linear-gradient(135deg, #7bb8a3 0%, #f3f8f5 50%, #549e88 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.endcard-invite {
+  margin: 80px 0 0;
+  font-size: 30px;
+  font-weight: 500;
+  color: rgba(243, 248, 245, 0.58);
+}

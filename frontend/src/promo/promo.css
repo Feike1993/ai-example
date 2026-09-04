@@ -135,12 +135,88 @@
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 1rem;
+  align-items: center;
   padding: 1.25rem clamp(1.5rem, 5vw, 4rem);
   background: #d7e2dc;
   border-bottom: 1px solid rgba(20, 36, 28, 0.08);
   font-weight: 600;
   font-size: 0.9rem;
   text-align: center;
+}
+
+.promo-overview-chip {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  letter-spacing: 0.01em;
+}
+
+.promo-overview-chip--baseline {
+  background: rgba(42, 111, 95, 0.16);
+  color: #245f51;
+}
+
+.promo-overview-chip--advanced {
+  background: rgba(30, 77, 66, 0.18);
+  color: #1e4d42;
+}
+
+/* 基础 / 进阶舞台分区 */
+.promo-stage--baseline {
+  background: #e4ebe6;
+  scroll-margin-top: 0.5rem;
+}
+
+.promo-stage-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem clamp(1rem, 3vw, 2rem) 0.5rem;
+}
+
+.promo-stage-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.7rem;
+  border-radius: 4px;
+  font-family: Syne, 'Noto Sans SC', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  background: #2a6f5f;
+  color: #f3f8f5;
+}
+
+.promo-stage-badge--on-dark {
+  background: #7bb8a3;
+  color: #0f1a14;
+}
+
+.promo-stage-title {
+  margin: 0 0 0.35rem;
+  font-family: Syne, 'Noto Sans SC', sans-serif;
+  font-size: clamp(1.25rem, 2vw, 1.55rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.promo-stage-desc {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: rgba(20, 36, 28, 0.72);
+}
+
+.promo-stage--advanced {
+  background: #1e4d42;
+  color: #f3f8f5;
+  padding: 3rem clamp(1.25rem, 4vw, 3rem) 3.5rem;
 }
 
 .promo-nav-chips {
@@ -851,6 +927,96 @@
   font-size: 0.78rem;
   opacity: 0.5;
   margin: 0;
+}
+
+/* 进阶五组静态逻辑宣传图墙（深色进阶舞台内） */
+.advanced-groups {
+  max-width: 1200px;
+  margin: 0 auto;
+  scroll-margin-top: 1.5rem;
+}
+
+.advanced-groups-header {
+  margin-bottom: 1.75rem;
+  max-width: 40rem;
+}
+
+.advanced-groups-header .promo-stage-badge {
+  margin-bottom: 0.85rem;
+}
+
+.advanced-groups-eyebrow {
+  margin: 0 0 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: rgba(243, 248, 245, 0.65);
+}
+
+.advanced-groups-title {
+  margin: 0 0 0.6rem;
+  font-family: Syne, 'Noto Sans SC', sans-serif;
+  font-size: clamp(1.4rem, 2.4vw, 1.9rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #f3f8f5;
+}
+
+.advanced-groups-lead {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: rgba(243, 248, 245, 0.78);
+}
+
+.advanced-groups-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2.25rem;
+}
+
+.advanced-group-item {
+  min-width: 0;
+}
+
+.advanced-group-label {
+  margin: 0 0 0.35rem;
+  font-family: Syne, 'Noto Sans SC', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #c5e0d6;
+}
+
+.advanced-group-blurb {
+  margin: 0 0 0.85rem;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: rgba(243, 248, 245, 0.72);
+  max-width: 40rem;
+}
+
+.advanced-group-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0;
+  border: 1px solid rgba(243, 248, 245, 0.18);
+  background: #e4ebe6;
+}
+
+.advanced-groups-cta {
+  margin: 1.75rem 0 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.advanced-groups-cta a {
+  color: #c5e0d6;
+  text-decoration: none;
+}
+
+.advanced-groups-cta a:hover {
+  text-decoration: underline;
+  color: #f3f8f5;
 }
 
 @media (max-width: 900px) {

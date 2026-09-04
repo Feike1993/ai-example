@@ -2,7 +2,7 @@
 
 独立的 Agent 学习 cookbook。**基础闭环 v0.2.0**（一至三期 + 基础补丁）；进阶至**第十三期**：Playground 进阶侧栏按主题分组（第十二期记忆×检索闭环等能力见各 phase 文档）。
 
-**宣传**：[基础闭环宣传页](frontend/promo.html) · [方版宣传图](frontend/public/promo/opensource-poster-1080.png)（源文件 [poster.html](frontend/poster.html)，导出 `cd frontend && pnpm poster:export`）
+**宣传**：[基础闭环宣传页](frontend/promo.html)（含进阶五组逻辑图墙 `#advanced-groups`） · [方版宣传图](frontend/public/promo/opensource-poster-1080.png)（源文件 [poster.html](frontend/poster.html)，导出 `cd frontend && pnpm poster:export`） · [仓库结尾卡](frontend/public/promo/repo-endcard-1080x1920.png)（竖版，源文件 [endcard.html](frontend/endcard.html)，导出 `cd frontend && pnpm endcard:export`）
 
 - **第一期**：Chat → 结构化输出 → Tool Calling → ReAct Agent Loop
 - **第二期**：MCP → RAG（pgvector）
