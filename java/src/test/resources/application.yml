@@ -7,6 +7,13 @@ app:
     context:
       store: memory
 
+  # 工业级链路默认不参与样例测试上下文；需要它的测试自行用 @SpringBootTest(properties=...) 打开
+  production:
+    enabled: false
+    stream:
+      # 单测不该为了验证 seq 递增去起 Redis 容器
+      event-log: memory
+
 spring:
   ai:
     mcp:

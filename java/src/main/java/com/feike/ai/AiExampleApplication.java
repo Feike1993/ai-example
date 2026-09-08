@@ -1,6 +1,7 @@
 package com.feike.ai;
 
 import com.feike.ai.core.AiProperties;
+import com.feike.ai.production.ProductionProperties;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration;
@@ -24,7 +25,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
     OpenAiAudioTranscriptionAutoConfiguration.class,
     OpenAiModerationAutoConfiguration.class
 })
-@EnableConfigurationProperties(AiProperties.class)
+@EnableConfigurationProperties({AiProperties.class, ProductionProperties.class})
 public class AiExampleApplication {
 
     /**

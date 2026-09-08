@@ -15,7 +15,8 @@ management:
       group:
         readiness:
           # PostgreSQL 是默认 jdbc 会话与 pgvector 的硬依赖，readiness 必须反映数据库状态。
-          include: readinessState,db
+          # Redis 是工业级链路 run 状态与 SSE 断线续传的硬依赖，同样纳入就绪判定。
+          include: readinessState,db,redis
 
 spring:
   servlet:
@@ -35,6 +36,14 @@ spring:
     hikari:
       # 无 Docker 时允许进程起来；真正 ingest/query 仍会因连不上库失败
       initialization-fail-timeout: -1
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      # Lettuce 懒连：与 datasource 同样的取舍，Redis 不可用不拖垮启动，只让工业级接口 503
+      timeout: 3s
+      connect-timeout: 2s
   ai:
     openai:
       # 仅占位：真正的 ChatClient 由 LlmProviderRegistry 按 app.ai.providers 手动创建，避免双模型
@@ -187,3 +196,25 @@ app:
       deny-words:
         - 违禁演示词
         - BLOCKED_DEMO
+
+  # 工业级链路：与 app.ai.*（教学样例）完全分开的一套配置
+  production:
+    # 代码里默认 false（属性缺失时不启用）；本仓部署显式打开
+    enabled: ${PRODUCTION_ENABLED:true}
+    # 独立语料，不与样例 ai-example-demo 混写，避免教学 ingest 覆盖生产索引
+    corpus: ${PRODUCTION_CORPUS:ai-example-prod}
+    top-k: ${PRODUCTION_TOP_K:4}
+    chunk-size: ${PRODUCTION_CHUNK_SIZE:400}
+    min-sources: ${PRODUCTION_MIN_SOURCES:1}
+    hybrid-enabled: ${PRODUCTION_HYBRID:true}
+    rrf-k: ${PRODUCTION_RRF_K:60}
+    keyword-top-k: ${PRODUCTION_KEYWORD_TOP_K:4}
+    stream:
+      # redis=跨实例可续传；memory=单进程，仅测试用
+      event-log: ${PRODUCTION_EVENT_LOG:redis}
+      # run 事件保留窗口：断线重连必须在此窗口内带 Last-Event-ID 回来，过期返回 410
+      replay-ttl: ${PRODUCTION_REPLAY_TTL:10m}
+      # 心跳注释帧间隔，防止代理在长思考期间掐断连接
+      heartbeat-interval: ${PRODUCTION_HEARTBEAT:15s}
+      # 单条 run 的墙钟上限，超时发 error 事件而不是无限挂着
+      timeout: ${PRODUCTION_STREAM_TIMEOUT:5m}

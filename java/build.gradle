@@ -22,6 +22,8 @@ dependencies {
     implementation 'org.springframework.ai:spring-ai-starter-mcp-client'
     implementation 'org.springframework.ai:spring-ai-starter-vector-store-pgvector'
     implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    // 工业级链路：run 状态注册表 + SSE 事件回放流
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.postgresql:postgresql'
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.0'
@@ -30,6 +32,8 @@ dependencies {
     testImplementation libs.junit.jupiter
     testImplementation libs.testcontainers.junit.jupiter
     testImplementation libs.testcontainers.postgresql
+    // Redis 事件回放集成测试用 GenericContainer 起 redis:7-alpine
+    testImplementation libs.testcontainers.core
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
