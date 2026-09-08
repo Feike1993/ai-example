@@ -147,13 +147,18 @@ docker compose down
 | `V1` | 接管教学样例的 `chat_session_message`（原先由 `JdbcChatSessionStore` 的 `@PostConstruct` 建） |
 | `V2` | 工业级会话表 `prod_chat_session` / `prod_chat_message` |
 
+依赖必须是 `spring-boot-starter-flyway`，不要只加 `org.flywaydb:flyway-core`。
+Spring Boot 4 把 `FlywayAutoConfiguration` 拆进了独立的 `spring-boot-flyway` 模块；
+只拉核心库时应用能正常启动、日志也不会抱怨，但迁移一条都不跑——直到某个请求撞上不存在的表才暴露。
+`FlywayAutoConfigurationPresenceTest` 守住这一点。
+
 两件事值得注意：
 
 **PostgreSQL 成了启动硬依赖。** 这与 `spring.datasource.hikari.initialization-fail-timeout: -1` 的取舍相反——那个设置是为了「没有 Docker 也能把进程起起来」。表结构对不上时让进程起不来，好过跑起来之后每个请求各报各的错。想保留原来的调试体验就设 `FLYWAY_ENABLED=false`，此时会话表不存在，`PRODUCTION_SESSION_ENABLED` 要一并关掉。
 
 **Flyway 不管向量库。** `vector_store` 仍归 Spring AI 的 `initialize-schema`，全文索引仍归 `RagKeywordRetriever`。同一个对象只能有一个 owner，否则迁移与运行期 DDL 会互相打架。
 
-存量库（已有 `chat_session_message`、没有 `flyway_schema_history`）不需要手工处理：`baseline-on-migrate: true` 会自动接管。
+存量库（已有 `chat_session_message`、没有 `flyway_schema_history`）不需要手工处理：`baseline-on-migrate: true` 会自动接管。改完依赖后重启一次 `./gradlew bootRun`，启动日志里应出现 Flyway 迁移成功的记录，库里会多出 `flyway_schema_history` 与 `prod_chat_*`。
 
 ### Redis 要不要起？
 

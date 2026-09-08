@@ -22,8 +22,13 @@ dependencies {
     implementation 'org.springframework.ai:spring-ai-starter-mcp-client'
     implementation 'org.springframework.ai:spring-ai-starter-vector-store-pgvector'
     implementation 'org.springframework.boot:spring-boot-starter-jdbc'
-    // 会话表结构版本化；Flyway 10+ 起 PostgreSQL 支持拆成独立模块
-    implementation 'org.flywaydb:flyway-core'
+    // 会话表结构版本化。
+    // 必须用 starter 而不是裸 flyway-core：Spring Boot 4 把 FlywayAutoConfiguration 从
+    // spring-boot-autoconfigure 拆到了独立的 spring-boot-flyway 模块。只加 flyway-core
+    // 只会拿到库本身，自动配置不在 classpath 上，迁移会「启动无报错但一条都不跑」——
+    // 直到某个请求撞上不存在的表才暴露。
+    implementation 'org.springframework.boot:spring-boot-starter-flyway'
+    // Flyway 10+ 起各数据库方言拆成独立模块，PostgreSQL 支持要单独声明
     implementation 'org.flywaydb:flyway-database-postgresql'
     // 工业级链路：run 状态注册表 + SSE 事件回放流
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
