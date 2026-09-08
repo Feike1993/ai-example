@@ -11,6 +11,8 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: 'index.html',
+        // 工业级区独立入口：与教学样例场共享组件与代理，但页面结构、导航、视觉完全分开
+        industrial: 'industrial.html',
         promo: 'promo.html',
         poster: 'poster.html',
         endcard: 'endcard.html',

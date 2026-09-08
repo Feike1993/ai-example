@@ -162,9 +162,14 @@ function App() {
             allowDeselect={false}
           />
         </div>
-        <a className="promo-entry" href="/promo.html">
-          宣传页 · 8 样例路径 →
-        </a>
+        <Stack gap={4}>
+          <a className="promo-entry" href="/industrial.html">
+            工业级 · 生产链路 →
+          </a>
+          <a className="promo-entry" href="/promo.html">
+            宣传页 · 8 样例路径 →
+          </a>
+        </Stack>
       </AppShell.Navbar>
       <AppShell.Main>
         {sample === 'chat' && <ChatPanel provider={provider} />}

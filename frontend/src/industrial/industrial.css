@@ -1,0 +1,136 @@
+/*
+ * 工业级区的视觉基调：深色侧栏 + 冷灰主体，与教学样例场的浅色 playground 一眼可分。
+ * 只覆盖本区独有的类名，样例场的 styles.css 不受影响（两个入口各自加载）。
+ */
+
+:root {
+  --industrial-ink: #10151c;
+  --industrial-line: #d6dbe2;
+  --industrial-accent: #2f6f5f;
+}
+
+body {
+  margin: 0;
+  font-family: 'Noto Sans SC', 'Figtree', system-ui, sans-serif;
+  background: #f4f6f8;
+  color: var(--industrial-ink);
+}
+
+.industrial-navbar {
+  background: var(--industrial-ink);
+  border-right: none;
+}
+
+.industrial-navbar-inner {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  color: #e7ebf0;
+}
+
+.industrial-navbar-inner :where(.mantine-Text-root) {
+  color: #93a1b1;
+}
+
+.industrial-wordmark {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-family: 'Syne', 'Figtree', sans-serif;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.industrial-wordmark-mark {
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  background: var(--industrial-accent);
+  color: #fff;
+  font-size: 0.85rem;
+}
+
+.industrial-wordmark-rest {
+  font-size: 1.05rem;
+  color: #e7ebf0;
+}
+
+.industrial-nav-item {
+  border-radius: 4px;
+  color: #c6cfd9;
+}
+
+.industrial-nav-item[data-active] {
+  background: rgba(47, 111, 95, 0.24);
+  color: #fff;
+}
+
+.industrial-back {
+  color: #93a1b1;
+  font-size: 0.75rem;
+  text-decoration: none;
+}
+
+.industrial-back:hover {
+  color: #fff;
+}
+
+.industrial-main {
+  background: #f4f6f8;
+}
+
+.industrial-source {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--industrial-line);
+  border-left: 3px solid var(--industrial-accent);
+  border-radius: 3px;
+  background: #fff;
+}
+
+/* 与样例场共用的 Workbench / MarkdownBody 类名，在本区补一套冷色皮肤 */
+.pane {
+  border: 1px solid var(--industrial-line);
+  background: #fff;
+}
+
+.pane-result.is-streaming {
+  border-color: var(--industrial-accent);
+}
+
+.markdown-body {
+  line-height: 1.7;
+  word-break: break-word;
+}
+
+.markdown-body pre {
+  padding: 0.75rem;
+  overflow-x: auto;
+  border-radius: 4px;
+  background: #f0f2f5;
+}
+
+.markdown-body table {
+  border-collapse: collapse;
+}
+
+.markdown-body th,
+.markdown-body td {
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--industrial-line);
+}
+
+.sse-caret {
+  display: inline-block;
+  width: 0.5rem;
+  height: 1rem;
+  margin-left: 2px;
+  background: var(--industrial-accent);
+  vertical-align: text-bottom;
+  animation: industrial-blink 1s steps(2, start) infinite;
+}
+
+@keyframes industrial-blink {
+  to {
+    visibility: hidden;
+  }
+}
