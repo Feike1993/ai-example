@@ -127,7 +127,8 @@ class RedisRunEventLogIT {
     private static ProductionProperties properties(Duration replayTtl) {
         return new ProductionProperties(
             true, "prod-corpus", 4, 400, 1, true, 60, 4,
-            new ProductionProperties.Stream("redis", replayTtl, Duration.ofSeconds(15), Duration.ofMinutes(5))
+            new ProductionProperties.Stream("redis", replayTtl, Duration.ofSeconds(15), Duration.ofMinutes(5)),
+            null
         );
     }
 }

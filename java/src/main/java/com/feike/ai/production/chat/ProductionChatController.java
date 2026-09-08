@@ -1,11 +1,13 @@
 package com.feike.ai.production.chat;
 
 import com.feike.ai.production.rag.ingest.ProductionIngestService;
+import com.feike.ai.production.session.SessionMessage;
 import com.feike.ai.production.sse.SseRunExecutor;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,6 +17,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import java.util.List;
 
 /**
  * 工业级链路 HTTP 入口，统一挂在 {@code /api/v1/**}。
@@ -68,24 +72,49 @@ public class ProductionChatController {
      */
     @PostMapping("/chat")
     public ProductionChatService.ChatAnswer chat(@RequestBody ChatRequest request) {
-        return chatService.answer(request.question(), request.provider(), request.topK());
+        return chatService.answer(request.sessionId(), request.question(), request.provider(), request.topK());
     }
 
     /**
      * 流式问答，返回严格契约的 SSE。
      *
-     * @param question 用户问题
-     * @param provider Chat Provider id
-     * @param topK     覆盖默认 topK
+     * @param question  用户问题
+     * @param sessionId 会话 id；缺省则新建，实际使用的 id 在首条 meta 事件里回传
+     * @param provider  Chat Provider id
+     * @param topK      覆盖默认 topK
      * @return SSE 流
      */
     @GetMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chatStream(
         @RequestParam @NotBlank String question,
+        @RequestParam(required = false) String sessionId,
         @RequestParam(required = false) String provider,
         @RequestParam(required = false) Integer topK
     ) {
-        return runExecutor.start(writer -> chatService.streamAnswer(writer, question, provider, topK));
+        return runExecutor.start(writer ->
+            chatService.streamAnswer(writer, sessionId, question, provider, topK));
+    }
+
+    /**
+     * 查看会话历史。
+     *
+     * @param sessionId 会话 id
+     * @return 按 seq 升序的消息列表
+     */
+    @GetMapping("/sessions/{sessionId}")
+    public SessionView session(@PathVariable String sessionId) {
+        return new SessionView(sessionId, chatService.history(sessionId));
+    }
+
+    /**
+     * 清空会话。
+     *
+     * @param sessionId 会话 id
+     * @return 会话原先是否存在
+     */
+    @DeleteMapping("/sessions/{sessionId}")
+    public ClearResult clearSession(@PathVariable String sessionId) {
+        return new ClearResult(sessionId, chatService.clearSession(sessionId));
     }
 
     /**
@@ -106,9 +135,31 @@ public class ProductionChatController {
     /**
      * 问答请求体。
      *
-     * @param question 用户问题
-     * @param provider Chat Provider id；空则用默认
-     * @param topK     覆盖默认 topK
+     * @param question  用户问题
+     * @param sessionId 会话 id；空则新建，实际使用的 id 在响应里回传
+     * @param provider  Chat Provider id；空则用默认
+     * @param topK      覆盖默认 topK
      */
-    public record ChatRequest(@NotBlank String question, String provider, Integer topK) {}
+    public record ChatRequest(
+        @NotBlank String question,
+        String sessionId,
+        String provider,
+        Integer topK
+    ) {}
+
+    /**
+     * 会话历史视图。
+     *
+     * @param sessionId 会话 id
+     * @param messages  按 seq 升序的消息
+     */
+    public record SessionView(String sessionId, List<SessionMessage> messages) {}
+
+    /**
+     * 清空结果。
+     *
+     * @param sessionId 会话 id
+     * @param existed   会话原先是否存在
+     */
+    public record ClearResult(String sessionId, boolean existed) {}
 }

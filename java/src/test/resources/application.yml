@@ -15,6 +15,10 @@ app:
       event-log: memory
 
 spring:
+  # 单测不该为了建表去连一个不存在的库；需要真实表的 IT 用
+  # @SpringBootTest(properties = "spring.flyway.enabled=true") 自行打开
+  flyway:
+    enabled: false
   ai:
     mcp:
       server:

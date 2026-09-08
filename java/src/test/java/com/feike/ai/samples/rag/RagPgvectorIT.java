@@ -44,6 +44,8 @@ class RagPgvectorIT {
         registry.add("spring.datasource.password", postgres::getPassword);
         registry.add("app.ai.rag.enabled", () -> "true");
         registry.add("spring.ai.vectorstore.type", () -> "pgvector");
+        // 顺带在真实 PG 上跑一遍迁移：这是唯一能发现「迁移脚本本身写错」的地方
+        registry.add("spring.flyway.enabled", () -> "true");
     }
 
     @Autowired(required = false)

@@ -4,6 +4,7 @@ import com.feike.ai.core.AiProperties;
 import com.feike.ai.core.LlmProviderRegistry;
 import com.feike.ai.core.TokenUsage;
 import com.feike.ai.core.TokenUsageExtractor;
+import com.feike.ai.core.context.ContextBudget;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.stereotype.Service;

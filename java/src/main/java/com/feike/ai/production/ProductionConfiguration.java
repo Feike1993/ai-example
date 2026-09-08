@@ -3,9 +3,14 @@ package com.feike.ai.production;
 import com.feike.ai.core.LlmProviderRegistry;
 import com.feike.ai.core.rag.RagKeywordRetriever;
 import com.feike.ai.production.chat.ProductionChatService;
+import com.feike.ai.production.lock.InMemorySessionLock;
+import com.feike.ai.production.lock.RedisSessionLock;
+import com.feike.ai.production.lock.SessionLock;
 import com.feike.ai.production.rag.generate.ProductionAnswerGenerator;
 import com.feike.ai.production.rag.ingest.ProductionIngestService;
 import com.feike.ai.production.rag.retrieve.ProductionRetrievalService;
+import com.feike.ai.production.session.JdbcProductionChatSessionStore;
+import com.feike.ai.production.session.ProductionChatSessionStore;
 import com.feike.ai.production.sse.InMemoryRunEventLog;
 import com.feike.ai.production.sse.RedisRunEventLog;
 import com.feike.ai.production.sse.RunEventLog;
@@ -16,6 +21,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -116,17 +124,78 @@ public class ProductionConfiguration {
     }
 
     /**
-     * @param retrieval  检索层
-     * @param generator  生成层
-     * @param properties 生产链路配置
+     * 会话存储。
+     * <p>
+     * 独立于 {@code app.production.enabled} 再加一层 {@code session.enabled}：
+     * 它依赖 Flyway 迁移已经跑过（{@code prod_chat_session} / {@code prod_chat_message}），
+     * 而链路的其余部分不依赖。schema 还没就位的环境可以只关这一项。
+     *
+     * @param jdbc               数据源模板
+     * @param transactionManager JDBC starter 自动提供
+     * @param properties         取重试次数
+     * @return 会话存储
+     */
+    @Bean
+    @ConditionalOnProperty(prefix = "app.production.session", name = "enabled", havingValue = "true")
+    public ProductionChatSessionStore productionChatSessionStore(
+        JdbcTemplate jdbc,
+        PlatformTransactionManager transactionManager,
+        ProductionProperties properties
+    ) {
+        return new JdbcProductionChatSessionStore(
+            jdbc,
+            new TransactionTemplate(transactionManager),
+            properties.session().seqRetries()
+        );
+    }
+
+    /**
+     * Redis 会话锁：跨实例互斥，生产默认。
+     *
+     * @param redis      字符串模板
+     * @param properties 取锁 TTL
+     * @return 会话锁
+     */
+    @Bean
+    @ConditionalOnProperty(
+        prefix = "app.production.session", name = "lock", havingValue = "redis", matchIfMissing = true)
+    public SessionLock redisSessionLock(StringRedisTemplate redis, ProductionProperties properties) {
+        return new RedisSessionLock(redis, properties.session().lockTtl());
+    }
+
+    /**
+     * 进程内会话锁：仅单实例演示与测试。
+     *
+     * @return 会话锁
+     */
+    @Bean
+    @ConditionalOnProperty(prefix = "app.production.session", name = "lock", havingValue = "memory")
+    public SessionLock inMemorySessionLock() {
+        return new InMemorySessionLock();
+    }
+
+    /**
+     * @param retrieval    检索层
+     * @param generator    生成层
+     * @param properties   生产链路配置
+     * @param sessionStore 会话存储；{@code session.enabled=false} 时不存在
+     * @param sessionLock  会话锁
      * @return 编排层
      */
     @Bean
     public ProductionChatService productionChatService(
         ProductionRetrievalService retrieval,
         ProductionAnswerGenerator generator,
-        ProductionProperties properties
+        ProductionProperties properties,
+        ObjectProvider<ProductionChatSessionStore> sessionStore,
+        ObjectProvider<SessionLock> sessionLock
     ) {
-        return new ProductionChatService(retrieval, generator, properties);
+        return new ProductionChatService(
+            retrieval,
+            generator,
+            properties,
+            sessionStore.getIfAvailable(),
+            sessionLock.getIfAvailable()
+        );
     }
 }

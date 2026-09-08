@@ -138,13 +138,31 @@ docker compose down
 
 ## 跑 Java
 
+### 数据库迁移（Flyway）
+
+建表由 Flyway 在启动期完成，脚本在 [java/src/main/resources/db/migration](java/src/main/resources/db/migration)：
+
+| 版本 | 内容 |
+| --- | --- |
+| `V1` | 接管教学样例的 `chat_session_message`（原先由 `JdbcChatSessionStore` 的 `@PostConstruct` 建） |
+| `V2` | 工业级会话表 `prod_chat_session` / `prod_chat_message` |
+
+两件事值得注意：
+
+**PostgreSQL 成了启动硬依赖。** 这与 `spring.datasource.hikari.initialization-fail-timeout: -1` 的取舍相反——那个设置是为了「没有 Docker 也能把进程起起来」。表结构对不上时让进程起不来，好过跑起来之后每个请求各报各的错。想保留原来的调试体验就设 `FLYWAY_ENABLED=false`，此时会话表不存在，`PRODUCTION_SESSION_ENABLED` 要一并关掉。
+
+**Flyway 不管向量库。** `vector_store` 仍归 Spring AI 的 `initialize-schema`，全文索引仍归 `RagKeywordRetriever`。同一个对象只能有一个 owner，否则迁移与运行期 DDL 会互相打架。
+
+存量库（已有 `chat_session_message`、没有 `flyway_schema_history`）不需要手工处理：`baseline-on-migrate: true` 会自动接管。
+
 ### Redis 要不要起？
 
 | 你要跑的内容 | PostgreSQL | Redis | 说明 |
 | --- | --- | --- | --- |
-| 仅 Chat / Tools / Agent 等非 RAG 样例 | 可选 | 可选 | 进程能起来；readiness 在缺 Redis/DB 时会失败 |
+| 仅 Chat / Tools / Agent 等非 RAG 样例 | **需要**（Flyway 迁移）| 可选 | 不想起库就设 `FLYWAY_ENABLED=false` |
 | RAG / 记忆 / 持久会话（教学样例） | **需要** | 可选 | 样例路径不读 Redis |
 | 工业级 `/api/v1/**`（含 SSE 断线续传） | **需要** | **需要** | 默认 `PRODUCTION_ENABLED=true`、`PRODUCTION_EVENT_LOG=redis`；Redis 挂了接口 503，不拖垮启动 |
+| 工业级多轮会话 | **需要** | 建议 | `PRODUCTION_SESSION_ENABLED=true`；`PRODUCTION_SESSION_LOCK=memory` 可不用 Redis，但多实例下等于没有锁 |
 | 只想先关工业级、专心跑样例 | 按上表 | 可不起 | `PRODUCTION_ENABLED=false` |
 
 本地推荐直接把 Postgres + Redis 一起起：
@@ -179,6 +197,11 @@ curl -s http://localhost:8080/ai-example/api/v1/chat \
   -H 'Content-Type: application/json' \
   -d '{"question":"这个项目的 RAG 是怎么做的？"}'
 curl -N "http://localhost:8080/ai-example/api/v1/chat/stream?question=RAG"
+
+# 多轮：sessionId 不传则由后端新建，并在首条 meta 事件里回传，下一轮带上它即可
+curl -N "http://localhost:8080/ai-example/api/v1/chat/stream?question=RAG&sessionId=demo-1"
+curl -s http://localhost:8080/ai-example/api/v1/sessions/demo-1
+curl -s -X DELETE http://localhost:8080/ai-example/api/v1/sessions/demo-1
 ```
 
 测试：
@@ -187,8 +210,20 @@ curl -N "http://localhost:8080/ai-example/api/v1/chat/stream?question=RAG"
 cd java && ./gradlew test
 # 可选 pgvector 集成（需 Docker）：
 # RUN_PGVECTOR_IT=true ./gradlew test --tests RagPgvectorIT
-# 可选 Redis 事件回放集成（需 Docker）：
-# RUN_REDIS_IT=true ./gradlew test --tests RedisRunEventLogIT
+# 可选 Redis 事件回放 / 会话锁集成（需 Docker）：
+# RUN_REDIS_IT=true ./gradlew test --tests RedisRunEventLogIT --tests RedisSessionLockIT
+# 可选会话存储集成：事务、并发取号、幂等（需 Docker）
+# RUN_SESSION_IT=true ./gradlew test --tests ProductionChatSessionStoreIT
+```
+
+集成测试默认用 Testcontainers 起容器。CI 上常以 service 形式提供依赖，容器套容器反而跑不起来；
+本机 Testcontainers 与某些 Docker 版本不兼容时同理。这两种情况直接指向已有实例：
+
+```bash
+RUN_SESSION_IT=true SESSION_IT_JDBC_URL=jdbc:postgresql://localhost:5432/ai_example \
+  ./gradlew test --tests ProductionChatSessionStoreIT
+RUN_REDIS_IT=true REDIS_IT_HOST=localhost REDIS_IT_PORT=6379 \
+  ./gradlew test --tests RedisSessionLockIT
 ```
 
 ## 工业级链路（与 samples 分开）
@@ -198,6 +233,27 @@ cd java && ./gradlew test
 - 配置前缀 `app.production.*`（环境变量 `PRODUCTION_*` / `REDIS_*`）
 - RAG 拆成 ingest / retrieve / generate，不含教学用的 compare 分支
 - SSE 契约：`meta → sources → delta* → usage → done|error`，带 `runId` / `seq`；断线用 `GET /api/v1/runs/{runId}/stream` + `Last-Event-ID` 续传
+
+### 多轮会话：教学版修好了什么
+
+[JdbcChatSessionStore](java/src/main/java/com/feike/ai/samples/context/JdbcChatSessionStore.java) 是教学实现，刻意保留了几处生产不该有的写法；
+修好的版本在 [com.feike.ai.production.session](java/src/main/java/com/feike/ai/production/session)，两边可以直接对照读。
+
+| 问题 | 教学版 | 生产版 |
+| --- | --- | --- |
+| 半个 turn | user 与 assistant 分两次裸写 | 同一事务，要么都在要么都不在 |
+| 序号竞态 | `SELECT MAX(seq)` 再 INSERT | `INSERT ... SELECT COALESCE(MAX(seq),-1)+1` 单语句取号，复合主键冲突后重取 |
+| 跨实例并发 | JVM `synchronized`，多实例失效 | Redis 会话锁（`SET NX PX` + Lua CAS 释放） |
+| 重复提交 | 会写两遍 | `turn_id` 唯一索引 + 写前查重 |
+| 建表 | `@PostConstruct` 运行期 DDL | Flyway 版本化迁移 |
+
+三条设计上的取舍：
+
+**只有收到 `done` 才落库。** 取消和报错都不写。宁可丢一轮，也不能让历史里留下一条没有回答的孤儿 user 消息——它会一直参与后续每一轮的 prompt，错误只会不断放大。
+
+**落库失败不改变已发出的结论。** 答案此刻已经流到用户屏幕上了，再发 `error` 只会让人不知道到底成没成。持久化异常降级为 `done` 负载里的 `persisted:false`，前端据此提示「本轮未计入历史」。
+
+**锁不是正确性的前提。** Redis 锁在主从切换、网络分区、持有者停顿超过 TTL 时都可能被两个持有者同时认为归自己所有，所以它只负责减少冲突、给用户一个明确的「会话忙」（`session_busy`，同步接口 409）。真正兜底的是 `prod_chat_message` 的复合主键与 `turn_id` 唯一索引。
 
 ## 跑前端
 

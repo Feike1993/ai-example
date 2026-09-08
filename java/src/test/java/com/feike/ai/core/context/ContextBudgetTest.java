@@ -1,4 +1,4 @@
-package com.feike.ai.samples.context;
+package com.feike.ai.core.context;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

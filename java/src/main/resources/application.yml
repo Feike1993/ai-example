@@ -36,6 +36,15 @@ spring:
     hikari:
       # 无 Docker 时允许进程起来；真正 ingest/query 仍会因连不上库失败
       initialization-fail-timeout: -1
+  flyway:
+    # 注意这里与上面 initialization-fail-timeout: -1 的取舍相反：Flyway 在启动期跑迁移，
+    # 连不上库就直接启动失败。表结构对不上时让进程起不来，好过跑起来之后每个请求各报各的错。
+    # 想保留「没有 Docker 也能起进程」的调试体验，设 FLYWAY_ENABLED=false。
+    enabled: ${FLYWAY_ENABLED:true}
+    # 存量库里 chat_session_message 已由旧版 @PostConstruct 建好，
+    # 没有 flyway_schema_history 表。baseline 让 V1 在这类库上也能顺利接管。
+    baseline-on-migrate: true
+    baseline-version: 0
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -218,3 +227,14 @@ app:
       heartbeat-interval: ${PRODUCTION_HEARTBEAT:15s}
       # 单条 run 的墙钟上限，超时发 error 事件而不是无限挂着
       timeout: ${PRODUCTION_STREAM_TIMEOUT:5m}
+    session:
+      # 多轮会话依赖 Flyway 建的 prod_chat_* 两张表；FLYWAY_ENABLED=false 时应一并关掉
+      enabled: ${PRODUCTION_SESSION_ENABLED:true}
+      # redis=跨实例互斥；memory=单进程，多实例下等于没有锁
+      lock: ${PRODUCTION_SESSION_LOCK:redis}
+      max-messages: ${PRODUCTION_SESSION_MAX_MESSAGES:20}
+      token-budget: ${PRODUCTION_SESSION_TOKEN_BUDGET:2000}
+      # 要明显长于 stream.timeout，否则一次慢生成就会让锁在持有期间过期
+      lock-ttl: ${PRODUCTION_SESSION_LOCK_TTL:6m}
+      # seq 取号撞上主键时的重试次数；正常并发下一次就够，留余量应对突发
+      seq-retries: ${PRODUCTION_SESSION_SEQ_RETRIES:3}

@@ -22,6 +22,9 @@ dependencies {
     implementation 'org.springframework.ai:spring-ai-starter-mcp-client'
     implementation 'org.springframework.ai:spring-ai-starter-vector-store-pgvector'
     implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    // 会话表结构版本化；Flyway 10+ 起 PostgreSQL 支持拆成独立模块
+    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-database-postgresql'
     // 工业级链路：run 状态注册表 + SSE 事件回放流
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'

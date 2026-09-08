@@ -24,6 +24,7 @@ import java.time.Duration;
  * @param rrfK          RRF 常数 k
  * @param keywordTopK   关键词路 topK
  * @param stream        SSE 流控参数
+ * @param session       多轮会话参数
  */
 @ConfigurationProperties(prefix = "app.production")
 public record ProductionProperties(
@@ -35,7 +36,8 @@ public record ProductionProperties(
     boolean hybridEnabled,
     int rrfK,
     int keywordTopK,
-    Stream stream
+    Stream stream,
+    Session session
 ) {
 
     public ProductionProperties {
@@ -59,6 +61,9 @@ public record ProductionProperties(
         }
         if (stream == null) {
             stream = new Stream(null, null, null, null);
+        }
+        if (session == null) {
+            session = new Session(false, null, 0, 0, null, 0);
         }
     }
 
@@ -93,6 +98,52 @@ public record ProductionProperties(
             }
             if (timeout == null || timeout.isNegative() || timeout.isZero()) {
                 timeout = Duration.ofMinutes(5);
+            }
+        }
+    }
+
+    /**
+     * 多轮会话参数。
+     * <p>
+     * 单独一个开关而不是跟着 {@code app.production.enabled} 走：会话持久化要求
+     * Flyway 迁移已经跑过，而工业级链路的其余部分（无状态问答、SSE 续传）不需要。
+     * 分开之后，schema 还没就位的环境仍然能先把链路跑起来。
+     *
+     * @param enabled     是否启用多轮会话；关闭时问答退化为单轮，不读也不写会话表
+     * @param lock        {@code redis}（默认，跨实例互斥）或 {@code memory}（单进程，测试用）
+     * @param maxMessages 送入模型的历史条数上限
+     * @param tokenBudget 历史的近似 token 上限；与 maxMessages 取更严的那个
+     * @param lockTtl     会话锁存活上限，兜底持有者崩溃；须明显长于一次对话的墙钟上限
+     * @param seqRetries  seq 取号冲突后的最大尝试次数
+     */
+    public record Session(
+        boolean enabled,
+        String lock,
+        int maxMessages,
+        int tokenBudget,
+        Duration lockTtl,
+        int seqRetries
+    ) {
+        public Session {
+            if (lock == null || lock.isBlank()) {
+                lock = "redis";
+            } else {
+                lock = lock.trim().toLowerCase();
+                if (!lock.equals("redis") && !lock.equals("memory")) {
+                    lock = "redis";
+                }
+            }
+            if (maxMessages < 2) {
+                maxMessages = 20;
+            }
+            if (tokenBudget < 100) {
+                tokenBudget = 2000;
+            }
+            if (lockTtl == null || lockTtl.isNegative() || lockTtl.isZero()) {
+                lockTtl = Duration.ofMinutes(6);
+            }
+            if (seqRetries < 1) {
+                seqRetries = 3;
             }
         }
     }

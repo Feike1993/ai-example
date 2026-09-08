@@ -1,8 +1,5 @@
 package com.feike.ai.samples.context;
 
-import jakarta.annotation.PostConstruct;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -13,35 +10,22 @@ import java.util.List;
 
 /**
  * PostgreSQL 持久会话；与 RAG 同库。配置 {@code app.ai.context.store=jdbc}（默认）时启用。
+ * <p>
+ * 建表已交给 Flyway（{@code db/migration/V1__baseline_chat_session_message.sql}），
+ * 本类不再做运行期 DDL。
+ * <p>
+ * 这是教学实现，刻意保留了几处生产不该有的写法作为对照：整个 turn 没有事务、
+ * seq 靠先查 {@code MAX(seq)} 再插入、跨实例串行只有 JVM {@code synchronized}。
+ * 修好的版本在 {@code com.feike.ai.production.session}。
  */
 @Component
 @ConditionalOnProperty(prefix = "app.ai.context", name = "store", havingValue = "jdbc", matchIfMissing = true)
 public class JdbcChatSessionStore implements ChatSessionStore {
 
-    private static final Logger log = LoggerFactory.getLogger(JdbcChatSessionStore.class);
-
     private final JdbcTemplate jdbcTemplate;
 
     public JdbcChatSessionStore(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
-    }
-
-    /**
-     * 幂等建表。
-     */
-    @PostConstruct
-    public void ensureSchema() {
-        jdbcTemplate.execute("""
-            CREATE TABLE IF NOT EXISTS chat_session_message (
-                session_id VARCHAR(128) NOT NULL,
-                seq INTEGER NOT NULL,
-                role VARCHAR(32) NOT NULL,
-                content TEXT NOT NULL,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                PRIMARY KEY (session_id, seq)
-            )
-            """);
-        log.info("chat_session_message 表已就绪");
     }
 
     @Override

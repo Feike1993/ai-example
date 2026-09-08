@@ -87,6 +87,18 @@ body {
   background: #fff;
 }
 
+/* 多轮之间要一眼可分：连续几轮问答挤在一起时，很难看出答案属于哪一问 */
+.industrial-turn + .industrial-turn {
+  padding-top: 1rem;
+  border-top: 1px dashed var(--industrial-line);
+}
+
+.industrial-turn-question {
+  padding: 0.4rem 0.6rem;
+  border-radius: 3px;
+  background: #eef1f4;
+}
+
 /* 与样例场共用的 Workbench / MarkdownBody 类名，在本区补一套冷色皮肤 */
 .pane {
   border: 1px solid var(--industrial-line);

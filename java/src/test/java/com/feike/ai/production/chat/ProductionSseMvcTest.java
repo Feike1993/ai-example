@@ -1,10 +1,12 @@
 package com.feike.ai.production.chat;
 
 import com.feike.ai.production.ProductionProperties;
+import com.feike.ai.production.lock.InMemorySessionLock;
 import com.feike.ai.production.rag.ProductionSource;
 import com.feike.ai.production.rag.generate.ProductionAnswerGenerator;
 import com.feike.ai.production.rag.ingest.ProductionIngestService;
 import com.feike.ai.production.rag.retrieve.ProductionRetrievalService;
+import com.feike.ai.production.session.FakeProductionChatSessionStore;
 import com.feike.ai.production.sse.InMemoryRunEventLog;
 import com.feike.ai.production.sse.SseRunExecutor;
 import org.junit.jupiter.api.AfterEach;
@@ -34,7 +36,9 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -48,11 +52,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ProductionSseMvcTest {
 
     private static final Pattern RUN_ID = Pattern.compile("\"runId\":\"([0-9a-f-]+)\"");
+    private static final Pattern SESSION_ID = Pattern.compile("\"sessionId\":\"([0-9a-f-]+)\"");
 
     private final ProductionRetrievalService retrieval = mock(ProductionRetrievalService.class);
     private final ProductionAnswerGenerator generator = mock(ProductionAnswerGenerator.class);
     private final ProductionIngestService ingestService = mock(ProductionIngestService.class);
     private final InMemoryRunEventLog eventLog = new InMemoryRunEventLog();
+    private final FakeProductionChatSessionStore sessionStore = new FakeProductionChatSessionStore();
 
     private SseRunExecutor runExecutor;
     private MockMvc mockMvc;
@@ -61,10 +67,12 @@ class ProductionSseMvcTest {
     void setUp() {
         ProductionProperties properties = new ProductionProperties(
             true, "prod-corpus", 4, 400, 1, true, 60, 4,
-            new ProductionProperties.Stream("memory", Duration.ofMinutes(1), Duration.ofSeconds(30), Duration.ofSeconds(10))
+            new ProductionProperties.Stream("memory", Duration.ofMinutes(1), Duration.ofSeconds(30), Duration.ofSeconds(10)),
+            new ProductionProperties.Session(true, "memory", 20, 2000, Duration.ofMinutes(1), 3)
         );
         runExecutor = new SseRunExecutor(eventLog, JsonMapper.builder().build(), properties);
-        ProductionChatService chatService = new ProductionChatService(retrieval, generator, properties);
+        ProductionChatService chatService = new ProductionChatService(
+            retrieval, generator, properties, sessionStore, new InMemorySessionLock());
         mockMvc = MockMvcBuilders
             .standaloneSetup(new ProductionChatController(chatService, ingestService, runExecutor))
             .build();
@@ -94,7 +102,7 @@ class ProductionSseMvcTest {
     void upstreamFailureShouldEmitErrorEventInsteadOfBareDisconnect() throws Exception {
         stubRetrieval();
         doThrow(new IllegalStateException("模型网关 502"))
-            .when(generator).stream(anyString(), any(), any(), any());
+            .when(generator).stream(anyString(), any(), any(), any(), any());
 
         String body = streamBody("/api/v1/chat/stream?question=x");
 
@@ -129,6 +137,41 @@ class ProductionSseMvcTest {
             .andExpect(status().isGone());
     }
 
+    @Test
+    void streamShouldEchoSessionIdAndExposeHistoryOverHttp() throws Exception {
+        stubRetrieval();
+        stubStream("答", "案");
+
+        String body = streamBody("/api/v1/chat/stream?question=x&sessionId=s-http");
+        assertTrue(body.contains("\"sessionId\":\"s-http\""), body);
+
+        mockMvc.perform(get("/api/v1/sessions/{id}", "s-http"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.messages.length()").value(2))
+            .andExpect(jsonPath("$.messages[0].role").value("user"))
+            .andExpect(jsonPath("$.messages[1].content").value("答案"));
+
+        mockMvc.perform(delete("/api/v1/sessions/{id}", "s-http"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.existed").value(true));
+
+        mockMvc.perform(get("/api/v1/sessions/{id}", "s-http"))
+            .andExpect(jsonPath("$.messages.length()").value(0));
+    }
+
+    @Test
+    void newSessionShouldGetGeneratedIdInMeta() throws Exception {
+        stubRetrieval();
+        stubStream("答");
+
+        String body = streamBody("/api/v1/chat/stream?question=x");
+
+        // 不带 sessionId 时后端负责生成，并且必须在 meta 里回传，否则客户端无从续接
+        Matcher matcher = SESSION_ID.matcher(body);
+        assertTrue(matcher.find(), "meta 事件里应带生成的 sessionId：" + body);
+        assertFalse(matcher.group(1).isBlank());
+    }
+
     private void stubRetrieval() {
         Document doc = Document.builder()
             .id("doc-1")
@@ -146,12 +189,12 @@ class ProductionSseMvcTest {
 
     private void stubStream(String... chunks) {
         doAnswer(invocation -> {
-            Consumer<String> onChunk = invocation.getArgument(3);
+            Consumer<String> onChunk = invocation.getArgument(4);
             for (String chunk : chunks) {
                 onChunk.accept(chunk);
             }
             return null;
-        }).when(generator).stream(anyString(), any(), any(), any());
+        }).when(generator).stream(anyString(), any(), any(), any(), any());
     }
 
     private String streamBody(String uri) throws Exception {

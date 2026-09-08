@@ -59,6 +59,18 @@ export type UsagePayload = {
   sourceCount: number
 }
 
+/**
+ * done 事件负载。
+ *
+ * `persisted=false` 表示回答生成成功但没能写进会话历史——后端刻意不把它降级成 error，
+ * 界面要据此提示「本轮未计入历史」，否则用户会以为下一轮还能接上。
+ */
+export type DonePayload = {
+  retrievalEmpty?: boolean
+  sessionId?: string | null
+  persisted?: boolean
+}
+
 /** 无法解析的事件，计数而非静默丢弃——静默丢弃会让前端显示不全却毫无线索。 */
 export type MalformedEvent = {
   reason: 'unknown_event' | 'bad_json' | 'bad_id'
@@ -71,6 +83,7 @@ export type RunHandlers = {
   onDelta?: (text: string) => void
   onStep?: (step: Partial<AgentStep> & { index: number; toolName: string }) => void
   onUsage?: (payload: UsagePayload) => void
+  onDone?: (payload: DonePayload) => void
   onMalformed?: (event: MalformedEvent) => void
   /** seq 出现缺口；返回后客户端会尝试续传（若配置了 resume）。 */
   onGap?: (expected: number, received: number) => void
@@ -359,6 +372,7 @@ function handleFrame(
       handlers.onUsage?.(payload as UsagePayload)
       return null
     case 'done':
+      handlers.onDone?.((payload ?? {}) as DonePayload)
       return 'done'
     case 'error': {
       const err = payload as { code?: string; message?: string }

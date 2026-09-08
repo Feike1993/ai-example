@@ -1,4 +1,4 @@
-package com.feike.ai.samples.context;
+package com.feike.ai.core.context;
 
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.MessageType;
@@ -11,10 +11,27 @@ import java.util.List;
  * 上下文预算：按「近似 token」与最大消息数裁剪或准备摘要输入。
  * <p>
  * 近似 token = 字符数 / 4（启发式，不接精确 tokenizer）。
+ * <p>
+ * 放在 core 而不是 samples：教学的 context 样例与工业级链路都要按预算裁历史，
+ * 逻辑一模一样。这里刻意不依赖任何存储抽象（原先调 samples 的
+ * {@code ChatSessionStore.isUserOrAssistant}），否则 core 会反向依赖 samples。
  */
 public final class ContextBudget {
 
     private ContextBudget() {}
+
+    /**
+     * 判断是否为参与预算裁剪的对话消息。
+     * <p>
+     * system 单列是因为它永远保留，不进「丢最旧一对」的候选集。
+     *
+     * @param message 消息
+     * @return user 或 assistant 时为真
+     */
+    public static boolean isUserOrAssistant(Message message) {
+        MessageType type = message.getMessageType();
+        return type == MessageType.USER || type == MessageType.ASSISTANT;
+    }
 
     /**
      * 估算消息列表的近似 token 数。
@@ -47,7 +64,7 @@ public final class ContextBudget {
         for (Message message : history) {
             if (message.getMessageType() == MessageType.SYSTEM) {
                 systems.add(message);
-            } else if (ChatSessionStore.isUserOrAssistant(message)) {
+            } else if (isUserOrAssistant(message)) {
                 turns.add(message);
             }
         }
@@ -92,7 +109,7 @@ public final class ContextBudget {
         for (Message message : history) {
             if (message.getMessageType() == MessageType.SYSTEM) {
                 systems.add(message);
-            } else if (ChatSessionStore.isUserOrAssistant(message)) {
+            } else if (isUserOrAssistant(message)) {
                 turns.add(message);
             }
         }
@@ -138,7 +155,7 @@ public final class ContextBudget {
     private static List<Message> extractTurns(List<Message> messages) {
         List<Message> turns = new ArrayList<>();
         for (Message message : messages) {
-            if (ChatSessionStore.isUserOrAssistant(message)) {
+            if (isUserOrAssistant(message)) {
                 turns.add(message);
             }
         }

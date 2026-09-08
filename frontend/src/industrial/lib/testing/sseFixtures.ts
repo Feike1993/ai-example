@@ -19,10 +19,49 @@ export function frame(seq: number | null, event: string, data: string): string {
 }
 
 /**
+ * 造一个逐块吐出文本的 SSE 响应。
+ *
+ * 单独导出是为了让需要按 URL 分流的用例（会话接口和流式接口混在一起时）
+ * 能自己组装 fetch，而不必再造一遍流。
+ *
+ * @param chunks  依次吐出的文本块
+ * @param signal  取消信号；已取消时让流报 AbortError
+ * @param delayMs 每块之间的间隔，用于制造「还在生成中」的窗口
+ * @returns text/event-stream 响应
+ */
+export function sseResponse(chunks: string[], signal?: AbortSignal | null, delayMs = 0): Response {
+  const encoder = new TextEncoder()
+  let index = 0
+
+  const stream = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (signal?.aborted) {
+        controller.error(new DOMException('Aborted', 'AbortError'))
+        return
+      }
+      if (index >= chunks.length) {
+        controller.close()
+        return
+      }
+      if (delayMs) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs))
+      }
+      controller.enqueue(encoder.encode(chunks[index]))
+      index += 1
+    },
+  })
+
+  return new Response(stream, {
+    status: 200,
+    headers: { 'Content-Type': 'text/event-stream' },
+  })
+}
+
+/**
  * 构造一个返回给定文本块的 fetch 替身。
  *
  * @param chunks   依次吐出的文本块
- * @param options  status 非 2xx 时模拟 HTTP 失败；truncate 表示流在中途结束
+ * @param options  status 非 2xx 时模拟 HTTP 失败；delayMs 拉长每块之间的间隔
  * @returns 可传给 streamRun 的 fetchImpl
  */
 export function fakeFetch(
@@ -35,32 +74,6 @@ export function fakeFetch(
     if (status >= 400) {
       return new Response(options.body ?? '后端炸了', { status })
     }
-
-    const signal = init?.signal
-    const encoder = new TextEncoder()
-    let index = 0
-
-    const stream = new ReadableStream<Uint8Array>({
-      async pull(controller) {
-        if (signal?.aborted) {
-          controller.error(new DOMException('Aborted', 'AbortError'))
-          return
-        }
-        if (index >= chunks.length) {
-          controller.close()
-          return
-        }
-        if (options.delayMs) {
-          await new Promise((resolve) => setTimeout(resolve, options.delayMs))
-        }
-        controller.enqueue(encoder.encode(chunks[index]))
-        index += 1
-      },
-    })
-
-    return new Response(stream, {
-      status: 200,
-      headers: { 'Content-Type': 'text/event-stream' },
-    })
+    return sseResponse(chunks, init?.signal, options.delayMs)
   }) as unknown as typeof fetch
 }

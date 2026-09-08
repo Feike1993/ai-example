@@ -1,8 +1,12 @@
 package com.feike.ai.production.rag.generate;
 
 import com.feike.ai.core.LlmProviderRegistry;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.document.Document;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -12,6 +16,9 @@ import java.util.function.Consumer;
  * 只做一件事——「基于给定上下文生成」。检索、空检索判定、事件推送都不在这里，
  * 这样换模型、改 prompt、加 citation 约束都只动这一个类，
  * 也让它可以脱离向量库和 Redis 单测。
+ * <p>
+ * 多轮历史由调用方裁剪后传进来，本类不碰存储也不做预算——
+ * 「裁多少」是会话策略，「怎么问」才是这里的职责。
  */
 public class ProductionAnswerGenerator {
 
@@ -42,13 +49,13 @@ public class ProductionAnswerGenerator {
      * @param question 用户问题
      * @param provider Chat Provider id；空则用默认
      * @param hits     检索命中
+     * @param history  已裁剪的多轮历史，可为空
      * @return 答案正文
      */
-    public String generate(String question, String provider, List<Document> hits) {
+    public String generate(String question, String provider, List<Document> hits, List<Message> history) {
         String answer = registry.plainClient(provider)
             .prompt()
-            .system(SYSTEM_GROUNDED)
-            .user(buildUserMessage(question, hits))
+            .messages(buildMessages(question, hits, history))
             .call()
             .content();
         return answer == null ? "" : answer;
@@ -63,13 +70,19 @@ public class ProductionAnswerGenerator {
      * @param question 用户问题
      * @param provider Chat Provider id；空则用默认
      * @param hits     检索命中
+     * @param history  已裁剪的多轮历史，可为空
      * @param onChunk  增量回调
      */
-    public void stream(String question, String provider, List<Document> hits, Consumer<String> onChunk) {
+    public void stream(
+        String question,
+        String provider,
+        List<Document> hits,
+        List<Message> history,
+        Consumer<String> onChunk
+    ) {
         registry.plainClient(provider)
             .prompt()
-            .system(SYSTEM_GROUNDED)
-            .user(buildUserMessage(question, hits))
+            .messages(buildMessages(question, hits, history))
             .stream()
             .content()
             .toStream()
@@ -78,6 +91,28 @@ public class ProductionAnswerGenerator {
                     onChunk.accept(chunk);
                 }
             });
+    }
+
+    /**
+     * 组装完整消息序列：system → 历史 → 本轮（含检索上下文）。
+     * <p>
+     * 自己拼列表而不是用 {@code .system()} + {@code .user()}：检索上下文只跟当前这一轮走，
+     * 必须排在历史之后。如果交给 ChatClient 分别设置，system / history / user 的相对次序
+     * 就变成了框架实现细节，而这个次序直接决定模型把上下文关联到哪一轮。
+     *
+     * @param question 用户问题
+     * @param hits     检索命中
+     * @param history  已裁剪的多轮历史，可为空
+     * @return 送入模型的消息序列
+     */
+    static List<Message> buildMessages(String question, List<Document> hits, List<Message> history) {
+        List<Message> messages = new ArrayList<>();
+        messages.add(new SystemMessage(SYSTEM_GROUNDED));
+        if (history != null) {
+            messages.addAll(history);
+        }
+        messages.add(new UserMessage(buildUserMessage(question, hits)));
+        return messages;
     }
 
     /**
