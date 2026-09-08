@@ -84,7 +84,7 @@ export function GuardrailPanel({
         }
         result={
           <Stack gap="md">
-            <RequestMeta elapsedMs={elapsedMs} usage={result?.usage} error={error} />
+            <RequestMeta elapsedMs={elapsedMs} usage={result?.usage} />
             {result && (
               <>
                 <Badge color={result.blocked ? 'red' : 'teal'} variant="light">
@@ -103,7 +103,7 @@ export function GuardrailPanel({
                     </Timeline.Item>
                   ))}
                 </Timeline>
-                <ResultBody>
+                <ResultBody error={null} emptyHint="暂无回答">
                   <MarkdownBody>{result.answer}</MarkdownBody>
                 </ResultBody>
                 <RawJsonAccordion value={result} />

@@ -3,6 +3,20 @@ server:
   servlet:
     context-path: /ai-example
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        readiness:
+          # PostgreSQL 是默认 jdbc 会话与 pgvector 的硬依赖，readiness 必须反映数据库状态。
+          include: readinessState,db
+
 spring:
   servlet:
     encoding:

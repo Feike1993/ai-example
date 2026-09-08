@@ -1,4 +1,4 @@
-import { Badge, Button, Checkbox, Stack, Text, TextInput, Textarea } from '@mantine/core'
+import { Badge, Button, Checkbox, Stack, TextInput, Textarea } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useState } from 'react'
 import {

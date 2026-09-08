@@ -317,7 +317,7 @@ export async function getJson<T>(path: string): Promise<T> {
   try {
     response = await fetch(path)
   } catch {
-    throw new Error('无法连接后端，请先在 8080 端口启动 Java 服务')
+    throw new Error('后端服务不可用，请检查部署状态或稍后重试')
   }
   const text = await response.text()
   if (!response.ok) {
@@ -359,7 +359,7 @@ async function requestJson<T>(path: string, method: 'POST' | 'PUT', body: unknow
       body: JSON.stringify(body),
     })
   } catch {
-    throw new Error('无法连接后端，请先在 8080 端口启动 Java 服务')
+    throw new Error('后端服务不可用，请检查部署状态或稍后重试')
   }
 
   const text = await response.text()
@@ -438,7 +438,7 @@ export function streamChat(
       finish()
       return
     }
-    finish(new Error('无法连接后端或流式中断，请确认 Java 服务已在 8080 启动'))
+    finish(new Error('后端服务不可用或流式响应中断，请检查部署状态或稍后重试'))
   }
 
   return () => finish()
@@ -563,7 +563,7 @@ export function streamAgentReact(
       finish()
       return
     }
-    finish(new Error('无法连接后端或流式中断，请确认 Java 服务已在 8080 启动'))
+    finish(new Error('后端服务不可用或流式响应中断，请检查部署状态或稍后重试'))
   }
 
   return () => finish()
@@ -636,7 +636,7 @@ export function streamRag(
       finish()
       return
     }
-    finish(new Error('无法连接后端或流式中断，请确认 Java 服务已在 8080 启动，且已 ingest'))
+    finish(new Error('后端服务不可用、流式响应中断或知识库尚未导入'))
   }
 
   return () => finish()

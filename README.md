@@ -69,8 +69,8 @@ Java：**Spring Boot 4.1 + Spring AI 2.0 + Gradle**；Python：**LangGraph / MCP
 
 - JDK **25**
 - Python **3.11+**（[uv](https://docs.astral.sh/uv/)）
-- Node.js **20.19+**（`pnpm`，在 **frontend/** 目录执行，不要在仓库根目录跑 `pnpm start`）
-- Docker（仅 RAG：PostgreSQL + pgvector）
+- Node.js **22.13+**（`pnpm@11` 依赖 `node:sqlite`；在 **frontend/** 目录执行，不要在仓库根目录跑 `pnpm start`）
+- Docker（完整容器化运行，或仅启动 PostgreSQL + pgvector）
 - API Key：**聊天**默认 DeepSeek；**Embedding（RAG）**需要 DashScope
 
 ```bash
@@ -79,11 +79,67 @@ cp .env.example .env
 # PROVIDER_DASHSCOPE_API_KEY=...  # RAG Embedding 必填
 ```
 
+## 使用 Docker Compose 运行完整系统
+
+完整模式会启动 PostgreSQL/pgvector、独立 MCP Server、Java 主服务和 Nginx 前端。浏览器只需访问 Nginx，API 与 SSE 通过同源 `/ai-example` 路径代理到 Java。
+
+```bash
+cp .env.example .env
+# 编辑 .env，至少填入实际使用的 Provider Key
+
+#1. `docker compose up`
+#根据 `docker-compose.yml` 启动 / 创建容器
+#2. `--build`
+#**先重新构建镜像**，再启动容器（修改了 Dockerfile 时必须加这个，否则用旧镜像）
+#3. `-d` = `--detach`
+#**后台守护进程运行**，终端不会卡住、不打印实时日志
+#4. `--wait`
+#等待所有服务**启动健康检查通过**之后，命令才结束退出；
+#如果服务启动失败 / 健康检查不通过，这条命令最终返回失败退出码（适合 CI 自动化脚本）
+
+docker compose up -d --build --wait
+docker compose ps
+```
+
+打开 http://localhost:8088 。默认仅发布前端端口，Java、MCP 和 PostgreSQL 只在 Compose 内网可见。
+
+调试时如需从宿主机直连 `5432`、`8080`、`8081`：
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build --wait
+```
+
+健康检查与日志：
+
+```bash
+curl -fsS http://localhost:8088/healthz
+curl -fsS http://localhost:8088/ai-example/actuator/health/readiness
+curl -fsS http://localhost:8088/ai-example/
+docker compose logs -f java mcp-server frontend
+```
+
+验证 SSE 时使用 `curl -N`，避免客户端缓冲掩盖代理问题：
+
+```bash
+curl -N "http://localhost:8088/ai-example/chat/stream?prompt=%E4%BD%A0%E5%A5%BD"
+```
+
+停止服务：
+
+```bash
+docker compose down
+```
+
+普通 `down` 会保留数据库命名卷。**不要随意执行 `docker compose down -v`，该命令会永久删除本地数据库数据。**
+
+> `.env` 仅由 Compose 或 Gradle `bootRun` 注入；打包后的 `java -jar` 不会自动读取仓库 `.env`。`ai/ai` 与 `dev-mcp-token` 仅适合本地演示，非本地部署必须替换。MCP Client 与 Server 的 `MCP_BEARER_TOKEN` 必须一致。
+
 ## 跑 Java
 
 ```bash
-# RAG / 记忆需要向量库
-docker compose up -d
+# RAG / 记忆需要向量库；宿主机开发只启动数据库
+# 调试覆盖文件负责发布 PostgreSQL 端口
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres
 
 # 第六期 MCP 远端（默认 mode=remote）：另开终端起 Server
 cd mcp-server && ./gradlew bootRun

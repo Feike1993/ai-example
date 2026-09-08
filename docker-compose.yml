@@ -1,19 +1,121 @@
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    ports:
-      - "5432:5432"
     environment:
-      POSTGRES_DB: ai_example
-      POSTGRES_USER: ai
-      POSTGRES_PASSWORD: ai
+      POSTGRES_DB: ${PG_DB:-ai_example}
+      POSTGRES_USER: ${PG_USER:-ai}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-ai}
     volumes:
       - ai_example_pg:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ai -d ai_example"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  mcp-server:
+    build:
+      context: .
+      dockerfile: mcp-server/Dockerfile
+    environment:
+      MCP_BEARER_TOKEN: ${MCP_BEARER_TOKEN:-dev-mcp-token}
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -ec
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/8081;
+          printf 'GET /actuator/health/liveness HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3;
+          grep -q '"status":"UP"' <&3
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  java:
+    build:
+      context: .
+      dockerfile: java/Dockerfile
+    environment:
+      PG_HOST: postgres
+      PG_PORT: 5432
+      PG_DB: ${PG_DB:-ai_example}
+      PG_USER: ${PG_USER:-ai}
+      PG_PASSWORD: ${PG_PASSWORD:-ai}
+      CONTEXT_STORE: ${CONTEXT_STORE:-jdbc}
+      MCP_MODE: ${MCP_MODE:-remote}
+      MCP_CLIENT_ENABLED: ${MCP_CLIENT_ENABLED:-true}
+      MCP_CLIENT_INITIALIZED: ${MCP_CLIENT_INITIALIZED:-false}
+      MCP_REMOTE_URL: http://mcp-server:8081
+      MCP_BEARER_TOKEN: ${MCP_BEARER_TOKEN:-dev-mcp-token}
+      AI_PROVIDER: ${AI_PROVIDER:-deepseek}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_BASE_URL: ${AI_BASE_URL:-https://api.deepseek.com}
+      AI_TEMPERATURE: ${AI_TEMPERATURE:-0.2}
+      PROVIDER_DEEPSEEK_API_KEY: ${PROVIDER_DEEPSEEK_API_KEY:-}
+      PROVIDER_DEEPSEEK_MODEL: ${PROVIDER_DEEPSEEK_MODEL:-deepseek-v4-flash}
+      PROVIDER_DASHSCOPE_API_KEY: ${PROVIDER_DASHSCOPE_API_KEY:-}
+      PROVIDER_DASHSCOPE_MODEL: ${PROVIDER_DASHSCOPE_MODEL:-qwen3.8-max}
+      PROVIDER_KIMI_API_KEY: ${PROVIDER_KIMI_API_KEY:-}
+      PROVIDER_KIMI_MODEL: ${PROVIDER_KIMI_MODEL:-kimi-latest}
+      PROVIDER_GLM_API_KEY: ${PROVIDER_GLM_API_KEY:-}
+      PROVIDER_GLM_MODEL: ${PROVIDER_GLM_MODEL:-glm-5}
+      PROVIDER_QWEN35_API_KEY: ${PROVIDER_QWEN35_API_KEY:-}
+      PROVIDER_QWEN35_MODEL: ${PROVIDER_QWEN35_MODEL:-qwennaradav1}
+      RAG_ENABLED: ${RAG_ENABLED:-true}
+      SPRING_AI_VECTORSTORE_TYPE: ${SPRING_AI_VECTORSTORE_TYPE:-pgvector}
+      RAG_MIN_SOURCES: ${RAG_MIN_SOURCES:-1}
+      RAG_SKIP_LLM_WHEN_EMPTY: ${RAG_SKIP_LLM_WHEN_EMPTY:-true}
+      RAG_HYBRID_ENABLED: ${RAG_HYBRID_ENABLED:-true}
+      RAG_RRF_K: ${RAG_RRF_K:-60}
+      RAG_KEYWORD_TOP_K: ${RAG_KEYWORD_TOP_K:-4}
+      RAG_REWRITE_QUERY: ${RAG_REWRITE_QUERY:-false}
+      RAG_HYDE_ENABLED: ${RAG_HYDE_ENABLED:-true}
+      RAG_HYDE_FUSE: ${RAG_HYDE_FUSE:-true}
+      RAG_SEMANTIC_CORPUS: ${RAG_SEMANTIC_CORPUS:-ai-example-demo-semantic}
+      RAG_PARENT_CORPUS: ${RAG_PARENT_CORPUS:-ai-example-demo-parent}
+      RAG_CHILD_SIZE: ${RAG_CHILD_SIZE:-200}
+      RAG_EXPAND_PARENT: ${RAG_EXPAND_PARENT:-true}
+      MEMORY_EXTRACT_MAX: ${MEMORY_EXTRACT_MAX:-5}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -ec
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/8080;
+          printf 'GET /ai-example/actuator/health/readiness HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3;
+          grep -q '"status":"UP"' <&3
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "${FRONTEND_PORT:-8088}:80"
+    depends_on:
+      java:
+        condition: service_started
+    healthcheck:
+      # Alpine wget 会先解析 localhost→::1；nginx 仅 listen 80(IPv4) 时探测会 Connection refused
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
 
 volumes:
   ai_example_pg:

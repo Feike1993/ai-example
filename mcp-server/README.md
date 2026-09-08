@@ -7,13 +7,36 @@
 
 ## 跑起来
 
+### 宿主机开发
+
 ```bash
 cd mcp-server
 # 可选：export MCP_BEARER_TOKEN=dev-mcp-token
 ./gradlew bootRun
 ```
 
-健康检查：主应用 `GET /ai-example/mcp/tools`（remote）能列出 `getWeather`、`add` 即说明 Client 已带正确 Bearer。
+### Docker Compose
+
+完整系统由仓库根目录统一编排，独立 MCP Server 默认不向宿主机暴露端口：
+
+```bash
+cd ..
+docker compose up -d --build --wait
+```
+
+需要从宿主机直接调试协议端点时，叠加开发覆盖文件：
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build --wait
+```
+
+容器自身健康检查：
+
+```bash
+curl -fsS http://localhost:8081/actuator/health/liveness
+```
+
+主应用 `GET /ai-example/mcp/tools`（remote）能列出 `getWeather`、`add`，则额外说明 Client、Compose 网络、Bearer 和 MCP 初始化链路均正常。
 
 无凭证直连应 401：
 

@@ -2,7 +2,7 @@
 export type CodeSnippet = {
   /** 片段标题，例如「同步补全」 */
   label: string
-  language: 'java' | 'tsx'
+  language: 'java' | 'tsx' | 'bash' | 'yaml'
   code: string
 }
 

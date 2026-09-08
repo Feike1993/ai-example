@@ -1,0 +1,13 @@
+.git
+.claude
+.cursor
+.env
+**/.env
+**/.gradle
+**/build
+**/node_modules
+**/dist
+**/.venv
+**/__pycache__
+**/*.pyc
+.DS_Store
