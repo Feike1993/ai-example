@@ -9,13 +9,18 @@ pnpm dev
 
 打开 http://localhost:5173 。详情见仓库根目录 README。
 
-## 宣传页
+## 多入口
 
 ```bash
 pnpm dev
 ```
 
-- Playground：http://localhost:5173/
+- Playground（教学样例）：http://localhost:5173/
+- 工业级（`/api/v1` 生产链路）：http://localhost:5173/industrial.html
 - 基础闭环宣传页：http://localhost:5173/promo.html
 
-构建后独立产物：`dist/promo.html`。
+构建后独立产物：`dist/index.html`、`dist/industrial.html`、`dist/promo.html`。
+
+```bash
+pnpm test
+```

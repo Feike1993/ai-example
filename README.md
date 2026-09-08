@@ -19,7 +19,7 @@
 - **第十二期**：记忆辅助改写 → RAG vs 记忆对照（见 [phase12](docs/phase12.md)）
 - **第十三期**：进阶侧栏主题分组（见 [phase13](docs/phase13.md)）
 
-Java：**Spring Boot 4.1 + Spring AI 2.0 + Gradle**；Python：**LangGraph / MCP SDK**；前端：**Vite + React playground**。
+Java：**Spring Boot 4.1 + Spring AI 2.0 + Gradle**；Python：**LangGraph / MCP SDK**；前端：**Vite + React playground**（另有工业级独立入口）。
 
 ## 基础阶段完成
 
@@ -70,7 +70,7 @@ Java：**Spring Boot 4.1 + Spring AI 2.0 + Gradle**；Python：**LangGraph / MCP
 - JDK **25**
 - Python **3.11+**（[uv](https://docs.astral.sh/uv/)）
 - Node.js **22.13+**（`pnpm@11` 依赖 `node:sqlite`；在 **frontend/** 目录执行，不要在仓库根目录跑 `pnpm start`）
-- Docker（完整容器化运行，或仅启动 PostgreSQL + pgvector）
+- Docker（完整容器化运行，或仅启动 PostgreSQL + pgvector；工业级链路另需 Redis）
 - API Key：**聊天**默认 DeepSeek；**Embedding（RAG）**需要 DashScope
 
 ```bash
@@ -81,7 +81,9 @@ cp .env.example .env
 
 ## 使用 Docker Compose 运行完整系统
 
-完整模式会启动 PostgreSQL/pgvector、独立 MCP Server、Java 主服务和 Nginx 前端。浏览器只需访问 Nginx，API 与 SSE 通过同源 `/ai-example` 路径代理到 Java。
+完整模式会启动 PostgreSQL/pgvector、**Redis**、独立 MCP Server、Java 主服务和 Nginx 前端。浏览器只需访问 Nginx，API 与 SSE 通过同源 `/ai-example` 路径代理到 Java。
+
+Redis 给工业级链路用：run 状态与 SSE 断线续传（`Last-Event-ID`）。教学样例（`/rag`、`/chat`、`/agent` 等）不读 Redis，但 readiness 探针已纳入 `redis`，没起 Redis 时 `/actuator/health/readiness` 会不健康。
 
 ```bash
 cp .env.example .env
@@ -101,9 +103,9 @@ docker compose up -d --build --wait
 docker compose ps
 ```
 
-打开 http://localhost:8088 。默认仅发布前端端口，Java、MCP 和 PostgreSQL 只在 Compose 内网可见。
+打开 http://localhost:8088 。默认仅发布前端端口；Java、MCP、PostgreSQL、Redis 只在 Compose 内网可见。教学场入口 `/`，工业级入口 `/industrial.html`。
 
-调试时如需从宿主机直连 `5432`、`8080`、`8081`：
+调试时如需从宿主机直连 `5432`、`6379`、`8080`、`8081`：
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build --wait
@@ -136,10 +138,21 @@ docker compose down
 
 ## 跑 Java
 
+### Redis 要不要起？
+
+| 你要跑的内容 | PostgreSQL | Redis | 说明 |
+| --- | --- | --- | --- |
+| 仅 Chat / Tools / Agent 等非 RAG 样例 | 可选 | 可选 | 进程能起来；readiness 在缺 Redis/DB 时会失败 |
+| RAG / 记忆 / 持久会话（教学样例） | **需要** | 可选 | 样例路径不读 Redis |
+| 工业级 `/api/v1/**`（含 SSE 断线续传） | **需要** | **需要** | 默认 `PRODUCTION_ENABLED=true`、`PRODUCTION_EVENT_LOG=redis`；Redis 挂了接口 503，不拖垮启动 |
+| 只想先关工业级、专心跑样例 | 按上表 | 可不起 | `PRODUCTION_ENABLED=false` |
+
+本地推荐直接把 Postgres + Redis 一起起：
+
 ```bash
-# RAG / 记忆需要向量库；宿主机开发只启动数据库
-# 调试覆盖文件负责发布 PostgreSQL 端口
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres
+# RAG / 记忆需要向量库；工业级 SSE 续传需要 Redis
+# 调试覆盖文件负责把端口发布到宿主机（5432 / 6379）
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis
 
 # 第六期 MCP 远端（默认 mode=remote）：另开终端起 Server
 cd mcp-server && ./gradlew bootRun
@@ -149,6 +162,7 @@ cd java
 ```
 
 切回二期同进程 MCP：面板切 `inprocess`，或 `MCP_MODE=inprocess`（初始值；亦可用 `PUT /mcp/mode`）。旧法：`MCP_SERVER_ENABLED=true MCP_CLIENT_ENABLED=false`。
+
 ```bash
 curl http://localhost:8080/ai-example/
 curl -s http://localhost:8080/ai-example/context/chat \
@@ -157,6 +171,12 @@ curl -s http://localhost:8080/ai-example/context/chat \
 curl -s http://localhost:8080/ai-example/multiagent/run \
   -H 'Content-Type: application/json' \
   -d '{"prompt":"查一下北京天气，再写一句出行建议"}'
+
+# 工业级：同步问答 / 流式（需 Redis；流式只有收到 done 才算成功）
+curl -s http://localhost:8080/ai-example/api/v1/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"question":"这个项目的 RAG 是怎么做的？"}'
+curl -N "http://localhost:8080/ai-example/api/v1/chat/stream?question=RAG"
 ```
 
 测试：
@@ -165,7 +185,17 @@ curl -s http://localhost:8080/ai-example/multiagent/run \
 cd java && ./gradlew test
 # 可选 pgvector 集成（需 Docker）：
 # RUN_PGVECTOR_IT=true ./gradlew test --tests RagPgvectorIT
+# 可选 Redis 事件回放集成（需 Docker）：
+# RUN_REDIS_IT=true ./gradlew test --tests RedisRunEventLogIT
 ```
+
+## 工业级链路（与 samples 分开）
+
+后端包 `com.feike.ai.production`，HTTP 前缀 `/ai-example/api/v1/**`，与教学样例路径不重叠。前端独立入口 [industrial.html](frontend/industrial.html)（样例场侧栏也有跳转）。
+
+- 配置前缀 `app.production.*`（环境变量 `PRODUCTION_*` / `REDIS_*`）
+- RAG 拆成 ingest / retrieve / generate，不含教学用的 compare 分支
+- SSE 契约：`meta → sources → delta* → usage → done|error`，带 `runId` / `seq`；断线用 `GET /api/v1/runs/{runId}/stream` + `Last-Event-ID` 续传
 
 ## 跑前端
 
@@ -175,7 +205,13 @@ pnpm install
 pnpm dev
 ```
 
-打开 http://localhost:5173 。侧栏含各期样例（进阶含 Hybrid / 评测 / 记忆 / HyDE；MCP 默认 remote，可面板切 inprocess；remote 需 mcp-server）。
+打开 http://localhost:5173 。侧栏含各期样例（进阶含 Hybrid / 评测 / 记忆 / HyDE；MCP 默认 remote，可面板切 inprocess；remote 需 mcp-server）。工业级入口：http://localhost:5173/industrial.html 。
+
+```bash
+pnpm test   # Vitest + Testing Library（SSE / Markdown 等）
+pnpm build
+```
+
 （请在 `frontend/` 下执行；仓库根目录没有 `package.json`，不要跑 `pnpm start`。）
 
 ## 跑 Python 对照
