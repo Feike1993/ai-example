@@ -1,4 +1,4 @@
-package com.feike.ai.samples.rag;
+package com.feike.ai.core.rag;
 
 import org.springframework.ai.document.Document;
 
@@ -180,8 +180,15 @@ public final class SemanticMarkdownSplitter {
 
     /**
      * 超长段按句号 / 换行硬切；断点过靠左则放弃，硬切到 max，避免过碎。
+     * <p>
+     * 对外公开是因为 parent-child 分块要复用同一套硬切规则切子块，
+     * 保证 parent 与 child 的边界策略一致。
+     *
+     * @param text 待切文本；{@code null} 或空返回空列表
+     * @param max  单块最大长度
+     * @return 切分后的片段（已 trim，不含空白块）
      */
-    static List<String> hardSplit(String text, int max) {
+    public static List<String> hardSplit(String text, int max) {
         List<String> parts = new ArrayList<>();
         if (text == null || text.isEmpty()) {
             return parts;

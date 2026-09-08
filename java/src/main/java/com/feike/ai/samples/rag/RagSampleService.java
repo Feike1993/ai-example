@@ -4,6 +4,11 @@ import com.feike.ai.core.AiProperties;
 import com.feike.ai.core.LlmProviderRegistry;
 import com.feike.ai.core.TokenUsage;
 import com.feike.ai.core.TokenUsageExtractor;
+import com.feike.ai.core.rag.CitationValidator;
+import com.feike.ai.core.rag.CitedSource;
+import com.feike.ai.core.rag.RagKeywordRetriever;
+import com.feike.ai.core.rag.RrfFusion;
+import com.feike.ai.core.rag.SemanticMarkdownSplitter;
 import com.feike.ai.samples.memory.MemorySampleService;
 import com.feike.ai.samples.structured.StructuredOutputInvoker;
 import org.slf4j.Logger;
@@ -1761,7 +1766,7 @@ public class RagSampleService {
         Double rrfScore,
         String chunkRole,
         String parentExcerpt
-    ) {
+    ) implements CitedSource {
         /** 二期兼容：无 rank 字段。 */
         public SourceView(String id, String source, String excerpt, Map<String, Object> metadata) {
             this(id, source, excerpt, metadata, null, null, null, null, null);

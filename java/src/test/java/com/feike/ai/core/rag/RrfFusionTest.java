@@ -1,4 +1,4 @@
-package com.feike.ai.samples.rag;
+package com.feike.ai.core.rag;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

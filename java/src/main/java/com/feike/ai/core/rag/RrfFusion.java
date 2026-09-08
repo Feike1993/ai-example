@@ -1,4 +1,4 @@
-package com.feike.ai.samples.rag;
+package com.feike.ai.core.rag;
 
 import java.util.ArrayList;
 import java.util.Comparator;

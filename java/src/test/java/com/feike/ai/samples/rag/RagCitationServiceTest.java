@@ -3,6 +3,8 @@ package com.feike.ai.samples.rag;
 import com.feike.ai.core.AiProperties;
 import com.feike.ai.core.LlmProviderRegistry;
 import com.feike.ai.core.TokenUsage;
+import com.feike.ai.core.rag.CitationValidator;
+import com.feike.ai.core.rag.RagKeywordRetriever;
 import com.feike.ai.samples.structured.StructuredOutputInvoker;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

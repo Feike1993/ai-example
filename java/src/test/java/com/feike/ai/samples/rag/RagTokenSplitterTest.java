@@ -8,6 +8,7 @@ import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -40,5 +41,11 @@ class RagTokenSplitterTest {
         List<Document> chunks = splitter.apply(List.of(doc));
         assertTrue(chunks.size() > 1, "长文应切出多个 chunk，实际=" + chunks.size());
         assertFalse(chunks.getFirst().getText().isBlank());
+    }
+
+    @Test
+    void parseChunkingStrategyDefaultsToToken() {
+        assertEquals(RagSampleService.ChunkingStrategy.token, RagSampleService.parseChunkingStrategy(null));
+        assertEquals(RagSampleService.ChunkingStrategy.semantic, RagSampleService.parseChunkingStrategy("semantic"));
     }
 }

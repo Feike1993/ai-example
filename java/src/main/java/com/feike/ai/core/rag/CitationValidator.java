@@ -1,4 +1,4 @@
-package com.feike.ai.samples.rag;
+package com.feike.ai.core.rag;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -27,7 +27,7 @@ public final class CitationValidator {
     /**
      * 单条引用。
      *
-     * @param sourceId 对应 {@link RagSampleService.SourceView#id()}（或归一化前的模型原文）
+     * @param sourceId 对应 {@link CitedSource#id()}（或归一化前的模型原文）
      * @param quote    摘录或依据说明
      */
     public record Citation(String sourceId, String quote) {}
@@ -56,13 +56,13 @@ public final class CitationValidator {
      * @param sources 本次检索 sources
      * @return 有序别名 → 真实 id
      */
-    public static Map<String, String> aliasMap(List<RagSampleService.SourceView> sources) {
+    public static Map<String, String> aliasMap(List<? extends CitedSource> sources) {
         Map<String, String> aliases = new LinkedHashMap<>();
         if (sources == null) {
             return aliases;
         }
         int index = 1;
-        for (RagSampleService.SourceView source : sources) {
+        for (CitedSource source : sources) {
             if (source == null || source.id() == null || source.id().isBlank()) {
                 continue;
             }
@@ -86,7 +86,7 @@ public final class CitationValidator {
     public static List<Citation> resolveCitations(
         List<Citation> citations,
         Map<String, String> aliases,
-        List<RagSampleService.SourceView> sources
+        List<? extends CitedSource> sources
     ) {
         if (citations == null || citations.isEmpty()) {
             return List.of();
@@ -142,12 +142,12 @@ public final class CitationValidator {
      * @param sources 检索 sources
      * @return 有序去重 id 集
      */
-    public static Set<String> idsOf(List<RagSampleService.SourceView> sources) {
+    public static Set<String> idsOf(List<? extends CitedSource> sources) {
         Set<String> ids = new LinkedHashSet<>();
         if (sources == null) {
             return ids;
         }
-        for (RagSampleService.SourceView source : sources) {
+        for (CitedSource source : sources) {
             if (source != null && source.id() != null && !source.id().isBlank()) {
                 ids.add(source.id());
             }
@@ -209,13 +209,13 @@ public final class CitationValidator {
      * 同文件多 chunk 时文件名无法唯一指向某一 id；若强行猜会破坏「可追溯到具体 hit」的教学约束，
      * 故标为歧义并排除，留给 validate 失败。
      */
-    private static Map<String, String> uniqueFilenameMap(List<RagSampleService.SourceView> sources) {
+    private static Map<String, String> uniqueFilenameMap(List<? extends CitedSource> sources) {
         Map<String, String> first = new HashMap<>();
         Set<String> ambiguous = new LinkedHashSet<>();
         if (sources == null) {
             return Map.of();
         }
-        for (RagSampleService.SourceView source : sources) {
+        for (CitedSource source : sources) {
             if (source == null || source.id() == null || source.id().isBlank()) {
                 continue;
             }
@@ -236,12 +236,12 @@ public final class CitationValidator {
         return first;
     }
 
-    private static List<String> orderedIds(List<RagSampleService.SourceView> sources) {
+    private static List<String> orderedIds(List<? extends CitedSource> sources) {
         List<String> ids = new ArrayList<>();
         if (sources == null) {
             return ids;
         }
-        for (RagSampleService.SourceView source : sources) {
+        for (CitedSource source : sources) {
             if (source != null && source.id() != null && !source.id().isBlank()) {
                 ids.add(source.id());
             }

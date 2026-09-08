@@ -1,4 +1,4 @@
-package com.feike.ai.samples.rag;
+package com.feike.ai.core.rag;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -48,7 +48,7 @@ class CitationValidatorTest {
 
     @Test
     void shouldResolveAliasToRealId() {
-        List<RagSampleService.SourceView> sources = List.of(
+        List<TestSource> sources = List.of(
             source("id-a", "a.md"),
             source("id-b", "b.md")
         );
@@ -67,7 +67,7 @@ class CitationValidatorTest {
 
     @Test
     void shouldResolveUniqueFilename() {
-        List<RagSampleService.SourceView> sources = List.of(source("id-a", "03-rag.md"));
+        List<TestSource> sources = List.of(source("id-a", "03-rag.md"));
         List<CitationValidator.Citation> resolved = CitationValidator.resolveCitations(
             List.of(new CitationValidator.Citation("03-rag.md", "摘录")),
             CitationValidator.aliasMap(sources),
@@ -78,7 +78,7 @@ class CitationValidatorTest {
 
     @Test
     void shouldNotGuessAmbiguousFilename() {
-        List<RagSampleService.SourceView> sources = List.of(
+        List<TestSource> sources = List.of(
             source("id-a", "03-rag.md"),
             source("id-b", "03-rag.md")
         );
@@ -93,7 +93,7 @@ class CitationValidatorTest {
 
     @Test
     void shouldResolveOrdinal() {
-        List<RagSampleService.SourceView> sources = List.of(
+        List<TestSource> sources = List.of(
             source("id-a", "a.md"),
             source("id-b", "b.md")
         );
@@ -111,7 +111,7 @@ class CitationValidatorTest {
 
     @Test
     void shouldKeepUnknownIdForValidateFailure() {
-        List<RagSampleService.SourceView> sources = List.of(source("id-a", "a.md"));
+        List<TestSource> sources = List.of(source("id-a", "a.md"));
         List<CitationValidator.Citation> resolved = CitationValidator.resolveCitations(
             List.of(new CitationValidator.Citation("ghost", "假")),
             CitationValidator.aliasMap(sources),
@@ -121,7 +121,11 @@ class CitationValidatorTest {
         assertFalse(CitationValidator.validate(resolved, CitationValidator.idsOf(sources)).valid());
     }
 
-    private static RagSampleService.SourceView source(String id, String filename) {
-        return new RagSampleService.SourceView(id, filename, "excerpt", Map.of());
+    private static TestSource source(String id, String filename) {
+        return new TestSource(id, filename, "excerpt", Map.of());
     }
+
+    /** 测试替身：只带 CitedSource 必需字段，避免 core 测试反向依赖上层 SourceView。 */
+    private record TestSource(String id, String source, String excerpt, Map<String, Object> metadata)
+        implements CitedSource {}
 }

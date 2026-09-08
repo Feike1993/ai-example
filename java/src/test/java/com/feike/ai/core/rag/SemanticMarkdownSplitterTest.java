@@ -1,4 +1,4 @@
-package com.feike.ai.samples.rag;
+package com.feike.ai.core.rag;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -51,11 +51,5 @@ class SemanticMarkdownSplitterTest {
         assertEquals(1, merged.size());
         assertTrue(merged.get(0).body().contains("短句一"));
         assertTrue(merged.get(0).body().contains("短句二"));
-    }
-
-    @Test
-    void parseChunkingStrategyDefaultsToToken() {
-        assertEquals(RagSampleService.ChunkingStrategy.token, RagSampleService.parseChunkingStrategy(null));
-        assertEquals(RagSampleService.ChunkingStrategy.semantic, RagSampleService.parseChunkingStrategy("semantic"));
     }
 }
