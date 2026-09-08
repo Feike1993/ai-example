@@ -34,18 +34,22 @@ tasks.withType(JavaCompile).configureEach {
     options.release = 25
 }
 
+def jvmNativeAccessArgs = [
+    '-Dfile.encoding=UTF-8',
+    '-Dconsole.encoding=UTF-8',
+    '--enable-native-access=ALL-UNNAMED',
+]
+
 tasks.named('bootJar') {
     archiveFileName = 'ai-example-mcp-server.jar'
 }
 
 tasks.named('test') {
     useJUnitPlatform()
+    jvmArgs = jvmNativeAccessArgs
 }
 
 tasks.named('bootRun') {
-    jvmArgs = [
-            '-Dfile.encoding=UTF-8',
-            '-Dconsole.encoding=UTF-8',
-            '--enable-native-access=ALL-UNNAMED'
-    ]
+    jvmArgs = jvmNativeAccessArgs
+    environment 'JAVA_TOOL_OPTIONS', '--enable-native-access=ALL-UNNAMED'
 }

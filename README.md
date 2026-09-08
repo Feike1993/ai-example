@@ -161,6 +161,8 @@ cd java
 ./gradlew bootRun
 ```
 
+> 若控制台出现 `System::loadLibrary` / `Use --enable-native-access=ALL-UNNAMED`：这是 **Java 25 对 Netty 原生库** 的提示，不是业务错误。`./gradlew bootRun` 已带该参数。若用 **IDE 直接跑主类**，请在 VM options 加上 `--enable-native-access=ALL-UNNAMED`，或在 `.env` 里设 `JAVA_TOOL_OPTIONS=--enable-native-access=ALL-UNNAMED`。
+
 切回二期同进程 MCP：面板切 `inprocess`，或 `MCP_MODE=inprocess`（初始值；亦可用 `PUT /mcp/mode`）。旧法：`MCP_SERVER_ENABLED=true MCP_CLIENT_ENABLED=false`。
 
 ```bash

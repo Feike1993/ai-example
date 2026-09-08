@@ -28,6 +28,12 @@ dependencies {
     implementation 'org.postgresql:postgresql'
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.0'
 
+    // Redis（Lettuce）会拉 Netty DNS；Spring 默认常只解析到 osx-x86_64，
+    // Apple Silicon 启动时找不到 aarch_64.jnilib 会打 ERROR 并回退系统 DNS。
+    // 显式声明两个 classifier，避免 arm64 / Intel Mac 各缺一边。
+    runtimeOnly 'io.netty:netty-resolver-dns-native-macos::osx-aarch_64'
+    runtimeOnly 'io.netty:netty-resolver-dns-native-macos::osx-x86_64'
+
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation libs.junit.jupiter
     testImplementation libs.testcontainers.junit.jupiter
@@ -48,20 +54,27 @@ tasks.withType(JavaCompile).configureEach {
     options.release = 25
 }
 
+// Java 22+：Netty（Lettuce Redis / 部分 HTTP 客户端）会调 System.loadLibrary，
+// 不声明 native access 会打 WARNING，未来版本可能直接拒绝。
+def jvmNativeAccessArgs = [
+    '-Dfile.encoding=UTF-8',
+    '-Dconsole.encoding=UTF-8',
+    '--enable-native-access=ALL-UNNAMED',
+]
+
 tasks.named('bootJar') {
     archiveFileName = 'ai-example.jar'
 }
 
 tasks.named('test') {
     useJUnitPlatform()
+    jvmArgs = jvmNativeAccessArgs
 }
 
 tasks.named('bootRun') {
-    jvmArgs = [
-            '-Dfile.encoding=UTF-8',
-            '-Dconsole.encoding=UTF-8',
-            '--enable-native-access=ALL-UNNAMED'
-    ]
+    jvmArgs = jvmNativeAccessArgs
+    // 双保险：IDE 若绕过 jvmArgs、但加载了仓库 .env，也能吃到
+    environment 'JAVA_TOOL_OPTIONS', '--enable-native-access=ALL-UNNAMED'
 
     def envFile = rootProject.file('../.env')
     if (!envFile.exists()) {
