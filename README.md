@@ -304,6 +304,8 @@ RUN_REDIS_IT=true REDIS_IT_HOST=localhost REDIS_IT_PORT=6379 \
 
 跨租户访问会话返回 **404**（不暴露存在性）。`POST /api/v1/rag/ingest` 仅 ADMIN。限流超限 **429** + `Retry-After`；同一会话并发是 **409** `session_busy`，两件事不要混。
 
+失败时保持真实 HTTP 状态（401/403/429 等），JSON 为 `{ "code", "message" }`：`code` 是稳定机器码（与 SSE `error` 事件对齐），`message` 是给用户看的简体中文。未知异常只回 `internal_error` / 「系统繁忙，请稍后重试」，不回堆栈。成功体仍是现有 DTO，不套一层 `data`。教学样例路径（`/rag`、`/chat` 等）的错误形态不变。
+
 **信封加密，不用 Vault。** LLM Key 与 JWT HMAC 用 AES-256-GCM 写入 Postgres 表 `prod_secret`。能解开密文的主密钥 KEK 只来自环境变量 `PRODUCTION_KEK`（`openssl rand -base64 32`），**永不入库**。这保护的是库备份和 `SELECT *`，不保护已经拿到 KEK 的进程。KEK 与密文必须分开放；缺 KEK 时应用照常启动，`/api/v1` 返回 503。
 
 **可观测。** 业务指标见 `GET /api/v1/ops/snapshot`（需登录）。Prometheus 刮取 `/ai-example/actuator/prometheus` 不放行匿名。Compose 含 Jaeger all-in-one（UI `http://localhost:16686`，OTLP 4318）。响应头带 `traceparent`，SSE `meta` 带 `traceId`。

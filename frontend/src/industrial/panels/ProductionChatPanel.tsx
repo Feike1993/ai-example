@@ -52,6 +52,7 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
   const [malformed, setMalformed] = useState(0)
   const [status, setStatus] = useState<'idle' | 'streaming' | 'done' | 'cancelled' | 'aborted'>('idle')
   const [error, setError] = useState<string | null>(null)
+  const [errorCode, setErrorCode] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [ingesting, setIngesting] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
@@ -93,6 +94,7 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
     const controller = new AbortController()
     abortRef.current = controller
     setError(null)
+    setErrorCode(null)
     setMeta(null)
     setMalformed(0)
     setBusy(false)
@@ -170,14 +172,20 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
           setBusy(true)
           setPending(null)
         } else {
-          setError(`${err.message}（错误码 ${err.code}）`)
+          setError(err.message)
+          setErrorCode(err.code)
         }
       } else if (err instanceof StreamAbortedError) {
         setError(err.message)
+        setErrorCode(null)
       } else if (err instanceof ApiError && err.status === 401) {
         notifyUnauthorized()
+      } else if (err instanceof ApiError) {
+        setError(err.message)
+        setErrorCode(err.code ?? null)
       } else {
         setError(describeError(err))
+        setErrorCode(null)
       }
     } finally {
       abortRef.current = null
@@ -197,6 +205,7 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
     setPending(null)
     setMeta(null)
     setError(null)
+    setErrorCode(null)
     setBusy(false)
     setStatus('idle')
   }
@@ -214,15 +223,18 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
         notifyUnauthorized()
       }
       setError(err instanceof ApiError ? err.message : describeError(err))
+      setErrorCode(err instanceof ApiError ? err.code ?? null : null)
     }
   }
 
   const onIngest = async () => {
     setIngesting(true)
     setError(null)
+    setErrorCode(null)
     try {
       const result = await postIngest()
       setError(null)
+      setErrorCode(null)
       setPending({
         question: '重建语料',
         answer: `已重建语料 ${result.corpus}：${result.chunkCount} 块，来自 ${result.sources.length} 个文件。`,
@@ -232,6 +244,7 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
       setStatus('done')
     } catch (err) {
       setError(err instanceof ApiError ? err.message : describeError(err))
+      setErrorCode(err instanceof ApiError ? err.code ?? null : null)
       setStatus('aborted')
     } finally {
       setIngesting(false)
@@ -294,7 +307,7 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
         </Stack>
       }
       result={
-        <ResultBody error={error} emptyHint="提交问题后，这里按事件顺序展示检索来源与流式答案，并保留整段多轮对话。">
+        <ResultBody error={error} errorHint={errorCode} emptyHint="提交问题后，这里按事件顺序展示检索来源与流式答案，并保留整段多轮对话。">
           {busy ? (
             <Alert color="yellow" variant="light" title="会话正忙">
               该会话上一轮对话还在进行。等它结束，或点「新会话」另起一段。

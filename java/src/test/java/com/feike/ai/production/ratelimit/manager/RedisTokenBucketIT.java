@@ -3,6 +3,8 @@ package com.feike.ai.production.ratelimit.manager;
 import com.feike.ai.production.ratelimit.service.RateLimitExceededException;
 
 import com.feike.ai.production.config.ProductionProperties;
+import com.feike.ai.production.web.BusinessException;
+import com.feike.ai.production.web.ErrorCodeEnum;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -10,8 +12,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.utility.DockerImageName;
 import tools.jackson.databind.json.JsonMapper;
@@ -88,11 +88,11 @@ class RedisTokenBucketIT {
         Optional<String> first = store.begin("tenant-a", key, "hash-a");
         assertTrue(first.isEmpty());
         store.complete("tenant-a", key, "hash-a", java.util.Map.of("ok", true));
-        ResponseStatusException ex = assertThrows(
-            ResponseStatusException.class,
+        BusinessException ex = assertThrows(
+            BusinessException.class,
             () -> store.begin("tenant-a", key, "hash-b")
         );
-        assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
+        assertEquals(ErrorCodeEnum.IDEMPOTENCY_CONFLICT, ex.getErrorCode());
     }
 
     @Test

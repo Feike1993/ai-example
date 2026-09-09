@@ -14,6 +14,7 @@ import com.feike.ai.production.ratelimit.service.RateLimitExceededException;
 import com.feike.ai.production.ratelimit.manager.RedisTokenBucket;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpHeaders;
 import org.springframework.validation.annotation.Validated;
@@ -77,7 +78,7 @@ public class ProductionAuthController {
      */
     @PostMapping("/auth/token")
     public TokenVO token(
-        @RequestBody LoginRequestDTO request,
+        @Valid @RequestBody LoginRequestDTO request,
         HttpServletRequest http,
         HttpServletResponse response
     ) {

@@ -5,12 +5,14 @@ export const API_BASE = '/ai-example'
 export class ApiError extends Error {
   readonly status: number
   readonly body: string
+  readonly code?: string
 
-  constructor(status: number, body: string, message?: string) {
+  constructor(status: number, body: string, message?: string, code?: string) {
     super(message ?? (body ? `HTTP ${status}: ${body}` : `HTTP ${status}`))
     this.name = 'ApiError'
     this.status = status
     this.body = body
+    this.code = code
   }
 }
 

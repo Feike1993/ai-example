@@ -12,6 +12,7 @@ import com.feike.ai.production.rag.retrieve.service.ProductionRetrievalService;
 import com.feike.ai.production.session.dao.impl.FakeProductionChatSessionDAOImpl;
 import com.feike.ai.production.sse.dao.impl.InMemoryRunEventLogDAOImpl;
 import com.feike.ai.production.sse.service.SseRunExecutor;
+import com.feike.ai.production.web.ProductionExceptionHandler;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -79,6 +80,7 @@ class ProductionSseMvcTest {
             retrieval, generator, properties, sessionStore, new InMemorySessionLock(), null);
         mockMvc = MockMvcBuilders
             .standaloneSetup(new ProductionChatController(chatService, ingestService, runExecutor))
+            .setControllerAdvice(new ProductionExceptionHandler())
             .build();
     }
 
@@ -138,7 +140,9 @@ class ProductionSseMvcTest {
     @Test
     void resumeOfUnknownRunShouldBeGone() throws Exception {
         mockMvc.perform(get("/api/v1/runs/{runId}/stream", "not-a-run"))
-            .andExpect(status().isGone());
+            .andExpect(status().isGone())
+            .andExpect(jsonPath("$.code").value("run_gone"))
+            .andExpect(jsonPath("$.message").value("run 不存在或已超出事件保留窗口，请重新发起请求"));
     }
 
     @Test

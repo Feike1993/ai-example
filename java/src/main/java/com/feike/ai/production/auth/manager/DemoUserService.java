@@ -3,10 +3,10 @@ package com.feike.ai.production.auth.manager;
 import com.feike.ai.production.auth.model.ProductionPrincipal;
 
 import com.feike.ai.production.config.ProductionProperties;
-import org.springframework.http.HttpStatus;
+import com.feike.ai.production.web.BusinessException;
+import com.feike.ai.production.web.ErrorCodeEnum;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -50,13 +50,13 @@ public class DemoUserService {
      */
     public ProductionPrincipal authenticate(String username, String password) {
         if (username == null || username.isBlank() || password == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "用户名或密码错误");
+            throw new BusinessException(ErrorCodeEnum.AUTH_LOGIN_FAILED);
         }
         String key = username.trim().toLowerCase(Locale.ROOT);
         ProductionProperties.DemoUser user = users.get(key);
         String encoded = encodedPasswords.get(key);
         if (user == null || encoded == null || !encoder.matches(password, encoded)) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "用户名或密码错误");
+            throw new BusinessException(ErrorCodeEnum.AUTH_LOGIN_FAILED);
         }
         return new ProductionPrincipal(
             user.username(),

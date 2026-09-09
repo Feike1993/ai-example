@@ -1,11 +1,11 @@
 package com.feike.ai.production.ratelimit.manager;
 
 import com.feike.ai.production.config.ProductionProperties;
+import com.feike.ai.production.web.BusinessException;
+import com.feike.ai.production.web.ErrorCodeEnum;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.nio.charset.StandardCharsets;
@@ -68,7 +68,7 @@ public class IdempotencyManager {
                 if (!previousHash.equals(bodyHash)) {
                     throw conflict();
                 }
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "相同幂等键的请求仍在处理");
+                throw new BusinessException(ErrorCodeEnum.IDEMPOTENCY_CONFLICT, "相同幂等键的请求仍在处理");
             }
             if (existing.startsWith("done:")) {
                 int split = existing.indexOf(':', 5);
@@ -83,7 +83,7 @@ public class IdempotencyManager {
                 return Optional.of(payload);
             }
             throw conflict();
-        } catch (ResponseStatusException ex) {
+        } catch (BusinessException ex) {
             throw ex;
         } catch (RuntimeException ex) {
             log.warn("幂等键 Redis 不可用，放行: {}", ex.toString());
@@ -136,7 +136,7 @@ public class IdempotencyManager {
         return "prod:idem:" + tenantId + ":" + key.trim();
     }
 
-    private static ResponseStatusException conflict() {
-        return new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency-Key 已用于不同的请求体");
+    private static BusinessException conflict() {
+        return new BusinessException(ErrorCodeEnum.IDEMPOTENCY_CONFLICT);
     }
 }

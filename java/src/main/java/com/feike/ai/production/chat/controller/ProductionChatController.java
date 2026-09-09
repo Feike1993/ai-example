@@ -14,22 +14,22 @@ import com.feike.ai.production.ratelimit.manager.IdempotencyManager;
 import com.feike.ai.production.ratelimit.service.RateLimitExceededException;
 import com.feike.ai.production.ratelimit.manager.RedisTokenBucket;
 import com.feike.ai.production.sse.service.SseRunExecutor;
+import com.feike.ai.production.web.BusinessException;
+import com.feike.ai.production.web.ErrorCodeEnum;
 import org.slf4j.MDC;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -38,12 +38,9 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import tools.jackson.databind.json.JsonMapper;
 
-import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -122,18 +119,6 @@ public class ProductionChatController {
     }
 
     /**
-     * 将本控制器的业务状态异常转换为稳定的 JSON 错误契约。
-     *
-     * @param exception 携带 HTTP 状态与业务提示的异常
-     * @return 状态码和面向调用方的提示
-     */
-    @ExceptionHandler(ResponseStatusException.class)
-    public ResponseEntity<Map<String, String>> handleResponseStatus(ResponseStatusException exception) {
-        String message = exception.getReason() == null ? exception.getStatusCode().toString() : exception.getReason();
-        return ResponseEntity.status(exception.getStatusCode()).body(Map.of("message", message));
-    }
-
-    /**
      * 幂等重建生产语料索引。仅 ADMIN。
      *
      * @param http HTTP
@@ -143,7 +128,7 @@ public class ProductionChatController {
     public ProductionIngestService.IngestResult ingest(HttpServletRequest http) {
         ProductionPrincipal principal = principal(http);
         if (!principal.admin()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "重建索引需要 ADMIN 角色");
+            throw new BusinessException(ErrorCodeEnum.INGEST_FORBIDDEN);
         }
         ProductionIngestService.IngestResult result = ingestService.ingest();
         audit(principal, "rag.ingest", http, 200, null, null);
@@ -161,7 +146,7 @@ public class ProductionChatController {
      */
     @PostMapping("/chat")
     public ProductionChatService.ChatAnswer chat(
-        @RequestBody ChatRequestDTO request,
+        @Valid @RequestBody ChatRequestDTO request,
         HttpServletRequest http,
         HttpServletResponse response,
         @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
@@ -173,7 +158,7 @@ public class ProductionChatController {
             try {
                 return jsonMapper.readValue(cached.get(), ProductionChatService.ChatAnswer.class);
             } catch (RuntimeException ex) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "幂等缓存损坏");
+                throw new BusinessException(ErrorCodeEnum.IDEMPOTENCY_CONFLICT, "幂等缓存损坏");
             }
         }
         long start = System.nanoTime();
@@ -206,7 +191,7 @@ public class ProductionChatController {
      */
     @GetMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chatStream(
-        @RequestParam @NotBlank String question,
+        @RequestParam @NotBlank(message = "问题不能为空") String question,
         @RequestParam(required = false) String sessionId,
         @RequestParam(required = false) String provider,
         @RequestParam(required = false) Integer topK,
@@ -235,7 +220,7 @@ public class ProductionChatController {
      */
     @PostMapping("/agent")
     public ProductionAgentService.AgentAnswer agent(
-        @RequestBody ChatRequestDTO request,
+        @Valid @RequestBody ChatRequestDTO request,
         HttpServletRequest http,
         HttpServletResponse response,
         @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
@@ -269,7 +254,7 @@ public class ProductionChatController {
      */
     @GetMapping(value = "/agent/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter agentStream(
-        @RequestParam @NotBlank String question,
+        @RequestParam @NotBlank(message = "问题不能为空") String question,
         @RequestParam(required = false) String sessionId,
         @RequestParam(required = false) String provider,
         HttpServletRequest http,
@@ -367,7 +352,7 @@ public class ProductionChatController {
 
     private void requireAgent() {
         if (agentService == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_IMPLEMENTED, "Agent 未装配");
+            throw new BusinessException(ErrorCodeEnum.AGENT_NOT_ASSEMBLED);
         }
     }
 

@@ -7,6 +7,8 @@ import com.feike.ai.production.rag.ingest.service.ProductionIngestService;
 import com.feike.ai.core.rag.RagKeywordRetriever;
 import com.feike.ai.core.rag.SemanticMarkdownSplitter;
 import com.feike.ai.production.config.ProductionProperties;
+import com.feike.ai.production.web.BusinessException;
+import com.feike.ai.production.web.ErrorCodeEnum;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
@@ -14,8 +16,6 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -122,7 +122,7 @@ public class ProductionIngestServiceImpl implements ProductionIngestService {
             PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
             Resource[] resources = resolver.getResources("classpath:rag-docs/*.md");
             if (resources.length == 0) {
-                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "未找到 classpath:rag-docs/*.md");
+                throw new BusinessException(ErrorCodeEnum.INGEST_FAILED, "未找到 classpath:rag-docs/*.md");
             }
             List<Document> docs = new ArrayList<>(resources.length);
             for (Resource resource : resources) {
@@ -136,7 +136,7 @@ public class ProductionIngestServiceImpl implements ProductionIngestService {
             }
             return docs;
         } catch (IOException ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "读取语料失败: " + ex.getMessage());
+            throw new BusinessException(ErrorCodeEnum.INGEST_FAILED, "读取语料失败: " + ex.getMessage());
         }
     }
 

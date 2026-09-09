@@ -254,12 +254,22 @@ describe('streamRun 服务端错误', () => {
     await expect(promise).rejects.toMatchObject({ code: 'upstream_error', message: '模型网关 502' })
   })
 
-  it('HTTP 非 2xx 抛 ApiError 并带上响应正文', async () => {
+  it('HTTP 非 2xx 抛 ApiError 并展示业务句', async () => {
     const promise = streamRun('/stream', {
-      fetchImpl: fakeFetch([], { status: 503, body: '事件日志暂不可用' }),
+      fetchImpl: fakeFetch([], {
+        status: 503,
+        body: JSON.stringify({
+          code: 'event_log_unavailable',
+          message: '事件日志暂不可用（Redis 连接异常），工业级流式接口无法保证断线续传',
+        }),
+      }),
     })
 
     await expect(promise).rejects.toBeInstanceOf(ApiError)
-    await expect(promise).rejects.toMatchObject({ status: 503, body: '事件日志暂不可用' })
+    await expect(promise).rejects.toMatchObject({
+      status: 503,
+      code: 'event_log_unavailable',
+      message: '事件日志暂不可用（Redis 连接异常），工业级流式接口无法保证断线续传',
+    })
   })
 })

@@ -36,13 +36,26 @@ describe('productionApi 鉴权头', () => {
   it('403 显示后端业务提示', async () => {
     setSession('tok-1', { username: 'alice', tenant: 'tenant-a', roles: ['USER'] })
     const fetchImpl = vi.fn(async () => new Response(
-      '{"message":"重建索引需要 ADMIN 角色"}', { status: 403 },
+      '{"code":"ingest_forbidden","message":"重建索引需要 ADMIN 角色"}', { status: 403 },
     ))
 
     await expect(postIngest(fetchImpl as unknown as typeof fetch)).rejects.toMatchObject({
       status: 403,
+      code: 'ingest_forbidden',
       message: '重建索引需要 ADMIN 角色',
     })
+  })
+
+  it('忽略 Boot 默认的 Forbidden 英文词', async () => {
+    setSession('tok-1', { username: 'alice', tenant: 'tenant-a', roles: ['USER'] })
+    const fetchImpl = vi.fn(async () => new Response(
+      '{"error":"Forbidden","status":403,"path":"/ai-example/api/v1/rag/ingest"}',
+      { status: 403 },
+    ))
+
+    const error = await postIngest(fetchImpl as unknown as typeof fetch).catch((err: unknown) => err) as Error
+    expect(error).toMatchObject({ status: 403, message: 'HTTP 403' })
+    expect(error.message).not.toContain('Forbidden')
   })
 
   it('审计列表按 JSON 数组返回', async () => {

@@ -8,12 +8,12 @@ import com.feike.ai.production.sse.model.StreamEvent;
 import com.feike.ai.production.sse.model.StreamEventTypeEnum;
 
 import com.feike.ai.production.config.ProductionProperties;
+import com.feike.ai.production.web.BusinessException;
+import com.feike.ai.production.web.ErrorCodeEnum;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -137,14 +137,11 @@ public class SseRunExecutor {
      * @param runId       原 run 标识
      * @param lastEventId 客户端已收到的最大 seq；首次连接传 -1
      * @return emitter
-     * @throws ResponseStatusException run 不存在或已过保留窗口时 410
+     * @throws BusinessException run 不存在或已过保留窗口时 410
      */
     public SseEmitter resume(String runId, long lastEventId) {
         RunSnapshot snapshot = eventLog.snapshot(runId)
-            .orElseThrow(() -> new ResponseStatusException(
-                HttpStatus.GONE,
-                "run 不存在或已超出事件保留窗口，请重新发起请求"
-            ));
+            .orElseThrow(() -> new BusinessException(ErrorCodeEnum.RUN_GONE));
 
         long timeoutMs = properties.stream().timeout().toMillis();
         SseEmitter emitter = new SseEmitter(timeoutMs + EMITTER_GRACE_MS);

@@ -11,7 +11,7 @@ import jakarta.validation.constraints.NotBlank;
  * @param topK      覆盖默认 topK
  */
 public record ChatRequestDTO(
-    @NotBlank String question,
+    @NotBlank(message = "问题不能为空") String question,
     String sessionId,
     String provider,
     Integer topK

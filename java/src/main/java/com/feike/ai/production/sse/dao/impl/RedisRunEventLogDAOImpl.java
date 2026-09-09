@@ -8,6 +8,8 @@ import com.feike.ai.production.sse.model.StreamEventTypeEnum;
 import com.feike.ai.production.sse.service.SseStreamWriter;
 
 import com.feike.ai.production.config.ProductionProperties;
+import com.feike.ai.production.web.BusinessException;
+import com.feike.ai.production.web.ErrorCodeEnum;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Range;
@@ -15,8 +17,6 @@ import org.springframework.data.redis.connection.stream.MapRecord;
 import org.springframework.data.redis.connection.stream.RecordId;
 import org.springframework.data.redis.connection.stream.StreamRecords;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -206,14 +206,11 @@ public class RedisRunEventLogDAOImpl implements RunEventLogDAO {
     private static <T> T guard(java.util.function.Supplier<T> action) {
         try {
             return action.get();
-        } catch (ResponseStatusException ex) {
+        } catch (BusinessException ex) {
             throw ex;
         } catch (RuntimeException ex) {
             log.error("Redis 事件日志操作失败", ex);
-            throw new ResponseStatusException(
-                HttpStatus.SERVICE_UNAVAILABLE,
-                "事件日志暂不可用（Redis 连接异常），工业级流式接口无法保证断线续传"
-            );
+            throw new BusinessException(ErrorCodeEnum.EVENT_LOG_UNAVAILABLE);
         }
     }
 }

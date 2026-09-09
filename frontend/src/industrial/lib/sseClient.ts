@@ -11,6 +11,7 @@
  */
 
 import { ApiError } from '../../api'
+import { parseProductionError } from './productionError'
 
 /** 与后端 StreamEventTypeEnum 一一对应。 */
 export const STREAM_EVENT_TYPES = [
@@ -268,7 +269,8 @@ async function consume(
 
   if (!response.ok) {
     const body = await safeText(response)
-    throw new ApiError(response.status, body)
+    const parsed = parseProductionError(response.status, body)
+    throw new ApiError(response.status, body, parsed.message, parsed.code)
   }
   if (!response.body) {
     throw new ApiError(response.status, '响应缺少流式正文')

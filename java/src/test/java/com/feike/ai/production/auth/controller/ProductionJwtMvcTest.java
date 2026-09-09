@@ -21,6 +21,7 @@ import com.feike.ai.production.secret.dao.SecretResolver;
 import com.feike.ai.production.session.dao.impl.FakeProductionChatSessionDAOImpl;
 import com.feike.ai.production.sse.dao.impl.InMemoryRunEventLogDAOImpl;
 import com.feike.ai.production.sse.service.SseRunExecutor;
+import com.feike.ai.production.web.ProductionExceptionHandler;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -87,7 +88,10 @@ class ProductionJwtMvcTest {
             null, bucket, null, audit, metrics, JsonMapper.builder().build(), null
         );
         JwtAuthFilter filter = new JwtAuthFilter(jwtService, secrets, metrics);
-        mockMvc = MockMvcBuilders.standaloneSetup(auth, chat).addFilters(filter).build();
+    mockMvc = MockMvcBuilders.standaloneSetup(auth, chat)
+        .setControllerAdvice(new ProductionExceptionHandler())
+        .addFilters(filter)
+        .build();
     }
 
     @AfterEach
@@ -97,7 +101,20 @@ class ProductionJwtMvcTest {
 
     @Test
     void missingTokenShouldBeUnauthorized() throws Exception {
-        mockMvc.perform(get("/api/v1/me")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/me"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("auth_missing_token"))
+            .andExpect(jsonPath("$.message").value("缺少 Authorization: Bearer 令牌"));
+    }
+
+    @Test
+    void loginFailureShouldReturnBusinessCopy() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"alice\",\"password\":\"wrong\"}"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("auth_login_failed"))
+            .andExpect(jsonPath("$.message").value("用户名或密码错误"));
     }
 
     @Test
@@ -114,6 +131,7 @@ class ProductionJwtMvcTest {
         String token = login("alice");
         mockMvc.perform(post("/api/v1/rag/ingest").header("Authorization", "Bearer " + token))
             .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("ingest_forbidden"))
             .andExpect(jsonPath("$.message").value("重建索引需要 ADMIN 角色"));
     }
 
@@ -133,7 +151,9 @@ class ProductionJwtMvcTest {
         sessionStore.appendTurn("tenant-a", "s-alice", UUID.randomUUID(), "run", "问", "答");
         String bob = login("bob");
         mockMvc.perform(get("/api/v1/sessions/s-alice").header("Authorization", "Bearer " + bob))
-            .andExpect(status().isNotFound());
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.code").value("session_not_found"))
+            .andExpect(jsonPath("$.message").value("会话不存在"));
     }
 
     @Test
@@ -151,8 +171,11 @@ class ProductionJwtMvcTest {
                     new ProductionMetrics(new SimpleMeterRegistry())
                 ))
             .addFilters(new JwtAuthFilter(jwtService, down))
+            .setControllerAdvice(new ProductionExceptionHandler())
             .build();
-        locked.perform(get("/api/v1/me")).andExpect(status().isServiceUnavailable());
+        locked.perform(get("/api/v1/me"))
+            .andExpect(status().isServiceUnavailable())
+            .andExpect(jsonPath("$.code").value("secret_unavailable"));
     }
 
     private String login(String username) throws Exception {

@@ -9,6 +9,7 @@ test.describe('工业级默认 E2E', () => {
     await page.getByLabel('密码').fill('wrong-password')
     await page.getByRole('button', { name: '登录' }).click()
     await expect(page.getByText('登录失败')).toBeVisible()
+    await expect(page.getByText('用户名或密码错误')).toBeVisible()
     await expect(page.getByTestId('login-title')).toBeVisible()
     await expect(page.getByTestId('identity-line')).toHaveCount(0)
   })
@@ -51,7 +52,8 @@ test.describe('工业级默认 E2E', () => {
     await page.getByRole('button', { name: '重建语料' }).click()
     const error = page.getByTestId('result-error')
     await expect(error).toBeVisible()
-    await expect(error).toContainText(/403|ADMIN|重建索引|Forbidden/)
+    await expect(error).toContainText('重建索引需要 ADMIN 角色')
+    await expect(error).not.toContainText('Forbidden')
   })
 
   test('输入护栏拦截违禁词且不依赖 Embedding', async ({ page }) => {

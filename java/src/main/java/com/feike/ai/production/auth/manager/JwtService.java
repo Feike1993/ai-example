@@ -4,6 +4,8 @@ import com.feike.ai.production.auth.model.ProductionPrincipal;
 
 import com.feike.ai.production.secret.dao.SecretResolver;
 import com.feike.ai.production.secret.service.SecretUnavailableException;
+import com.feike.ai.production.web.BusinessException;
+import com.feike.ai.production.web.ErrorCodeEnum;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -11,8 +13,6 @@ import com.nimbusds.jose.crypto.MACSigner;
 import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
@@ -73,7 +73,7 @@ public class JwtService {
      *
      * @param token 紧凑 JWT
      * @return 主体
-     * @throws ResponseStatusException 401
+     * @throws BusinessException 401 令牌无效
      */
     public ProductionPrincipal parse(String token) {
         try {
@@ -130,7 +130,7 @@ public class JwtService {
         return String.valueOf(value);
     }
 
-    private static ResponseStatusException unauthorized(String message) {
-        return new ResponseStatusException(HttpStatus.UNAUTHORIZED, message);
+    private static BusinessException unauthorized(String message) {
+        return new BusinessException(ErrorCodeEnum.AUTH_INVALID, message);
     }
 }

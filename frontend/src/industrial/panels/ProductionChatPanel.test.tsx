@@ -81,18 +81,24 @@ describe('ProductionChatPanel', () => {
     expect(screen.getByText(/未收到 done 事件/)).toBeInTheDocument()
   })
 
-  it('HTTP 错误展示为红色告警并带上后端正文', async () => {
-    vi.stubGlobal('fetch', fakeFetch([], { status: 503, body: '事件日志暂不可用（Redis 连接异常）' }))
+  it('HTTP 错误展示后端中文业务句', async () => {
+    vi.stubGlobal('fetch', fakeFetch([], {
+      status: 503,
+      body: JSON.stringify({
+        code: 'event_log_unavailable',
+        message: '事件日志暂不可用（Redis 连接异常），工业级流式接口无法保证断线续传',
+      }),
+    }))
     renderPanel(<ProductionChatPanel provider="deepseek" />)
 
     await userEvent.click(screen.getByRole('button', { name: '流式提问' }))
 
     await waitFor(() => expect(screen.getByText('请求失败')).toBeInTheDocument())
-    expect(screen.getByText(/HTTP 503/)).toBeInTheDocument()
-    expect(screen.getByText(/Redis 连接异常/)).toBeInTheDocument()
+    expect(screen.getByText(/事件日志暂不可用/)).toBeInTheDocument()
+    expect(screen.queryByText(/HTTP 503/)).toBeNull()
   })
 
-  it('服务端 error 事件展示错误码', async () => {
+  it('服务端 error 事件展示业务句，错误码放在次要位置', async () => {
     vi.stubGlobal(
       'fetch',
       fakeFetch([META, frame(1, 'error', JSON.stringify({ code: 'stream_timeout', message: '生成超时，请重试' }))]),
@@ -101,7 +107,8 @@ describe('ProductionChatPanel', () => {
 
     await userEvent.click(screen.getByRole('button', { name: '流式提问' }))
 
-    await waitFor(() => expect(screen.getByText(/stream_timeout/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('生成超时，请重试')).toBeInTheDocument())
+    expect(screen.getByText('stream_timeout')).toBeInTheDocument()
   })
 
   it('点击停止会取消请求，不弹错误', async () => {

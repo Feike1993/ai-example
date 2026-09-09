@@ -6,6 +6,8 @@ import com.feike.ai.production.secret.service.SecretUnavailableException;
 
 import com.feike.ai.core.config.AiProperties;
 import com.feike.ai.core.ApiPathResolver;
+import com.feike.ai.production.web.BusinessException;
+import com.feike.ai.production.web.ErrorCodeEnum;
 import com.openai.client.OpenAIClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,8 +15,6 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -72,7 +72,7 @@ public class ProductionModelFactory {
         }
         AiProperties.Provider cfg = aiProperties.providers().get(providerId);
         if (cfg == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "未知 LLM Provider: " + providerId);
+            throw new BusinessException(ErrorCodeEnum.UNKNOWN_PROVIDER, "未知 LLM Provider: " + providerId);
         }
         String apiKey = secrets.get(SecretResolver.llmKey(providerId)).orElse("");
         if (apiKey.isBlank()) {

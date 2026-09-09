@@ -5,6 +5,7 @@ import {
   rememberRateRemaining,
   type ProductionUser,
 } from './auth'
+import { parseProductionError } from './productionError'
 import type { ProductionSource } from './sseClient'
 
 /** 工业级链路的接口前缀，与样例路径不重叠。 */
@@ -274,22 +275,8 @@ async function requestJson<T>(
     notifyUnauthorized()
   }
   if (!response.ok) {
-    throw new ApiError(response.status, text, errorMessage(response.status, text))
+    const parsed = parseProductionError(response.status, text)
+    throw new ApiError(response.status, text, parsed.message, parsed.code)
   }
   return JSON.parse(text) as T
-}
-
-function errorMessage(status: number, body: string): string {
-  try {
-    const parsed: unknown = JSON.parse(body)
-    if (typeof parsed === 'object' && parsed !== null && 'message' in parsed && typeof parsed.message === 'string') {
-      return parsed.message
-    }
-    if (typeof parsed === 'object' && parsed !== null && 'error' in parsed && typeof parsed.error === 'string') {
-      return parsed.error
-    }
-  } catch {
-    // 非 JSON 错误体仍保留原文展示
-  }
-  return body ? `HTTP ${status}: ${body}` : `HTTP ${status}`
 }
