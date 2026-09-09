@@ -13,7 +13,7 @@ type ResultBodyProps = {
 export function ResultBody({ error, emptyHint, children }: ResultBodyProps) {
   if (error) {
     return (
-      <Alert color="red" title="请求失败" variant="light">
+      <Alert color="red" title="请求失败" variant="light" data-testid="result-error">
         {error}
       </Alert>
     )

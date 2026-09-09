@@ -6,8 +6,8 @@ export class ApiError extends Error {
   readonly status: number
   readonly body: string
 
-  constructor(status: number, body: string) {
-    super(body ? `HTTP ${status}: ${body}` : `HTTP ${status}`)
+  constructor(status: number, body: string, message?: string) {
+    super(message ?? (body ? `HTTP ${status}: ${body}` : `HTTP ${status}`))
     this.name = 'ApiError'
     this.status = status
     this.body = body

@@ -86,7 +86,7 @@ export function IndustrialApp() {
               /api/v1 生产链路
             </Text>
             {user ? (
-              <Text size="xs" c="dimmed">
+              <Text size="xs" c="dimmed" data-testid="identity-line">
                 {user.username} · {user.tenant} · {user.roles.join(', ')}
               </Text>
             ) : null}
@@ -96,6 +96,7 @@ export function IndustrialApp() {
               <NavLink
                 key={item.id}
                 className="industrial-nav-item"
+                data-testid={`nav-${item.id}`}
                 label={item.label}
                 description={item.description}
                 active={section === item.id}

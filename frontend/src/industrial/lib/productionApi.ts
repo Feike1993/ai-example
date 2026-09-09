@@ -274,7 +274,22 @@ async function requestJson<T>(
     notifyUnauthorized()
   }
   if (!response.ok) {
-    throw new ApiError(response.status, text)
+    throw new ApiError(response.status, text, errorMessage(response.status, text))
   }
   return JSON.parse(text) as T
+}
+
+function errorMessage(status: number, body: string): string {
+  try {
+    const parsed: unknown = JSON.parse(body)
+    if (typeof parsed === 'object' && parsed !== null && 'message' in parsed && typeof parsed.message === 'string') {
+      return parsed.message
+    }
+    if (typeof parsed === 'object' && parsed !== null && 'error' in parsed && typeof parsed.error === 'string') {
+      return parsed.error
+    }
+  } catch {
+    // 非 JSON 错误体仍保留原文展示
+  }
+  return body ? `HTTP ${status}: ${body}` : `HTTP ${status}`
 }

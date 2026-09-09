@@ -2,6 +2,9 @@ server:
   port: 8080
   servlet:
     context-path: /ai-example
+  error:
+    # 工业级接口的 ResponseStatusException reason 是可操作的业务提示，必须回给前端。
+    include-message: always
 
 management:
   endpoints:

@@ -6,10 +6,15 @@
   "packageManager": "pnpm@11.4.0",
   "scripts": {
     "dev": "vite",
+    "dev:e2e": "VITE_E2E=1 vite --host 127.0.0.1 --port 5173 --strictPort",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright install chromium && playwright test --project=chromium",
+    "test:e2e:headed": "playwright install chromium && PLAYWRIGHT_SLOWMO=400 playwright test --project=chromium --headed",
+    "test:e2e:ui": "playwright install chromium && playwright test --project=chromium --ui",
+    "test:e2e:keys": "playwright install chromium && playwright test --project=keys",
     "preview": "vite preview",
     "poster:export": "node scripts/export-poster.mjs",
     "endcard:export": "node scripts/export-poster.mjs endcard"
@@ -27,6 +32,7 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",

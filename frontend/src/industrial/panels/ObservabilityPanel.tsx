@@ -63,7 +63,7 @@ export function ObservabilityPanel() {
               Compose 下 Jaeger UI：{JAEGER_UI}
             </Text>
           )}
-          <Button variant="default" onClick={() => void load()}>
+          <Button variant="default" data-testid="refresh-snapshot" onClick={() => void load()}>
             刷新快照
           </Button>
         </Stack>
@@ -71,7 +71,7 @@ export function ObservabilityPanel() {
       result={
         <ResultBody error={error} emptyHint="登录后刷新，这里显示生产链路计数。">
           {rows.length > 0 ? (
-            <Table withTableBorder>
+            <Table withTableBorder data-testid="ops-snapshot">
               <Table.Tbody>
                 {rows.map(([label, value]) => (
                   <Table.Tr key={label}>

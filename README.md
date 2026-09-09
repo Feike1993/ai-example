@@ -35,33 +35,35 @@ Java：**Spring Boot 4.1 + Spring AI 2.0 + Gradle**；Python：**LangGraph / MCP
 
 ## 你将学到什么
 
-| 期 | 样例 | 概念 | Java | Python |
-| --- | --- | --- | --- | --- |
-| 1 | Chat | Token、SSE、TTFT | `POST /ai-example/chat` | `samples.chat` |
-| 1 | 结构化输出 | JSON Schema、重试 | `POST /ai-example/structured/ticket` | `samples.structured` |
-| 1 | Tool Calling | Function Calling | `POST /ai-example/tools` | `samples.tools` |
-| 1 | Agent Loop | ReAct / maxSteps | `POST /ai-example/agent/react` | `samples.react_agent` |
-| 2 | MCP | 工具协议标准化 | `POST /ai-example/mcp/chat` | `samples.mcp_client` |
-| 2 | RAG | 分块 / Embedding / 检索 | `POST /ai-example/rag/query` | `samples.rag` |
-| 3 | 上下文工程 | trim / summarize | `POST /ai-example/context/chat` | `samples.context_memory` |
-| 3 | 多 Agent | Orchestrator–Subagent | `POST /ai-example/multiagent/run` | `samples.multi_agent` |
-| 4 | Hybrid RAG | 向量 + 全文 + RRF | `POST /ai-example/rag/query/compare` | `samples.hybrid_rag` |
-| 4 | Agent 评测 | golden suite | `POST /ai-example/eval/run` | `samples.eval_runner` |
-| 5 | 持久会话 | PG 会话存储 | `POST /ai-example/context/chat` | `samples.context_memory` |
-| 5 | 长期记忆 | pgvector 事实库 | `POST /ai-example/memory/chat` | `samples.long_term_memory` |
-| 6 | MCP 远端 | 独立 Server + Client | `POST /ai-example/mcp/chat`（需 8081） | `samples.mcp_client_http` |
-| 6 | HyDE | 假想文档 Embedding | `POST /ai-example/rag/query/compare-expansion` | `samples.hyde_rag` |
-| 7a | 语义分块 | token vs 结构切 | `POST /ai-example/rag/query/compare-chunking` | `samples.semantic_chunk` |
-| 7b | 父子文档 | 子检索父上下文 | `chunkingStrategy=parent_child` | `samples.parent_child_rag` |
-| 8a | 自动抽记忆 | 对话抽事实 → remember | `POST /ai-example/memory/extract` | `samples.memory_extract` |
-| 8b | 召回对照 | topK / 阈值 / 有无记忆 | `POST /ai-example/memory/recall/compare` | `samples.memory_recall_compare` |
-| 9 | MCP Bearer | Server 校验 + Client 带凭证 | `MCP_BEARER_TOKEN` + `/mcp` | `samples.mcp_client_http` |
-| 10 | Agent 逐步 SSE | tool_call / tool_result 实时推送 | `GET /ai-example/agent/react/stream` | `samples.react_agent` |
-| 10 | Usage 累加 | 多轮 TokenUsage 合计 | `POST /ai-example/agent/react`（`usage`） | `samples.react_agent` |
-| 11 | 输出护栏 | 词表 + 结构校验 | `POST /ai-example/guardrail/chat` | `samples.guardrail_chat` |
-| 11 | RAG Citation | 强制可校验引用 | `POST /ai-example/rag/query`（`citationMode=required`） | `samples.rag_citation` |
-| 12 | 记忆辅助改写 | memory_rewrite | `POST /ai-example/rag/query`（`queryExpansion=memory_rewrite`） | `samples.memory_informed_rag` |
-| 12 | RAG vs 记忆 | 双路对照 | `POST /ai-example/rag/query/compare-memory` | `samples.rag_memory_compare` |
+
+| 期   | 样例           | 概念                           | Java                                                          | Python                          |
+| --- | ------------ | ---------------------------- | ------------------------------------------------------------- | ------------------------------- |
+| 1   | Chat         | Token、SSE、TTFT               | `POST /ai-example/chat`                                       | `samples.chat`                  |
+| 1   | 结构化输出        | JSON Schema、重试               | `POST /ai-example/structured/ticket`                          | `samples.structured`            |
+| 1   | Tool Calling | Function Calling             | `POST /ai-example/tools`                                      | `samples.tools`                 |
+| 1   | Agent Loop   | ReAct / maxSteps             | `POST /ai-example/agent/react`                                | `samples.react_agent`           |
+| 2   | MCP          | 工具协议标准化                      | `POST /ai-example/mcp/chat`                                   | `samples.mcp_client`            |
+| 2   | RAG          | 分块 / Embedding / 检索          | `POST /ai-example/rag/query`                                  | `samples.rag`                   |
+| 3   | 上下文工程        | trim / summarize             | `POST /ai-example/context/chat`                               | `samples.context_memory`        |
+| 3   | 多 Agent      | Orchestrator–Subagent        | `POST /ai-example/multiagent/run`                             | `samples.multi_agent`           |
+| 4   | Hybrid RAG   | 向量 + 全文 + RRF                | `POST /ai-example/rag/query/compare`                          | `samples.hybrid_rag`            |
+| 4   | Agent 评测     | golden suite                 | `POST /ai-example/eval/run`                                   | `samples.eval_runner`           |
+| 5   | 持久会话         | PG 会话存储                      | `POST /ai-example/context/chat`                               | `samples.context_memory`        |
+| 5   | 长期记忆         | pgvector 事实库                 | `POST /ai-example/memory/chat`                                | `samples.long_term_memory`      |
+| 6   | MCP 远端       | 独立 Server + Client           | `POST /ai-example/mcp/chat`（需 8081）                           | `samples.mcp_client_http`       |
+| 6   | HyDE         | 假想文档 Embedding               | `POST /ai-example/rag/query/compare-expansion`                | `samples.hyde_rag`              |
+| 7a  | 语义分块         | token vs 结构切                 | `POST /ai-example/rag/query/compare-chunking`                 | `samples.semantic_chunk`        |
+| 7b  | 父子文档         | 子检索父上下文                      | `chunkingStrategy=parent_child`                               | `samples.parent_child_rag`      |
+| 8a  | 自动抽记忆        | 对话抽事实 → remember             | `POST /ai-example/memory/extract`                             | `samples.memory_extract`        |
+| 8b  | 召回对照         | topK / 阈值 / 有无记忆             | `POST /ai-example/memory/recall/compare`                      | `samples.memory_recall_compare` |
+| 9   | MCP Bearer   | Server 校验 + Client 带凭证       | `MCP_BEARER_TOKEN` + `/mcp`                                   | `samples.mcp_client_http`       |
+| 10  | Agent 逐步 SSE | tool_call / tool_result 实时推送 | `GET /ai-example/agent/react/stream`                          | `samples.react_agent`           |
+| 10  | Usage 累加     | 多轮 TokenUsage 合计             | `POST /ai-example/agent/react`（`usage`）                       | `samples.react_agent`           |
+| 11  | 输出护栏         | 词表 + 结构校验                    | `POST /ai-example/guardrail/chat`                             | `samples.guardrail_chat`        |
+| 11  | RAG Citation | 强制可校验引用                      | `POST /ai-example/rag/query`（`citationMode=required`）         | `samples.rag_citation`          |
+| 12  | 记忆辅助改写       | memory_rewrite               | `POST /ai-example/rag/query`（`queryExpansion=memory_rewrite`） | `samples.memory_informed_rag`   |
+| 12  | RAG vs 记忆    | 双路对照                         | `POST /ai-example/rag/query/compare-memory`                   | `samples.rag_memory_compare`    |
+
 
 文档：[学习路径](docs/learning-path.md) · [基础补丁](docs/baseline-patches.md) · [集成说明](docs/integration.md) · [第二期](docs/phase2.md) · [第三期](docs/phase3.md) · [第四期](docs/phase4.md) · [第五期](docs/phase5.md) · [第六期](docs/phase6.md) · [第七期](docs/phase7.md) · [第八期](docs/phase8.md) · [第九期](docs/phase9.md) · [第十期](docs/phase10.md) · [第十一期](docs/phase11.md) · [第十二期](docs/phase12.md) · [第十三期](docs/phase13.md) · [CHANGELOG](CHANGELOG.md) · [刻意不做 backlog](docs/backlog.md)
 
@@ -103,7 +105,7 @@ docker compose up -d --build --wait
 docker compose ps
 ```
 
-打开 http://localhost:8088 。默认仅发布前端端口；Java、MCP、PostgreSQL、Redis 只在 Compose 内网可见。教学场入口 `/`，工业级入口 `/industrial.html`。
+打开 [http://localhost:8088](http://localhost:8088) 。默认仅发布前端端口；Java、MCP、PostgreSQL、Redis 只在 Compose 内网可见。教学场入口 `/`，工业级入口 `/industrial.html`。
 
 调试时如需从宿主机直连 `5432`、`6379`、`8080`、`8081`：
 
@@ -158,13 +160,15 @@ cd java && ./gradlew bootRun
 cd frontend && pnpm install && pnpm dev
 ```
 
-| 入口 | 地址 |
-| --- | --- |
-| 教学场 | http://localhost:5173/ |
-| 工业级 | http://localhost:5173/industrial.html |
-| Java 直连 | http://localhost:8080/ai-example/ |
-| Jaeger UI | http://localhost:16686/ |
-| MCP Server | http://localhost:8081/mcp |
+
+| 入口         | 地址                                                                             |
+| ---------- | ------------------------------------------------------------------------------ |
+| 教学场        | [http://localhost:5173/](http://localhost:5173/)                               |
+| 工业级        | [http://localhost:5173/industrial.html](http://localhost:5173/industrial.html) |
+| Java 直连    | [http://localhost:8080/ai-example/](http://localhost:8080/ai-example/)         |
+| Jaeger UI  | [http://localhost:16686/](http://localhost:16686/)                             |
+| MCP Server | [http://localhost:8081/mcp](http://localhost:8081/mcp)                         |
+
 
 `./gradlew bootRun` 已带 `--enable-native-access=ALL-UNNAMED`（Java 25 / Netty）。IDE 直跑主类请自行加该 VM 参数，或在 `.env` 里设 `JAVA_TOOL_OPTIONS=--enable-native-access=ALL-UNNAMED`。
 
@@ -177,20 +181,21 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d jaeger
 # OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318/v1/traces
 ```
 
-然后重启 `bootRun`。Jaeger UI：http://localhost:16686/ 。指标仍走 Prometheus scrape，不往 Jaeger 推 metrics。
+然后重启 `bootRun`。Jaeger UI：[http://localhost:16686/](http://localhost:16686/) 。指标仍走 Prometheus scrape，不往 Jaeger 推 metrics。
 
 ## 跑 Java
-
 
 ### 数据库迁移（Flyway）
 
 建表由 Flyway 在启动期完成，脚本在 [java/src/main/resources/db/migration](java/src/main/resources/db/migration)：
 
-| 版本 | 内容 |
-| --- | --- |
+
+| 版本   | 内容                                                                                |
+| ---- | --------------------------------------------------------------------------------- |
 | `V1` | 接管教学样例的 `chat_session_message`（原先由 `JdbcChatSessionDAOImpl` 的 `@PostConstruct` 建） |
-| `V2` | 工业级会话表 `prod_chat_session` / `prod_chat_message` |
-| `V3` | `prod_secret` 信封密文、`prod_audit_log`、会话租户索引 |
+| `V2` | 工业级会话表 `prod_chat_session` / `prod_chat_message`                                  |
+| `V3` | `prod_secret` 信封密文、`prod_audit_log`、会话租户索引                                        |
+
 
 依赖必须是 `spring-boot-starter-flyway`，不要只加 `org.flywaydb:flyway-core`。
 Spring Boot 4 把 `FlywayAutoConfiguration` 拆进了独立的 `spring-boot-flyway` 模块；
@@ -207,13 +212,15 @@ Spring Boot 4 把 `FlywayAutoConfiguration` 拆进了独立的 `spring-boot-flyw
 
 ### Redis 要不要起？
 
-| 你要跑的内容 | PostgreSQL | Redis | 说明 |
-| --- | --- | --- | --- |
-| 仅 Chat / Tools / Agent 等非 RAG 样例 | **需要**（Flyway 迁移）| 可选 | 不想起库就设 `FLYWAY_ENABLED=false` |
-| RAG / 记忆 / 持久会话（教学样例） | **需要** | 可选 | 样例路径不读 Redis |
-| 工业级 `/api/v1/**`（含 SSE 断线续传） | **需要** | **需要** | 默认 `PRODUCTION_ENABLED=true`、`PRODUCTION_EVENT_LOG=redis`；Redis 挂了接口 503，不拖垮启动 |
-| 工业级多轮会话 | **需要** | 建议 | `PRODUCTION_SESSION_ENABLED=true`；`PRODUCTION_SESSION_LOCK=memory` 可不用 Redis，但多实例下等于没有锁 |
-| 只想先关工业级、专心跑样例 | 按上表 | 可不起 | `PRODUCTION_ENABLED=false` |
+
+| 你要跑的内容                           | PostgreSQL        | Redis  | 说明                                                                                      |
+| -------------------------------- | ----------------- | ------ | --------------------------------------------------------------------------------------- |
+| 仅 Chat / Tools / Agent 等非 RAG 样例 | **需要**（Flyway 迁移） | 可选     | 不想起库就设 `FLYWAY_ENABLED=false`                                                           |
+| RAG / 记忆 / 持久会话（教学样例）            | **需要**            | 可选     | 样例路径不读 Redis                                                                            |
+| 工业级 `/api/v1/**`（含 SSE 断线续传）     | **需要**            | **需要** | 默认 `PRODUCTION_ENABLED=true`、`PRODUCTION_EVENT_LOG=redis`；Redis 挂了接口 503，不拖垮启动          |
+| 工业级多轮会话                          | **需要**            | 建议     | `PRODUCTION_SESSION_ENABLED=true`；`PRODUCTION_SESSION_LOCK=memory` 可不用 Redis，但多实例下等于没有锁 |
+| 只想先关工业级、专心跑样例                    | 按上表               | 可不起    | `PRODUCTION_ENABLED=false`                                                              |
+
 
 本地依赖与 `bootRun` 命令见 [本地开发](#本地开发宿主机)。按要跑的内容决定是否起 Redis：
 
@@ -274,9 +281,12 @@ RUN_REDIS_IT=true REDIS_IT_HOST=localhost REDIS_IT_PORT=6379 \
 
 后端包 `com.feike.ai.production`，HTTP 前缀 `/ai-example/api/v1/**`，与教学样例路径不重叠。前端独立入口 [industrial.html](frontend/industrial.html)（样例场侧栏也有跳转）。
 
+这是**工业级第四阶段（Playwright E2E）**，与课程**第四期 Hybrid RAG + Eval**（[docs/phase4.md](docs/phase4.md)）不是同一件事。
+
 - 配置前缀 `app.production.*`（环境变量 `PRODUCTION_*` / `REDIS_*`）
 - RAG 拆成 ingest / retrieve / generate，不含教学用的 compare 分支
 - SSE 契约：`meta → sources → delta* → step* → usage → done|error`，带 `runId` / `seq`；断线用 `GET /api/v1/runs/{runId}/stream` + `Last-Event-ID` 续传
+- **第四阶段 E2E**：`cd frontend && pnpm test:e2e`。默认套件覆盖登录、安全/可观测面板、401、alice ingest 403、输入护栏（不打 Chat LLM）。空检索会先走 Embedding，因此 `pnpm test:e2e:keys` 仅在已配 `PROVIDER_DASHSCOPE_API_KEY` 时跑。压测不做。可选 `PLAYWRIGHT_BASE_URL=http://localhost:8088` 打 Compose 前端；不要用 `vite preview`（无 API 代理）。
 
 ### 鉴权 / 信封加密 / 指标
 
@@ -284,11 +294,13 @@ RUN_REDIS_IT=true REDIS_IT_HOST=localhost REDIS_IT_PORT=6379 \
 
 **JWT（HS256）。** `POST /api/v1/auth/token` 换令牌，后续请求带 `Authorization: Bearer`。演示账号（密码均为 `demo`）：
 
-| 用户 | 租户 | 角色 |
-| --- | --- | --- |
-| alice | tenant-a | USER |
-| bob | tenant-b | USER |
+
+| 用户    | 租户       | 角色           |
+| ----- | -------- | ------------ |
+| alice | tenant-a | USER         |
+| bob   | tenant-b | USER         |
 | admin | tenant-a | ADMIN + USER |
+
 
 跨租户访问会话返回 **404**（不暴露存在性）。`POST /api/v1/rag/ingest` 仅 ADMIN。限流超限 **429** + `Retry-After`；同一会话并发是 **409** `session_busy`，两件事不要混。
 
@@ -303,13 +315,15 @@ RUN_REDIS_IT=true REDIS_IT_HOST=localhost REDIS_IT_PORT=6379 \
 [JdbcChatSessionDAOImpl](java/src/main/java/com/feike/ai/samples/context/dao/impl/JdbcChatSessionDAOImpl.java) 是教学实现，刻意保留了几处生产不该有的写法；
 修好的版本在 [com.feike.ai.production.session.dao](java/src/main/java/com/feike/ai/production/session/dao)，两边可以直接对照读。
 
-| 问题 | 教学版 | 生产版 |
-| --- | --- | --- |
-| 半个 turn | user 与 assistant 分两次裸写 | 同一事务，要么都在要么都不在 |
-| 序号竞态 | `SELECT MAX(seq)` 再 INSERT | `INSERT ... SELECT COALESCE(MAX(seq),-1)+1` 单语句取号，复合主键冲突后重取 |
-| 跨实例并发 | JVM `synchronized`，多实例失效 | Redis 会话锁（`SET NX PX` + Lua CAS 释放） |
-| 重复提交 | 会写两遍 | `turn_id` 唯一索引 + 写前查重 |
-| 建表 | `@PostConstruct` 运行期 DDL | Flyway 版本化迁移 |
+
+| 问题      | 教学版                        | 生产版                                                         |
+| ------- | -------------------------- | ----------------------------------------------------------- |
+| 半个 turn | user 与 assistant 分两次裸写     | 同一事务，要么都在要么都不在                                              |
+| 序号竞态    | `SELECT MAX(seq)` 再 INSERT | `INSERT ... SELECT COALESCE(MAX(seq),-1)+1` 单语句取号，复合主键冲突后重取 |
+| 跨实例并发   | JVM `synchronized`，多实例失效   | Redis 会话锁（`SET NX PX` + Lua CAS 释放）                         |
+| 重复提交    | 会写两遍                       | `turn_id` 唯一索引 + 写前查重                                       |
+| 建表      | `@PostConstruct` 运行期 DDL   | Flyway 版本化迁移                                                |
+
 
 三条设计上的取舍：
 
@@ -327,14 +341,18 @@ pnpm install
 pnpm dev
 ```
 
-打开 http://localhost:5173 。侧栏含各期样例（进阶含 Hybrid / 评测 / 记忆 / HyDE；MCP 默认 remote，可面板切 inprocess；remote 需 mcp-server）。工业级入口：http://localhost:5173/industrial.html 。
+打开 [http://localhost:5173](http://localhost:5173) 。侧栏含各期样例（进阶含 Hybrid / 评测 / 记忆 / HyDE；MCP 默认 remote，可面板切 inprocess；remote 需 mcp-server）。工业级入口：[http://localhost:5173/industrial.html](http://localhost:5173/industrial.html) 。
 
 ```bash
-pnpm test   # Vitest + Testing Library（SSE / Markdown 等）
+pnpm test          # Vitest + Testing Library（SSE / Markdown 等）
+pnpm test:e2e        # 工业级 Playwright 默认套件（无头；缺 Chromium 时会先下载）
+pnpm test:e2e:headed # 弹出浏览器并放慢操作，便于看过程
+pnpm test:e2e:ui     # Playwright UI，可逐步回放
+pnpm test:e2e:keys   # 空检索 / ingest / 跨租户（另需 Embedding Key）
 pnpm build
 ```
 
-（请在 `frontend/` 下执行；仓库根目录没有 `package.json`，不要跑 `pnpm start`。）
+请在 `frontend/` 下执行。仓库根也可以 `pnpm test:e2e`（只转发到 frontend，没有 `pnpm start`）。
 
 ## 跑 Python 对照
 
@@ -347,3 +365,4 @@ uv run python -m ai_example.samples.mcp_client_http
 uv run python -m ai_example.samples.hyde_rag
 uv run pytest
 ```
+

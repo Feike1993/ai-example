@@ -26,8 +26,10 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -41,6 +43,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -116,6 +119,18 @@ public class ProductionChatController {
         this.metrics = metrics;
         this.jsonMapper = jsonMapper;
         this.tracer = tracer == null ? null : tracer.getIfAvailable();
+    }
+
+    /**
+     * 将本控制器的业务状态异常转换为稳定的 JSON 错误契约。
+     *
+     * @param exception 携带 HTTP 状态与业务提示的异常
+     * @return 状态码和面向调用方的提示
+     */
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<Map<String, String>> handleResponseStatus(ResponseStatusException exception) {
+        String message = exception.getReason() == null ? exception.getStatusCode().toString() : exception.getReason();
+        return ResponseEntity.status(exception.getStatusCode()).body(Map.of("message", message));
     }
 
     /**

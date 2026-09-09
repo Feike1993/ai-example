@@ -113,7 +113,8 @@ class ProductionJwtMvcTest {
     void ingestAsUserShouldBeForbidden() throws Exception {
         String token = login("alice");
         mockMvc.perform(post("/api/v1/rag/ingest").header("Authorization", "Bearer " + token))
-            .andExpect(status().isForbidden());
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.message").value("重建索引需要 ADMIN 角色"));
     }
 
     @Test

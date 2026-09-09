@@ -262,6 +262,7 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
           />
           <Textarea
             label="问题"
+            data-testid="question-input"
             autosize
             minRows={3}
             value={question}
@@ -271,7 +272,7 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
             <NumberInput label="topK" min={1} max={20} value={topK} onChange={setTopK} />
           ) : null}
           <Group gap="sm">
-            <Button onClick={onStream} loading={streaming} disabled={!question.trim()}>
+            <Button data-testid="stream-submit" onClick={onStream} loading={streaming} disabled={!question.trim()}>
               流式提问
             </Button>
             <Button variant="default" onClick={onStop} disabled={!streaming}>
@@ -283,11 +284,11 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
             <Button variant="subtle" color="red" onClick={onClearSession} disabled={streaming || !sessionId}>
               清空会话
             </Button>
-            <Button variant="subtle" onClick={onIngest} loading={ingesting}>
+            <Button variant="subtle" data-testid="ingest" onClick={onIngest} loading={ingesting}>
               重建语料
             </Button>
           </Group>
-          <Text size="xs" c="dimmed">
+          <Text size="xs" c="dimmed" data-testid="session-meta">
             当前模型：{provider} · 会话 {sessionId ?? '未建立'} · 已存 {turns.length} 轮
           </Text>
         </Stack>
@@ -370,7 +371,7 @@ function StatusBadge({ status }: { status: string }) {
   }
   const view = map[status] ?? map.idle
   return (
-    <Badge color={view.color} variant="light">
+    <Badge color={view.color} variant="light" data-testid="stream-status">
       {view.label}
     </Badge>
   )

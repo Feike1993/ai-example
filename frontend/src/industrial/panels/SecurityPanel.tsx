@@ -41,16 +41,16 @@ export function SecurityPanel({ onLogout }: SecurityPanelProps) {
           <Text size="sm" fw={600}>
             当前身份
           </Text>
-          <Text size="sm">
+          <Text size="sm" data-testid="security-identity">
             {user ? `${user.username} · ${user.tenant} · ${user.roles.join(', ')}` : '未登录'}
           </Text>
           <Text size="sm">
             限流剩余：{remaining ?? '尚未发起需限流的请求'}
           </Text>
-          <Button variant="default" onClick={() => void load()}>
+          <Button variant="default" data-testid="refresh-audit" onClick={() => void load()}>
             刷新审计
           </Button>
-          <Button variant="subtle" color="red" onClick={onLogout}>
+          <Button variant="subtle" color="red" data-testid="logout" onClick={onLogout}>
             退出登录
           </Button>
           <Text size="xs" c="dimmed">
@@ -66,7 +66,7 @@ export function SecurityPanel({ onLogout }: SecurityPanelProps) {
       result={
         <ResultBody error={error} emptyHint="登录后这里列出本租户最近的审计记录。">
           {rows.length > 0 ? (
-            <Table striped highlightOnHover withTableBorder>
+            <Table striped highlightOnHover withTableBorder data-testid="audit-table">
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>时间</Table.Th>
@@ -132,7 +132,7 @@ export function LoginForm({ onLoggedIn }: LoginFormProps) {
 
   return (
     <Stack gap="md" maw={420} mx="auto" mt="xl">
-      <Text fw={700} size="lg">
+      <Text fw={700} size="lg" data-testid="login-title">
         工业级链路登录
       </Text>
       <Text size="sm" c="dimmed">
@@ -143,9 +143,24 @@ export function LoginForm({ onLoggedIn }: LoginFormProps) {
           {error}
         </Alert>
       ) : null}
-      <TextInput label="用户名" value={username} onChange={(event) => setUsername(event.currentTarget.value)} />
-      <PasswordInput label="密码" value={password} onChange={(event) => setPassword(event.currentTarget.value)} />
-      <Button onClick={() => void onSubmit()} loading={loading} disabled={!username.trim()}>
+      <TextInput
+        label="用户名"
+        data-testid="login-username"
+        value={username}
+        onChange={(event) => setUsername(event.currentTarget.value)}
+      />
+      <PasswordInput
+        label="密码"
+        data-testid="login-password"
+        value={password}
+        onChange={(event) => setPassword(event.currentTarget.value)}
+      />
+      <Button
+        data-testid="login-submit"
+        onClick={() => void onSubmit()}
+        loading={loading}
+        disabled={!username.trim()}
+      >
         登录
       </Button>
       <Group gap="xs">

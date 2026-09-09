@@ -98,7 +98,9 @@
 | 鉴权、限流、审计落库 | 全程 | 教学样例仍不做；工业级第三阶段已覆盖 | 样例路径保持匿名，避免挡住课程点击即跑 | JWT / Redis 限流 / `prod_audit_log` 见 `/api/v1` |
 | 信封加密存 LLM Key | 工业级 | 已覆盖（第三阶段） | 不用 HashiCorp Vault，密文进 Postgres，KEK 只在 `PRODUCTION_KEK` | 云 KMS / 自动轮换仍不做 |
 | Prometheus + OTel / Jaeger | 工业级 | 已覆盖（第三阶段） | 浏览器走 `/api/v1/ops/snapshot`，不直连 actuator | Grafana 容器不做 |
+| Playwright E2E | 工业级第三阶段后 | 已覆盖（第四阶段） | 默认套件不打 Chat LLM；空检索仍要 Embedding，故 `@keys` 本机选跑 | 与教学第四期 Hybrid RAG 不是同一件事 |
+| 压测（k6 / JMeter） | 工业级 | 候选 | 第四阶段仍不做，避免 cookbook 绑云资源 | 业务项目 |
 | 有副作用的真实外部工具 | 第一期 | 明确不做（本仓） | 演示工具保持幂等、可离线 | 业务项目 |
-| 仓库根目录 `package.json` / `pnpm start` | 前端引入后 | 明确不做（本仓） | 避免与 Vite 工程混淆 | — |
+| 仓库根目录 `package.json` / `pnpm start` | 前端引入后 | 已覆盖（仅脚本转发） | 根 `package.json` 无依赖、无 `start`，只转发 `test:e2e`，避免 pnpm 11 在 git 根误跑 install | 不要把 Vite 工程升到仓库根 |
 
 各期样例文末可写一句：详见 [backlog](backlog.md)。

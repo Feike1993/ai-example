@@ -23,8 +23,8 @@ export default defineConfig({
     /** 显式绑 IPv4，避免仅监听 ::1 时 127.0.0.1 打不开 */
     host: '127.0.0.1',
     port: 5173,
-    /** 启动 dev 时用系统默认浏览器打开（非 IDE 内嵌预览） */
-    open: true,
+    /** 日常 pnpm dev 打开浏览器；E2E 脚本设 VITE_E2E=1，避免 CI 弹窗 */
+    open: process.env.VITE_E2E ? false : true,
     proxy: {
       '/ai-example': {
         target: 'http://localhost:8080',

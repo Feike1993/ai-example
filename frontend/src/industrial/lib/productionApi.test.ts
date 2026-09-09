@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api'
 import { getAccessToken, setSession, UNAUTHORIZED_EVENT } from './auth'
-import { getAudit, getMe, postChat } from './productionApi'
+import { getAudit, getMe, postChat, postIngest } from './productionApi'
 
 describe('productionApi 鉴权头', () => {
   beforeEach(() => {
@@ -31,6 +31,18 @@ describe('productionApi 鉴权头', () => {
     await expect(postChat({ question: 'hi' }, fetchImpl as unknown as typeof fetch)).rejects.toBeInstanceOf(ApiError)
     expect(getAccessToken()).toBeNull()
     expect(seen).toEqual(['u'])
+  })
+
+  it('403 显示后端业务提示', async () => {
+    setSession('tok-1', { username: 'alice', tenant: 'tenant-a', roles: ['USER'] })
+    const fetchImpl = vi.fn(async () => new Response(
+      '{"message":"重建索引需要 ADMIN 角色"}', { status: 403 },
+    ))
+
+    await expect(postIngest(fetchImpl as unknown as typeof fetch)).rejects.toMatchObject({
+      status: 403,
+      message: '重建索引需要 ADMIN 角色',
+    })
   })
 
   it('审计列表按 JSON 数组返回', async () => {
