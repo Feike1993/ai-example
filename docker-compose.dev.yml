@@ -7,6 +7,10 @@ services:
     ports:
       - "${REDIS_PORT:-6379}:6379"
 
+  jaeger:
+    ports:
+      - "${JAEGER_OTLP_PORT:-4318}:4318"
+
   mcp-server:
     ports:
       - "${MCP_PORT:-8081}:8081"

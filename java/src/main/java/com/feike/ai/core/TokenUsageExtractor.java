@@ -1,5 +1,6 @@
 package com.feike.ai.core;
 
+import com.feike.ai.core.model.TokenUsageDTO;
 import org.springframework.ai.chat.metadata.EmptyUsage;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -15,7 +16,7 @@ public final class TokenUsageExtractor {
      * @param response Spring AI 聊天响应，可为 {@code null}
      * @return 用量 DTO；无有效数据时为 {@code null}
      */
-    public static TokenUsage from(ChatResponse response) {
+    public static TokenUsageDTO from(ChatResponse response) {
         if (response == null) {
             return null;
         }
@@ -30,7 +31,7 @@ public final class TokenUsageExtractor {
             if (isZeroOrNull(prompt) && isZeroOrNull(completion) && isZeroOrNull(total)) {
                 return null;
             }
-            return new TokenUsage(prompt, completion, total);
+            return new TokenUsageDTO(prompt, completion, total);
         } catch (RuntimeException ignored) {
             return null;
         }
@@ -47,7 +48,7 @@ public final class TokenUsageExtractor {
      * @param right 右侧用量
      * @return 合计；两边皆无效时为 {@code null}
      */
-    public static TokenUsage sum(TokenUsage left, TokenUsage right) {
+    public static TokenUsageDTO sum(TokenUsageDTO left, TokenUsageDTO right) {
         if (left == null) {
             return right;
         }
@@ -62,7 +63,7 @@ public final class TokenUsageExtractor {
         }
         // 若网关只给了 prompt/completion 未给 total，用二者之和填 total
         Integer totalOut = total > 0 ? total : (prompt + completion > 0 ? prompt + completion : null);
-        return new TokenUsage(
+        return new TokenUsageDTO(
             prompt > 0 ? prompt : null,
             completion > 0 ? completion : null,
             totalOut

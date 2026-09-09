@@ -9,7 +9,7 @@ describe('mergeAgentSteps', () => {
     const merged = mergeAgentSteps(EMPTY, { index: 0, toolName: 'search', toolArgs: '{"q":"x"}' })
 
     expect(merged).toEqual([
-      { index: 0, toolName: 'search', assistantText: '', toolArgs: '{"q":"x"}', toolResult: '' },
+      { index: 0, toolName: 'search', assistantText: '', toolArgs: '{"q":"x"}', toolResult: '', denied: false },
     ])
   })
 
@@ -20,7 +20,7 @@ describe('mergeAgentSteps', () => {
     ])
 
     expect(merged).toEqual([
-      { index: 0, toolName: 'search', assistantText: '我来查', toolArgs: '{"q":"x"}', toolResult: '找到 3 条' },
+      { index: 0, toolName: 'search', assistantText: '我来查', toolArgs: '{"q":"x"}', toolResult: '找到 3 条', denied: false },
     ])
   })
 
@@ -68,6 +68,15 @@ describe('mergeAgentSteps', () => {
     expect(mergeAgentSteps(base, { index: 0, toolName: 't' })[0].toolResult).toBe('旧')
   })
 
+  it('denied 标记会保留，不被后到的普通片段抹掉', () => {
+    const merged = mergeAllAgentSteps(EMPTY, [
+      { index: 0, toolName: 'rebuild_index', denied: true, toolResult: 'denied' },
+      { index: 0, toolName: 'rebuild_index', toolArgs: '{}' },
+    ])
+    expect(merged[0].denied).toBe(true)
+    expect(merged[0].toolResult).toBe('denied')
+  })
+
   it('不修改传入的数组', () => {
     const base = mergeAgentSteps(EMPTY, { index: 0, toolName: 'a' })
     const snapshot = structuredClone(base)
@@ -76,3 +85,4 @@ describe('mergeAgentSteps', () => {
     expect(base).toEqual(snapshot)
   })
 })
+

@@ -1,5 +1,7 @@
 package com.feike.ai.core;
 
+import com.feike.ai.core.config.AiProperties;
+import com.feike.ai.core.model.ProviderVO;
 import com.openai.client.OpenAIClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,14 +59,14 @@ public class LlmProviderRegistry {
     /**
      * 列出可切换的 Provider，供前端下拉框使用。
      */
-    public List<ProviderView> list() {
-        List<ProviderView> views = new ArrayList<>();
+    public List<ProviderVO> list() {
+        List<ProviderVO> views = new ArrayList<>();
         for (Map.Entry<String, AiProperties.Provider> entry : properties.providers().entrySet()) {
             AiProperties.Provider cfg = entry.getValue();
             String id = entry.getKey();
             String label = cfg.label() == null || cfg.label().isBlank() ? id : cfg.label();
             boolean configured = cfg.apiKey() != null && !cfg.apiKey().isBlank();
-            views.add(new ProviderView(id, label, cfg.model(), configured));
+            views.add(new ProviderVO(id, label, cfg.model(), configured));
         }
         return views;
     }
@@ -251,14 +253,4 @@ public class LlmProviderRegistry {
             .options(options)
             .build();
     }
-
-    /**
-     * 前端 / 索引用的 Provider 摘要，不含密钥。
-     *
-     * @param id          配置 key
-     * @param label       展示名
-     * @param model       当前模型
-     * @param configured  是否已填 API Key
-     */
-    public record ProviderView(String id, String label, String model, boolean configured) {}
 }

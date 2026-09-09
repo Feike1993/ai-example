@@ -1,4 +1,10 @@
 import { API_BASE, ApiError } from '../../api'
+import {
+  authHeaders,
+  notifyUnauthorized,
+  rememberRateRemaining,
+  type ProductionUser,
+} from './auth'
 import type { ProductionSource } from './sseClient'
 
 /** 工业级链路的接口前缀，与样例路径不重叠。 */
@@ -20,6 +26,41 @@ export type ProductionIngestResult = {
   sources: string[]
 }
 
+export type TokenResponse = {
+  token: string
+  username: string
+  tenant: string
+  roles: string[]
+  expiresIn: number
+}
+
+export type AuditRow = {
+  id: number
+  tenantId: string
+  principal: string
+  action: string
+  path: string
+  status: number
+  runId: string | null
+  questionSha256: string | null
+  durationMs: number | null
+  ip: string | null
+  createdAt: string
+}
+
+export type OpsSnapshot = {
+  chatRuns: number
+  agentRuns: number
+  retrievalEmpty: number
+  guardrailBlocked: number
+  toolDenied: number
+  rateLimited: number
+  authFail: number
+  chatDurationCount: number
+  meters: number
+  traceId: string | null
+}
+
 /** 一条已落库的会话消息，与后端 SessionMessage 对齐。 */
 export type SessionMessage = {
   seq: number
@@ -33,6 +74,53 @@ export type SessionMessage = {
 export type SessionView = {
   sessionId: string
   messages: SessionMessage[]
+}
+
+/**
+ * 换取 JWT。
+ *
+ * @param username  演示用户名
+ * @param password  密码
+ * @param fetchImpl 便于测试注入
+ */
+export async function postToken(
+  username: string,
+  password: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<TokenResponse> {
+  return requestJson<TokenResponse>(`${PRODUCTION_BASE}/auth/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  }, fetchImpl, false)
+}
+
+/**
+ * 当前令牌对应的主体。
+ *
+ * @param fetchImpl 便于测试注入
+ */
+export async function getMe(fetchImpl: typeof fetch = fetch): Promise<ProductionUser> {
+  return requestJson<ProductionUser>(`${PRODUCTION_BASE}/me`, { method: 'GET' }, fetchImpl)
+}
+
+/**
+ * 本租户最近审计。
+ *
+ * @param limit     条数
+ * @param fetchImpl 便于测试注入
+ */
+export async function getAudit(limit = 50, fetchImpl: typeof fetch = fetch): Promise<AuditRow[]> {
+  return requestJson<AuditRow[]>(`${PRODUCTION_BASE}/audit?limit=${limit}`, { method: 'GET' }, fetchImpl)
+}
+
+/**
+ * 指标快照。
+ *
+ * @param fetchImpl 便于测试注入
+ */
+export async function getOpsSnapshot(fetchImpl: typeof fetch = fetch): Promise<OpsSnapshot> {
+  return requestJson<OpsSnapshot>(`${PRODUCTION_BASE}/ops/snapshot`, { method: 'GET' }, fetchImpl)
 }
 
 /**
@@ -129,6 +217,27 @@ export function chatStreamUrl(params: {
 }
 
 /**
+ * 流式 Agent 地址。
+ *
+ * @param params 任务与会话
+ * @returns 完整 URL
+ */
+export function agentStreamUrl(params: {
+  question: string
+  sessionId?: string | null
+  provider?: string
+}): string {
+  const query = new URLSearchParams({ question: params.question })
+  if (params.sessionId) {
+    query.set('sessionId', params.sessionId)
+  }
+  if (params.provider) {
+    query.set('provider', params.provider)
+  }
+  return `${PRODUCTION_BASE}/agent/stream?${query.toString()}`
+}
+
+/**
  * 断线续传地址。
  *
  * @param runId 首条 meta 事件里的 runId
@@ -138,14 +247,32 @@ export function resumeUrl(runId: string): string {
   return `${PRODUCTION_BASE}/runs/${encodeURIComponent(runId)}/stream`
 }
 
-async function requestJson<T>(url: string, init: RequestInit, fetchImpl: typeof fetch): Promise<T> {
+async function requestJson<T>(
+  url: string,
+  init: RequestInit,
+  fetchImpl: typeof fetch,
+  withAuth = true,
+): Promise<T> {
+  const headers = new Headers(init.headers)
+  if (withAuth) {
+    const auth = authHeaders()
+    for (const [key, value] of Object.entries(auth)) {
+      if (!headers.has(key)) {
+        headers.set(key, value)
+      }
+    }
+  }
   let response: Response
   try {
-    response = await fetchImpl(url, init)
+    response = await fetchImpl(url, { ...init, headers })
   } catch {
     throw new ApiError(0, '后端服务不可用，请检查部署状态或稍后重试')
   }
+  rememberRateRemaining(response.headers.get('X-RateLimit-Remaining'))
   const text = await response.text()
+  if (response.status === 401 && withAuth) {
+    notifyUnauthorized()
+  }
   if (!response.ok) {
     throw new ApiError(response.status, text)
   }

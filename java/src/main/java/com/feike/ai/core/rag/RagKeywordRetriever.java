@@ -79,21 +79,36 @@ public class RagKeywordRetriever {
      * @return Document 列表（id / content / metadata）
      */
     public List<Document> search(String query, int topK, String corpus) {
+        return search(query, topK, corpus, null);
+    }
+
+    /**
+     * 关键词全文检索，按 ts_rank 降序，可选租户可见性。
+     *
+     * @param query    用户问题
+     * @param topK     返回条数
+     * @param corpus   语料 metadata 过滤值
+     * @param tenantId 租户；空则只按 corpus
+     * @return Document 列表
+     */
+    public List<Document> search(String query, int topK, String corpus, String tenantId) {
         ensureFullTextIndex();
         if (query == null || query.isBlank()) {
             return List.of();
         }
         int k = topK < 1 ? 4 : topK;
+        String tenantClause = tenantSql(tenantId);
         String sql = """
             SELECT id::text AS id, content, metadata::text AS metadata_json,
                    ts_rank(to_tsvector('simple', coalesce(content, '')),
                            plainto_tsquery('simple', ?)) AS rank
             FROM %s
             WHERE metadata->>'corpus' = ?
+              %s
               AND to_tsvector('simple', coalesce(content, '')) @@ plainto_tsquery('simple', ?)
             ORDER BY rank DESC
             LIMIT ?
-            """.formatted(tableName);
+            """.formatted(tableName, tenantClause);
         try {
             return jdbcTemplate.query(
                 sql,
@@ -114,19 +129,21 @@ public class RagKeywordRetriever {
             );
         } catch (Exception ex) {
             log.warn("关键词检索失败: {}", ex.toString());
-            return fallbackIlike(query, k, corpus);
+            return fallbackIlike(query, k, corpus, tenantId);
         }
     }
 
-    private List<Document> fallbackIlike(String query, int topK, String corpus) {
+    private List<Document> fallbackIlike(String query, int topK, String corpus, String tenantId) {
         String pattern = "%" + query.trim().replace("%", "") + "%";
+        String tenantClause = tenantSql(tenantId);
         String sql = """
             SELECT id::text AS id, content, metadata::text AS metadata_json
             FROM %s
             WHERE metadata->>'corpus' = ?
+              %s
               AND content ILIKE ?
             LIMIT ?
-            """.formatted(tableName);
+            """.formatted(tableName, tenantClause);
         try {
             return jdbcTemplate.query(
                 sql,
@@ -143,6 +160,17 @@ public class RagKeywordRetriever {
             log.warn("ILIKE 降级检索失败: {}", ex.toString());
             return List.of();
         }
+    }
+
+    /**
+     * 租户可见性：public 或当前租户，缺列视为公开（兼容第三阶段前写入的文档）。
+     */
+    private static String tenantSql(String tenantId) {
+        if (tenantId == null || tenantId.isBlank()) {
+            return "";
+        }
+        String safe = tenantId.replace("'", "");
+        return "AND (metadata->>'tenant_id' IS NULL OR metadata->>'tenant_id' IN ('public', '" + safe + "'))";
     }
 
     private Map<String, Object> parseMetadata(String json) {

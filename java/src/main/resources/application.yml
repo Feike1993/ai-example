@@ -7,7 +7,29 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,prometheus
+  otlp:
+    metrics:
+      export:
+        # Jaeger all-in-one 只收 trace；本仓指标走 Prometheus scrape。
+        enabled: false
+  tracing:
+    sampling:
+      probability: ${OTEL_SAMPLE_PROBABILITY:1.0}
+    export:
+      otlp:
+        # 默认关：未起 Jaeger 时 HttpExporter 会 ERROR Failed to export spans。
+        # 本地要看 Trace：起 jaeger，并设 OTEL_TRACING_EXPORT=true。
+        enabled: ${OTEL_TRACING_EXPORT:false}
+  logging:
+    export:
+      otlp:
+        enabled: false
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
   endpoint:
     health:
       probes:
@@ -238,3 +260,39 @@ app:
       lock-ttl: ${PRODUCTION_SESSION_LOCK_TTL:6m}
       # seq 取号撞上主键时的重试次数；正常并发下一次就够，留余量应对突发
       seq-retries: ${PRODUCTION_SESSION_SEQ_RETRIES:3}
+    security:
+      # Base64 的 32 字节 AES-256 KEK。生成：openssl rand -base64 32
+      # 空则 /api/v1 503，教学样例不受影响
+      kek: ${PRODUCTION_KEK:}
+      # postgres=密文进 prod_secret；env=仅内存，单测用
+      secret-store: ${PRODUCTION_SECRET_STORE:postgres}
+      kek-id: ${PRODUCTION_KEK_ID:v1}
+      jwt-ttl: ${PRODUCTION_JWT_TTL:8h}
+      deny-words:
+        - 违禁演示词
+        - BLOCKED_DEMO
+    rate-limit:
+      capacity: ${PRODUCTION_RATE_CAPACITY:30}
+      window: ${PRODUCTION_RATE_WINDOW:60s}
+      login-capacity: ${PRODUCTION_LOGIN_CAPACITY:10}
+      idempotency-ttl: ${PRODUCTION_IDEMPOTENCY_TTL:10m}
+    agent:
+      max-steps: ${PRODUCTION_AGENT_MAX_STEPS:6}
+      public-tenant-id: public
+    users:
+      - username: alice
+        password: demo
+        tenant: tenant-a
+        roles:
+          - USER
+      - username: bob
+        password: demo
+        tenant: tenant-b
+        roles:
+          - USER
+      - username: admin
+        password: demo
+        tenant: tenant-a
+        roles:
+          - ADMIN
+          - USER

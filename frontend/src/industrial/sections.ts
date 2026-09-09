@@ -23,13 +23,13 @@ export const industrialSections: IndustrialSection[] = [
   {
     id: 'observability',
     label: '可观测',
-    description: '指标 / Trace（第三阶段）',
-    ready: false,
+    description: '指标 / Trace / Jaeger',
+    ready: true,
   },
   {
     id: 'security',
     label: '安全',
-    description: '鉴权 / 限流 / 审计（第三阶段）',
-    ready: false,
+    description: '鉴权 / 限流 / 审计',
+    ready: true,
   },
 ]

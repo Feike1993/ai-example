@@ -1,7 +1,7 @@
 package com.feike.ai;
 
-import com.feike.ai.core.AiProperties;
-import com.feike.ai.production.ProductionProperties;
+import com.feike.ai.core.config.AiProperties;
+import com.feike.ai.production.config.ProductionProperties;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration;
@@ -23,7 +23,10 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
     OpenAiImageAutoConfiguration.class,
     OpenAiAudioSpeechAutoConfiguration.class,
     OpenAiAudioTranscriptionAutoConfiguration.class,
-    OpenAiModerationAutoConfiguration.class
+    OpenAiModerationAutoConfiguration.class,
+    org.springframework.boot.security.autoconfigure.SecurityAutoConfiguration.class,
+    org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration.class,
+    org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration.class
 })
 @EnableConfigurationProperties({AiProperties.class, ProductionProperties.class})
 public class AiExampleApplication {
@@ -32,7 +35,7 @@ public class AiExampleApplication {
      * 启动样例 HTTP 服务。
      * <p>
      * 本地 API Key 请用 {@code ./gradlew bootRun}（会注入仓库根目录 {@code .env}）；
-     * IDE 直跑不会自动读 {@code .env}，需自行配置运行环境变量。
+     * IDE 直跑主类不会自动读 {@code .env}，需自行配置运行环境变量。
      *
      * @param args 命令行参数，当前未使用
      */

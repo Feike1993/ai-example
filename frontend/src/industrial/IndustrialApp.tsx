@@ -1,7 +1,10 @@
 import { AppShell, NavLink, Select, Stack, Text } from '@mantine/core'
 import { useEffect, useState } from 'react'
 import { listProviders, type ProviderView } from '../api'
+import { clearAuth, getAccessToken, getProductionUser, UNAUTHORIZED_EVENT } from './lib/auth'
+import { ObservabilityPanel } from './panels/ObservabilityPanel'
 import { ProductionChatPanel } from './panels/ProductionChatPanel'
+import { LoginForm, SecurityPanel } from './panels/SecurityPanel'
 import { industrialSections, type IndustrialSectionId } from './sections'
 
 const PROVIDER_STORAGE_KEY = 'ai-example.provider'
@@ -17,6 +20,14 @@ export function IndustrialApp() {
   const [section, setSection] = useState<IndustrialSectionId>('chat')
   const [provider, setProvider] = useState('deepseek')
   const [providers, setProviders] = useState<ProviderView[]>([])
+  const [authed, setAuthed] = useState(() => Boolean(getAccessToken()))
+  const user = getProductionUser()
+
+  useEffect(() => {
+    const onUnauthorized = () => setAuthed(false)
+    window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized)
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized)
+  }, [])
 
   useEffect(() => {
     void listProviders()
@@ -41,7 +52,22 @@ export function IndustrialApp() {
     localStorage.setItem(PROVIDER_STORAGE_KEY, value)
   }
 
+  const onLogout = () => {
+    clearAuth()
+    setAuthed(false)
+  }
+
   const selected = providers.find((item) => item.id === provider)
+
+  if (!authed) {
+    return (
+      <AppShell padding="lg">
+        <AppShell.Main>
+          <LoginForm onLoggedIn={() => setAuthed(true)} />
+        </AppShell.Main>
+      </AppShell>
+    )
+  }
 
   return (
     <AppShell
@@ -59,6 +85,11 @@ export function IndustrialApp() {
             <Text size="xs" c="dimmed">
               /api/v1 生产链路
             </Text>
+            {user ? (
+              <Text size="xs" c="dimmed">
+                {user.username} · {user.tenant} · {user.roles.join(', ')}
+              </Text>
+            ) : null}
           </Stack>
           <Stack gap={2} mb="md">
             {industrialSections.map((item) => (
@@ -92,6 +123,8 @@ export function IndustrialApp() {
       </AppShell.Navbar>
       <AppShell.Main>
         {section === 'chat' && <ProductionChatPanel provider={provider} />}
+        {section === 'security' && <SecurityPanel onLogout={onLogout} />}
+        {section === 'observability' && <ObservabilityPanel />}
       </AppShell.Main>
     </AppShell>
   )

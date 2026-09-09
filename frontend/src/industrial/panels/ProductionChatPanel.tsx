@@ -1,15 +1,18 @@
-import { Alert, Badge, Button, Group, NumberInput, Stack, Text, Textarea } from '@mantine/core'
+import { Alert, Badge, Button, Group, NumberInput, SegmentedControl, Stack, Text, Textarea } from '@mantine/core'
 import { useEffect, useRef, useState } from 'react'
 import { ApiError, describeError } from '../../api'
 import { MarkdownBody } from '../../components/MarkdownBody'
 import { ResultBody } from '../../components/ResultBody'
 import { Workbench } from '../../components/Workbench'
-import { chatStreamUrl, clearSession, getSession, postIngest, resumeUrl } from '../lib/productionApi'
+import { authHeaders, notifyUnauthorized, rememberTraceId } from '../lib/auth'
+import { mergeAgentSteps } from '../lib/agentSteps'
+import { agentStreamUrl, chatStreamUrl, clearSession, getSession, postIngest, resumeUrl } from '../lib/productionApi'
 import { toTurns, type Turn } from '../lib/sessionTurns'
 import {
   StreamAbortedError,
   StreamServerError,
   streamRun,
+  type AgentStep,
   type ProductionSource,
   type SourcesPayload,
 } from '../lib/sseClient'
@@ -38,6 +41,7 @@ const SESSION_BUSY = 'session_busy'
  */
 export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
   const [question, setQuestion] = useState('这个项目的 RAG 是怎么做的？')
+  const [mode, setMode] = useState<'chat' | 'agent'>('chat')
   const [topK, setTopK] = useState<number | string>(4)
   const [sessionId, setSessionId] = useState<string | null>(
     () => localStorage.getItem(SESSION_STORAGE_KEY),
@@ -95,7 +99,7 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
     setStatus('streaming')
 
     const asked = question
-    let current: Turn = { question: asked, answer: '', sources: [], usage: null }
+    let current: Turn = { question: asked, answer: '', sources: [], usage: null, steps: [] }
     setPending(current)
     const update = (patch: Partial<Turn>) => {
       current = { ...current, ...patch }
@@ -104,15 +108,22 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
 
     let persisted = true
     try {
+      const url = mode === 'agent'
+        ? agentStreamUrl({ question: asked, sessionId, provider })
+        : chatStreamUrl({ question: asked, sessionId, provider, topK: Number(topK) || undefined })
       const result = await streamRun(
-        chatStreamUrl({ question: asked, sessionId, provider, topK: Number(topK) || undefined }),
+        url,
         {
           signal: controller.signal,
           resumeUrl,
           maxResumes: 2,
+          headers: authHeaders(),
           handlers: {
             onMeta: (payload) => {
               setMeta({ runId: payload.runId })
+              if (typeof payload.traceId === 'string') {
+                rememberTraceId(payload.traceId)
+              }
               if (typeof payload.sessionId === 'string') {
                 rememberSession(payload.sessionId)
               }
@@ -124,6 +135,9 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
               )
             },
             onDelta: (text) => update({ answer: current.answer + text }),
+            onStep: (step) => {
+              update({ steps: mergeAgentSteps(current.steps ?? [], step) })
+            },
             onUsage: (usage) => update({ usage }),
             onDone: (payload) => {
               persisted = payload.persisted !== false
@@ -160,6 +174,8 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
         }
       } else if (err instanceof StreamAbortedError) {
         setError(err.message)
+      } else if (err instanceof ApiError && err.status === 401) {
+        notifyUnauthorized()
       } else {
         setError(describeError(err))
       }
@@ -194,6 +210,9 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
       await clearSession(sessionId)
       onNewSession()
     } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        notifyUnauthorized()
+      }
       setError(err instanceof ApiError ? err.message : describeError(err))
     }
   }
@@ -225,10 +244,22 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
   return (
     <Workbench
       title="生产问答"
-      hint="严格 SSE 契约：meta → sources → delta → usage → done。只有收到 done 才算成功，且该轮才会写入会话历史。"
+      hint={
+        mode === 'agent'
+          ? 'Agent 模式会多发 step 事件。被角色策略拒绝的工具带 denied:true，不会静默吞掉。'
+          : '严格 SSE 契约：meta → sources → delta → usage → done。只有收到 done 才算成功，且该轮才会写入会话历史。'
+      }
       streaming={streaming}
       form={
         <Stack gap="sm">
+          <SegmentedControl
+            value={mode}
+            onChange={(value) => setMode(value as 'chat' | 'agent')}
+            data={[
+              { value: 'chat', label: '问答' },
+              { value: 'agent', label: 'Agent' },
+            ]}
+          />
           <Textarea
             label="问题"
             autosize
@@ -236,7 +267,9 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
             value={question}
             onChange={(event) => setQuestion(event.currentTarget.value)}
           />
-          <NumberInput label="topK" min={1} max={20} value={topK} onChange={setTopK} />
+          {mode === 'chat' ? (
+            <NumberInput label="topK" min={1} max={20} value={topK} onChange={setTopK} />
+          ) : null}
           <Group gap="sm">
             <Button onClick={onStream} loading={streaming} disabled={!question.trim()}>
               流式提问
@@ -316,6 +349,7 @@ function TurnView({ turn, streaming }: { turn: Turn; streaming: boolean }) {
         </Alert>
       ) : null}
       <MarkdownBody streaming={streaming}>{turn.answer}</MarkdownBody>
+      {turn.steps && turn.steps.length > 0 ? <StepList steps={turn.steps} /> : null}
       {turn.sources.length > 0 ? <SourceList sources={turn.sources} /> : null}
       {turn.usage ? (
         <Text size="xs" c="dimmed">
@@ -339,6 +373,41 @@ function StatusBadge({ status }: { status: string }) {
     <Badge color={view.color} variant="light">
       {view.label}
     </Badge>
+  )
+}
+
+function StepList({ steps }: { steps: AgentStep[] }) {
+  return (
+    <Stack gap={6}>
+      <Text size="sm" fw={600}>
+        工具步骤（{steps.length}）
+      </Text>
+      {steps.map((step) => (
+        <div key={`${step.index}-${step.toolName}`} className="industrial-source">
+          <Group gap="xs">
+            <Text size="xs" fw={600}>
+              {step.index + 1}. {step.toolName}
+            </Text>
+            {step.denied ? (
+              <Badge color="red" variant="light" size="xs">
+                已拒绝
+              </Badge>
+            ) : null}
+          </Group>
+          {step.assistantText ? (
+            <Text size="xs" c="dimmed">
+              {step.assistantText}
+            </Text>
+          ) : null}
+          {step.toolArgs ? (
+            <Text size="xs" c="dimmed">
+              args {step.toolArgs}
+            </Text>
+          ) : null}
+          {step.toolResult ? <Text size="sm">{step.toolResult}</Text> : null}
+        </div>
+      ))}
+    </Stack>
   )
 }
 

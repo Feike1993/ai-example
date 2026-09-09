@@ -79,7 +79,7 @@ def assemble_with_summary(session: Session, summary: str, recent: list[Turn]) ->
 
 
 class SqliteSessionStore:
-    """对照 Java JdbcChatSessionStore：SQLite 持久化轮次。"""
+    """对照 Java JdbcChatSessionDAOImpl：SQLite 持久化轮次。"""
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)

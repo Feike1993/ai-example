@@ -38,7 +38,7 @@ uv run python -m ai_example.samples.context_memory
 
 ## 对照 / 拷贝
 
-- Java：`samples.context`（`InMemoryChatSessionStore` + trim/summarize）
+- Java：`samples.context`（`InMemoryChatSessionDAOImpl` + trim/summarize）
 - 配置：`app.ai.context.max-messages` / `token-budget`
 - 生产持久化会话、向量长期记忆：见 [backlog](../backlog.md)
 

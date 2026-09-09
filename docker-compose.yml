@@ -30,6 +30,15 @@ services:
       start_period: 5s
     restart: unless-stopped
 
+  # 工业级链路 Trace：OTLP HTTP 4318。浏览器看 UI 用 16686，不刮 Prometheus。
+  jaeger:
+    image: jaegertracing/all-in-one:1.66.0
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "${JAEGER_UI_PORT:-16686}:16686"
+    restart: unless-stopped
+
   mcp-server:
     build:
       context: .
@@ -66,6 +75,13 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       PRODUCTION_ENABLED: ${PRODUCTION_ENABLED:-true}
+      PRODUCTION_KEK: ${PRODUCTION_KEK:-}
+      PRODUCTION_RATE_CAPACITY: ${PRODUCTION_RATE_CAPACITY:-30}
+      PRODUCTION_RATE_WINDOW: ${PRODUCTION_RATE_WINDOW:-60s}
+      PRODUCTION_LOGIN_CAPACITY: ${PRODUCTION_LOGIN_CAPACITY:-10}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318/v1/traces}
+      OTEL_SAMPLE_PROBABILITY: ${OTEL_SAMPLE_PROBABILITY:-1.0}
+      OTEL_TRACING_EXPORT: ${OTEL_TRACING_EXPORT:-true}
       MCP_MODE: ${MCP_MODE:-remote}
       MCP_CLIENT_ENABLED: ${MCP_CLIENT_ENABLED:-true}
       MCP_CLIENT_INITIALIZED: ${MCP_CLIENT_INITIALIZED:-false}
@@ -105,6 +121,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      jaeger:
+        condition: service_started
     healthcheck:
       test:
         - CMD

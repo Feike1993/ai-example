@@ -136,7 +136,51 @@ docker compose down
 
 > `.env` 仅由 Compose 或 Gradle `bootRun` 注入；打包后的 `java -jar` 不会自动读取仓库 `.env`。`ai/ai` 与 `dev-mcp-token` 仅适合本地演示，非本地部署必须替换。MCP Client 与 Server 的 `MCP_BEARER_TOKEN` 必须一致。
 
+## 本地开发（宿主机）
+
+改 Java / 前端时不要用整套 Compose 跑 `java` 与 `frontend` 容器，让依赖进 Docker、应用留在本机。四个终端（或等价后台进程）：
+
+```bash
+cp .env.example .env
+# 至少填 PROVIDER_DEEPSEEK_API_KEY（聊天）与 PROVIDER_DASHSCOPE_API_KEY（RAG Embedding）
+# 工业级 /api/v1 还需要 PRODUCTION_KEK（例如 openssl rand -base64 32）
+
+# 1) 依赖：把端口打到宿主机。Jaeger 可选（见下方 Trace）
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis
+
+# 2) MCP 远端（默认 app.ai.mcp.mode=remote）。只跑教学 inprocess 可跳过
+cd mcp-server && ./gradlew bootRun
+
+# 3) Java 主服务（会读仓库根目录 .env）
+cd java && ./gradlew bootRun
+
+# 4) Playground
+cd frontend && pnpm install && pnpm dev
+```
+
+| 入口 | 地址 |
+| --- | --- |
+| 教学场 | http://localhost:5173/ |
+| 工业级 | http://localhost:5173/industrial.html |
+| Java 直连 | http://localhost:8080/ai-example/ |
+| Jaeger UI | http://localhost:16686/ |
+| MCP Server | http://localhost:8081/mcp |
+
+`./gradlew bootRun` 已带 `--enable-native-access=ALL-UNNAMED`（Java 25 / Netty）。IDE 直跑主类请自行加该 VM 参数，或在 `.env` 里设 `JAVA_TOOL_OPTIONS=--enable-native-access=ALL-UNNAMED`。
+
+Trace **默认不导出**（`OTEL_TRACING_EXPORT=false`），所以可以不起 Jaeger。要看链路时：
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d jaeger
+# 在 .env 中：
+# OTEL_TRACING_EXPORT=true
+# OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318/v1/traces
+```
+
+然后重启 `bootRun`。Jaeger UI：http://localhost:16686/ 。指标仍走 Prometheus scrape，不往 Jaeger 推 metrics。
+
 ## 跑 Java
+
 
 ### 数据库迁移（Flyway）
 
@@ -144,8 +188,9 @@ docker compose down
 
 | 版本 | 内容 |
 | --- | --- |
-| `V1` | 接管教学样例的 `chat_session_message`（原先由 `JdbcChatSessionStore` 的 `@PostConstruct` 建） |
+| `V1` | 接管教学样例的 `chat_session_message`（原先由 `JdbcChatSessionDAOImpl` 的 `@PostConstruct` 建） |
 | `V2` | 工业级会话表 `prod_chat_session` / `prod_chat_message` |
+| `V3` | `prod_secret` 信封密文、`prod_audit_log`、会话租户索引 |
 
 依赖必须是 `spring-boot-starter-flyway`，不要只加 `org.flywaydb:flyway-core`。
 Spring Boot 4 把 `FlywayAutoConfiguration` 拆进了独立的 `spring-boot-flyway` 模块；
@@ -170,21 +215,7 @@ Spring Boot 4 把 `FlywayAutoConfiguration` 拆进了独立的 `spring-boot-flyw
 | 工业级多轮会话 | **需要** | 建议 | `PRODUCTION_SESSION_ENABLED=true`；`PRODUCTION_SESSION_LOCK=memory` 可不用 Redis，但多实例下等于没有锁 |
 | 只想先关工业级、专心跑样例 | 按上表 | 可不起 | `PRODUCTION_ENABLED=false` |
 
-本地推荐直接把 Postgres + Redis 一起起：
-
-```bash
-# RAG / 记忆需要向量库；工业级 SSE 续传需要 Redis
-# 调试覆盖文件负责把端口发布到宿主机（5432 / 6379）
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis
-
-# 第六期 MCP 远端（默认 mode=remote）：另开终端起 Server
-cd mcp-server && ./gradlew bootRun
-
-cd java
-./gradlew bootRun
-```
-
-> 若控制台出现 `System::loadLibrary` / `Use --enable-native-access=ALL-UNNAMED`：这是 **Java 25 对 Netty 原生库** 的提示，不是业务错误。`./gradlew bootRun` 已带该参数。若用 **IDE 直接跑主类**，请在 VM options 加上 `--enable-native-access=ALL-UNNAMED`，或在 `.env` 里设 `JAVA_TOOL_OPTIONS=--enable-native-access=ALL-UNNAMED`。
+本地依赖与 `bootRun` 命令见 [本地开发](#本地开发宿主机)。按要跑的内容决定是否起 Redis：
 
 切回二期同进程 MCP：面板切 `inprocess`，或 `MCP_MODE=inprocess`（初始值；亦可用 `PUT /mcp/mode`）。旧法：`MCP_SERVER_ENABLED=true MCP_CLIENT_ENABLED=false`。
 
@@ -197,16 +228,24 @@ curl -s http://localhost:8080/ai-example/multiagent/run \
   -H 'Content-Type: application/json' \
   -d '{"prompt":"查一下北京天气，再写一句出行建议"}'
 
-# 工业级：同步问答 / 流式（需 Redis；流式只有收到 done 才算成功）
+# 工业级：先换 JWT（alice / bob / admin，密码均为 demo），再调业务接口
+TOKEN=$(curl -s http://localhost:8080/ai-example/api/v1/auth/token \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"alice","password":"demo"}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
 curl -s http://localhost:8080/ai-example/api/v1/chat \
+  -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"question":"这个项目的 RAG 是怎么做的？"}'
-curl -N "http://localhost:8080/ai-example/api/v1/chat/stream?question=RAG"
+curl -N "http://localhost:8080/ai-example/api/v1/chat/stream?question=RAG" \
+  -H "Authorization: Bearer $TOKEN"
 
 # 多轮：sessionId 不传则由后端新建，并在首条 meta 事件里回传，下一轮带上它即可
-curl -N "http://localhost:8080/ai-example/api/v1/chat/stream?question=RAG&sessionId=demo-1"
-curl -s http://localhost:8080/ai-example/api/v1/sessions/demo-1
-curl -s -X DELETE http://localhost:8080/ai-example/api/v1/sessions/demo-1
+curl -N "http://localhost:8080/ai-example/api/v1/chat/stream?question=RAG&sessionId=demo-1" \
+  -H "Authorization: Bearer $TOKEN"
+curl -s http://localhost:8080/ai-example/api/v1/sessions/demo-1 \
+  -H "Authorization: Bearer $TOKEN"
+curl -s -X DELETE http://localhost:8080/ai-example/api/v1/sessions/demo-1 \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 测试：
@@ -215,10 +254,10 @@ curl -s -X DELETE http://localhost:8080/ai-example/api/v1/sessions/demo-1
 cd java && ./gradlew test
 # 可选 pgvector 集成（需 Docker）：
 # RUN_PGVECTOR_IT=true ./gradlew test --tests RagPgvectorIT
-# 可选 Redis 事件回放 / 会话锁集成（需 Docker）：
-# RUN_REDIS_IT=true ./gradlew test --tests RedisRunEventLogIT --tests RedisSessionLockIT
+# 可选 Redis 事件回放 / 会话锁 / 令牌桶（需 Docker）：
+# RUN_REDIS_IT=true ./gradlew test --tests RedisRunEventLogIT --tests RedisSessionLockIT --tests RedisTokenBucketIT
 # 可选会话存储集成：事务、并发取号、幂等（需 Docker）
-# RUN_SESSION_IT=true ./gradlew test --tests ProductionChatSessionStoreIT
+# RUN_SESSION_IT=true ./gradlew test --tests ProductionChatSessionDAOIT
 ```
 
 集成测试默认用 Testcontainers 起容器。CI 上常以 service 形式提供依赖，容器套容器反而跑不起来；
@@ -226,7 +265,7 @@ cd java && ./gradlew test
 
 ```bash
 RUN_SESSION_IT=true SESSION_IT_JDBC_URL=jdbc:postgresql://localhost:5432/ai_example \
-  ./gradlew test --tests ProductionChatSessionStoreIT
+  ./gradlew test --tests ProductionChatSessionDAOIT
 RUN_REDIS_IT=true REDIS_IT_HOST=localhost REDIS_IT_PORT=6379 \
   ./gradlew test --tests RedisSessionLockIT
 ```
@@ -237,12 +276,32 @@ RUN_REDIS_IT=true REDIS_IT_HOST=localhost REDIS_IT_PORT=6379 \
 
 - 配置前缀 `app.production.*`（环境变量 `PRODUCTION_*` / `REDIS_*`）
 - RAG 拆成 ingest / retrieve / generate，不含教学用的 compare 分支
-- SSE 契约：`meta → sources → delta* → usage → done|error`，带 `runId` / `seq`；断线用 `GET /api/v1/runs/{runId}/stream` + `Last-Event-ID` 续传
+- SSE 契约：`meta → sources → delta* → step* → usage → done|error`，带 `runId` / `seq`；断线用 `GET /api/v1/runs/{runId}/stream` + `Last-Event-ID` 续传
+
+### 鉴权 / 信封加密 / 指标
+
+教学样例路径（`/rag`、`/chat`、`/agent` 等）仍然匿名开放。第三阶段只武装 `/api/v1/**`。
+
+**JWT（HS256）。** `POST /api/v1/auth/token` 换令牌，后续请求带 `Authorization: Bearer`。演示账号（密码均为 `demo`）：
+
+| 用户 | 租户 | 角色 |
+| --- | --- | --- |
+| alice | tenant-a | USER |
+| bob | tenant-b | USER |
+| admin | tenant-a | ADMIN + USER |
+
+跨租户访问会话返回 **404**（不暴露存在性）。`POST /api/v1/rag/ingest` 仅 ADMIN。限流超限 **429** + `Retry-After`；同一会话并发是 **409** `session_busy`，两件事不要混。
+
+**信封加密，不用 Vault。** LLM Key 与 JWT HMAC 用 AES-256-GCM 写入 Postgres 表 `prod_secret`。能解开密文的主密钥 KEK 只来自环境变量 `PRODUCTION_KEK`（`openssl rand -base64 32`），**永不入库**。这保护的是库备份和 `SELECT *`，不保护已经拿到 KEK 的进程。KEK 与密文必须分开放；缺 KEK 时应用照常启动，`/api/v1` 返回 503。
+
+**可观测。** 业务指标见 `GET /api/v1/ops/snapshot`（需登录）。Prometheus 刮取 `/ai-example/actuator/prometheus` 不放行匿名。Compose 含 Jaeger all-in-one（UI `http://localhost:16686`，OTLP 4318）。响应头带 `traceparent`，SSE `meta` 带 `traceId`。
+
+**Agent。** `POST /api/v1/agent` 与 `GET /api/v1/agent/stream`。USER 能用 `search_kb` / `add` / `get_weather`；`rebuild_index` 仅 ADMIN。被拒工具会发 `step` 且 `denied:true`。
 
 ### 多轮会话：教学版修好了什么
 
-[JdbcChatSessionStore](java/src/main/java/com/feike/ai/samples/context/JdbcChatSessionStore.java) 是教学实现，刻意保留了几处生产不该有的写法；
-修好的版本在 [com.feike.ai.production.session](java/src/main/java/com/feike/ai/production/session)，两边可以直接对照读。
+[JdbcChatSessionDAOImpl](java/src/main/java/com/feike/ai/samples/context/dao/impl/JdbcChatSessionDAOImpl.java) 是教学实现，刻意保留了几处生产不该有的写法；
+修好的版本在 [com.feike.ai.production.session.dao](java/src/main/java/com/feike/ai/production/session/dao)，两边可以直接对照读。
 
 | 问题 | 教学版 | 生产版 |
 | --- | --- | --- |

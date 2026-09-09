@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- 工业级：脱敏 Bearer / JWT / sk- 形态密钥；MDC 带租户与主体 -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{ISO8601} [%thread] %-5level %logger{36} tenant=%X{tenant} sub=%X{sub} runId=%X{runId} traceId=%X{traceId} - %replace(%replace(%replace(%msg){'(?i)Bearer [A-Za-z0-9\-._~+/]+=*','Bearer ***'}){'(eyJ[A-Za-z0-9_\-]+=*\.eyJ[A-Za-z0-9_\-.=]*)','***jwt***'}){'(?i)(sk-|api[_-]?key[=:])[A-Za-z0-9_\-]+','$1***'}%n</pattern>
+        </encoder>
+    </appender>
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

@@ -12,7 +12,7 @@
 
 import { ApiError } from '../../api'
 
-/** 与后端 StreamEventType 一一对应。 */
+/** 与后端 StreamEventTypeEnum 一一对应。 */
 export const STREAM_EVENT_TYPES = [
   'meta',
   'sources',
@@ -39,6 +39,7 @@ export type AgentStep = {
   assistantText: string
   toolArgs: string
   toolResult: string
+  denied?: boolean
 }
 
 export type ProductionSource = {

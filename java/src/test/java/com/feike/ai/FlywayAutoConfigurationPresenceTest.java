@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 会拿到库本身却没有自动配置：应用照常启动、日志一句不说、迁移一条不跑，
  * 直到某个请求撞上不存在的表才炸。这正是它出过的事故。
  * <p>
- * 所以这里不测 Flyway 的行为（那是 {@code ProductionChatSessionStoreIT} 的事），
+ * 所以这里不测 Flyway 的行为（那是 {@code ProductionChatSessionDAOIT} 的事），
  * 只测「自动配置真的在 classpath 上」——依赖被人改回裸 flyway-core 时立刻失败，
  * 而不是等到线上第一个请求。
  */

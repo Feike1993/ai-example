@@ -1,5 +1,7 @@
 package com.feike.ai.core;
 
+import com.feike.ai.core.config.AiProperties;
+import com.feike.ai.core.model.ProviderVO;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
@@ -37,7 +39,7 @@ class LlmProviderRegistryTest {
     @Test
     void shouldListConfiguredFlagWithoutExposingKey() {
         LlmProviderRegistry registry = registry();
-        List<LlmProviderRegistry.ProviderView> views = registry.list();
+        List<ProviderVO> views = registry.list();
         assertEquals(2, views.size());
         assertEquals("deepseek", views.get(0).id());
         assertTrue(views.get(0).configured());

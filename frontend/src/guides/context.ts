@@ -30,7 +30,7 @@ export const contextGuide: SampleGuideData = {
     steps: [
       {
         title: '会话存在应用侧',
-        detail: 'ChatSessionStore：jdbc 写 chat_session_message；memory 为 ConcurrentHashMap。',
+        detail: 'ChatSessionDAO：jdbc 写 chat_session_message；memory 为 ConcurrentHashMap。',
       },
       {
         title: '先预算，再调用',

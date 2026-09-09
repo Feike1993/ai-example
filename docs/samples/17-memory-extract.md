@@ -5,7 +5,7 @@
 样例 12 是 **手工 remember**。本样例用一次 Chat 从对话中抽出短事实句，再走现有 `remember`（精确去重 / 相似合并）。
 
 - 显式 `POST /memory/extract`，**不**在 `/context/chat` 里静默写入
-- 可传 `messages`，或只传 `sessionId`（从 `ChatSessionStore` 拉快照）
+- 可传 `messages`，或只传 `sessionId`（从 `ChatSessionDAO` 拉快照）
 - corpus 仍为 `long-term-memory`，按 `userId` 隔离
 
 ## 怎么跑

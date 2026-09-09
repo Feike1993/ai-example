@@ -1,5 +1,6 @@
 package com.feike.ai.core;
 
+import com.feike.ai.core.model.TokenUsageDTO;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.metadata.ChatResponseMetadata;
@@ -42,7 +43,7 @@ class TokenUsageExtractorTest {
         ChatResponseMetadata metadata = ChatResponseMetadata.builder().usage(usage).build();
         ChatResponse response = new ChatResponse(List.of(), metadata);
 
-        TokenUsage extracted = TokenUsageExtractor.from(response);
+        TokenUsageDTO extracted = TokenUsageExtractor.from(response);
 
         assertEquals(120, extracted.prompt());
         assertEquals(45, extracted.completion());
@@ -51,9 +52,9 @@ class TokenUsageExtractorTest {
 
     @Test
     void shouldSumUsages() {
-        TokenUsage left = new TokenUsage(10, 5, 15);
-        TokenUsage right = new TokenUsage(8, 12, 20);
-        TokenUsage sum = TokenUsageExtractor.sum(left, right);
+        TokenUsageDTO left = new TokenUsageDTO(10, 5, 15);
+        TokenUsageDTO right = new TokenUsageDTO(8, 12, 20);
+        TokenUsageDTO sum = TokenUsageExtractor.sum(left, right);
         assertEquals(18, sum.prompt());
         assertEquals(17, sum.completion());
         assertEquals(35, sum.total());

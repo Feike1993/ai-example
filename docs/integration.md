@@ -56,8 +56,8 @@
 
 ### 上下文工程
 
-- 拷 `samples.context`：`ChatSessionStore` + trim / summarize
-- 默认 `JdbcChatSessionStore`（PostgreSQL）；`app.ai.context.store=memory` 可回退进程内
+- 拷 `samples.context`：`ChatSessionDAO` + trim / summarize
+- 默认 `JdbcChatSessionDAOImpl`（PostgreSQL）；`app.ai.context.store=memory` 可回退进程内
 - 精确 tokenizer 见 [backlog](backlog.md)
 
 ### 多 Agent
@@ -77,7 +77,7 @@
 
 - 拷 `samples.eval` + `eval/golden/*.json`
 - `POST /eval/run` 复用现有 Service；断言 mustContain / expectToolName / expectSources
-- 不做评测看板；Token 用量汇总依赖 v0.2.0 的 `TokenUsage`
+- 不做评测看板；Token 用量汇总依赖 v0.2.0 的 `TokenUsageDTO`
 
 Python 对照：`hybrid_rag.py`、`eval_runner.py`。
 
@@ -85,7 +85,7 @@ Python 对照：`hybrid_rag.py`、`eval_runner.py`。
 
 #### 持久会话
 
-- 拷 `ChatSessionStore` / `JdbcChatSessionStore`；与 RAG 同库
+- 拷 `ChatSessionDAO` / `JdbcChatSessionDAOImpl`；与 RAG 同库
 - 接口形状兼容第三期 `/context/*`
 
 #### 长期记忆

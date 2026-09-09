@@ -1,0 +1,57 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api'
+import { getAccessToken, setSession, UNAUTHORIZED_EVENT } from './auth'
+import { getAudit, getMe, postChat } from './productionApi'
+
+describe('productionApi 鉴权头', () => {
+  beforeEach(() => {
+    sessionStorage.clear()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    sessionStorage.clear()
+  })
+
+  it('登录后请求带 Authorization', async () => {
+    setSession('tok-1', { username: 'alice', tenant: 'tenant-a', roles: ['USER'] })
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      username: 'alice', tenant: 'tenant-a', roles: ['USER'],
+    }), { status: 200, headers: { 'X-RateLimit-Remaining': '29' } }))
+    await getMe(fetchImpl as unknown as typeof fetch)
+    const headers = new Headers(fetchImpl.mock.calls[0][1]?.headers)
+    expect(headers.get('Authorization')).toBe('Bearer tok-1')
+  })
+
+  it('401 清 token 并派发 unauthorized', async () => {
+    setSession('expired', { username: 'alice', tenant: 'tenant-a', roles: ['USER'] })
+    const seen: string[] = []
+    window.addEventListener(UNAUTHORIZED_EVENT, () => seen.push('u'))
+    const fetchImpl = vi.fn(async () => new Response('{"error":"未认证"}', { status: 401 }))
+    await expect(postChat({ question: 'hi' }, fetchImpl as unknown as typeof fetch)).rejects.toBeInstanceOf(ApiError)
+    expect(getAccessToken()).toBeNull()
+    expect(seen).toEqual(['u'])
+  })
+
+  it('审计列表按 JSON 数组返回', async () => {
+    setSession('tok-1', { username: 'alice', tenant: 'tenant-a', roles: ['USER'] })
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify([
+      {
+        id: 1,
+        tenantId: 'tenant-a',
+        principal: 'alice',
+        action: 'chat',
+        path: '/api/v1/chat',
+        status: 200,
+        runId: null,
+        questionSha256: 'abc',
+        durationMs: 12,
+        ip: '127.0.0.1',
+        createdAt: '2026-09-09T01:00:00Z',
+      },
+    ]), { status: 200 }))
+    const rows = await getAudit(10, fetchImpl as unknown as typeof fetch)
+    expect(rows).toHaveLength(1)
+    expect(rows[0].action).toBe('chat')
+  })
+})

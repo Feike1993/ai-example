@@ -39,7 +39,7 @@
 | Playground 进阶侧栏主题分组 | 进阶项平铺难扫 | 已覆盖 | 第十三期 | 见 [phase13.md](phase13.md)；无新样例 |
 | 混合检索（向量 + 关键词 + RRF） | 第二期 | 已覆盖 | 第四期 Hybrid RAG | `retrievalMode=hybrid` + compare API |
 | 完整评测平台（golden / 回归） | 第三期 | 已覆盖（最小 harness） | 第四期 Eval | `POST /eval/run`；无看板 |
-| DB 持久会话（PostgreSQL） | 第三期 | 已覆盖 | 第五期 | `JdbcChatSessionStore`；Redis 仍为候选 |
+| DB 持久会话（PostgreSQL） | 第三期 | 已覆盖 | 第五期 | `JdbcChatSessionDAOImpl`；Redis 仍为候选 |
 | 长期记忆写入向量库 | 第三期 | 已覆盖 | 第五期 | `corpus=long-term-memory` + `/memory/*` |
 | MCP 远端拆分（独立 Server + Client） | 第二期 | 已覆盖 | 第六期 | `mcp-server/` + `mode=remote` |
 | 完整 HyDE | 第二期 / 第四期 rewrite | 已覆盖 | 第六期 | `queryExpansion=hyde` + compare-expansion |
@@ -95,7 +95,9 @@
 | --- | --- | --- | --- | --- |
 | SSE / 流式 token 累加、Agent 逐步 usage | v0.2.0 补丁 A2 后 | 已覆盖 | 第十期 | 见 [21-stream-token-usage.md](samples/21-stream-token-usage.md) |
 | Agent 逐步 tool_call 实时 SSE | v0.2.0 补丁 A4 后 | 已覆盖 | 第十期 | 见 [20-agent-tool-sse.md](samples/20-agent-tool-sse.md) |
-| 鉴权、限流、审计落库 | 全程 | 明确不做（本仓） | 学习样例无安全产品面 | 业务项目 |
+| 鉴权、限流、审计落库 | 全程 | 教学样例仍不做；工业级第三阶段已覆盖 | 样例路径保持匿名，避免挡住课程点击即跑 | JWT / Redis 限流 / `prod_audit_log` 见 `/api/v1` |
+| 信封加密存 LLM Key | 工业级 | 已覆盖（第三阶段） | 不用 HashiCorp Vault，密文进 Postgres，KEK 只在 `PRODUCTION_KEK` | 云 KMS / 自动轮换仍不做 |
+| Prometheus + OTel / Jaeger | 工业级 | 已覆盖（第三阶段） | 浏览器走 `/api/v1/ops/snapshot`，不直连 actuator | Grafana 容器不做 |
 | 有副作用的真实外部工具 | 第一期 | 明确不做（本仓） | 演示工具保持幂等、可离线 | 业务项目 |
 | 仓库根目录 `package.json` / `pnpm start` | 前端引入后 | 明确不做（本仓） | 避免与 Vite 工程混淆 | — |
 

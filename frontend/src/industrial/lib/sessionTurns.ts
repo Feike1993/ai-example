@@ -1,5 +1,5 @@
 import type { SessionMessage } from './productionApi'
-import type { ProductionSource, UsagePayload } from './sseClient'
+import type { AgentStep, ProductionSource, UsagePayload } from './sseClient'
 
 /**
  * 界面上的一轮问答。
@@ -17,6 +17,8 @@ export type Turn = {
   incomplete?: boolean
   /** 收到了 done 但后端没能落库 */
   unpersisted?: boolean
+  /** Agent 工具步骤 */
+  steps?: AgentStep[]
 }
 
 /**

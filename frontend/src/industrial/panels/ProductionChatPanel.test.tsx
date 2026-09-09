@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import type { ReactElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeFetch, frame, sseResponse } from '../lib/testing/sseFixtures'
+import { setSession } from '../lib/auth'
 import { ProductionChatPanel } from './ProductionChatPanel'
 
 function renderPanel(ui: ReactElement) {
@@ -50,6 +51,7 @@ describe('ProductionChatPanel', () => {
   beforeEach(() => {
     // 会话 id 存在 localStorage，用例之间必须隔离，否则后跑的用例会带上前一个的会话
     localStorage.clear()
+    sessionStorage.clear()
     vi.stubGlobal('fetch', fakeFetch([]))
   })
 
@@ -216,5 +218,42 @@ describe('ProductionChatPanel', () => {
     await waitFor(() => expect(screen.getByText('本轮未计入历史')).toBeInTheDocument())
     // 回答本身仍要展示：生成是成功的，只是没存下来
     expect(screen.getByText('这是答案。')).toBeInTheDocument()
+  })
+
+  it('已登录时流式请求带 Authorization', async () => {
+    setSession('tok-1', { username: 'alice', tenant: 'tenant-a', roles: ['USER'] })
+    const inner = fakeFetch([META, SOURCES, DELTA, USAGE, DONE])
+    const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) => inner(input, init))
+    vi.stubGlobal('fetch', fetchImpl as unknown as typeof fetch)
+    renderPanel(<ProductionChatPanel provider="deepseek" />)
+
+    await userEvent.click(screen.getByRole('button', { name: '流式提问' }))
+    await waitFor(() => expect(screen.getByText('已完成')).toBeInTheDocument())
+
+    const streamCall = fetchImpl.mock.calls.find((call) => String(call[0]).includes('/chat/stream'))
+    expect(streamCall).toBeTruthy()
+    const headers = new Headers(streamCall?.[1]?.headers)
+    expect(headers.get('Authorization')).toBe('Bearer tok-1')
+  })
+
+  it('Agent 模式合并 step 并展示拒绝标记', async () => {
+    vi.stubGlobal(
+      'fetch',
+      fakeFetch([
+        frame(0, 'meta', JSON.stringify({ runId: 'run-a', sessionId: 's-1', mode: 'agent' })),
+        frame(1, 'step', JSON.stringify({
+          index: 0, toolName: 'rebuild_index', assistantText: '', toolArgs: '{}',
+          toolResult: 'denied: 当前角色不能调用 rebuild_index', denied: true,
+        })),
+        frame(2, 'delta', JSON.stringify('已按策略拒绝该工具。')),
+        frame(3, 'usage', JSON.stringify({ answerChars: 10, sourceCount: 0 })),
+        frame(4, 'done', JSON.stringify({ sessionId: 's-1', persisted: true })),
+      ]),
+    )
+    renderPanel(<ProductionChatPanel provider="deepseek" />)
+    await userEvent.click(screen.getByText('Agent'))
+    await userEvent.click(screen.getByRole('button', { name: '流式提问' }))
+    await waitFor(() => expect(screen.getByText('已拒绝')).toBeInTheDocument())
+    expect(screen.getByText('已按策略拒绝该工具。')).toBeInTheDocument()
   })
 })

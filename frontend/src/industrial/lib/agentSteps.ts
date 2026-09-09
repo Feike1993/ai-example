@@ -39,6 +39,7 @@ export function mergeAgentSteps(steps: readonly AgentStep[], patch: StepPatch): 
     assistantText: patch.assistantText ?? prev?.assistantText ?? '',
     toolArgs: patch.toolArgs ?? prev?.toolArgs ?? '',
     toolResult: patch.toolResult ?? prev?.toolResult ?? '',
+    denied: patch.denied ?? prev?.denied ?? false,
   })
 
   return Array.from(byKey.values()).sort((a, b) => a.index - b.index)

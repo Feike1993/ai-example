@@ -1,5 +1,7 @@
 package com.feike.ai.core.context;
 
+import com.feike.ai.samples.context.dao.ChatSessionDAO;
+
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.MessageType;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -14,7 +16,7 @@ import java.util.List;
  * <p>
  * 放在 core 而不是 samples：教学的 context 样例与工业级链路都要按预算裁历史，
  * 逻辑一模一样。这里刻意不依赖任何存储抽象（原先调 samples 的
- * {@code ChatSessionStore.isUserOrAssistant}），否则 core 会反向依赖 samples。
+ * {@code ChatSessionDAO.isUserOrAssistant}），否则 core 会反向依赖 samples。
  */
 public final class ContextBudget {
 
