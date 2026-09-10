@@ -33,12 +33,16 @@ import com.feike.ai.production.sse.dao.impl.InMemoryRunEventLogDAOImpl;
 import com.feike.ai.production.sse.dao.impl.RedisRunEventLogDAOImpl;
 import com.feike.ai.production.sse.dao.RunEventLogDAO;
 import com.feike.ai.production.sse.service.SseRunExecutor;
+import com.feike.ai.production.web.InstanceIdFilter;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -63,6 +67,32 @@ import tools.jackson.databind.json.JsonMapper;
 @Configuration
 @ConditionalOnProperty(prefix = "app.production", name = "enabled", havingValue = "true")
 public class ProductionConfiguration {
+
+    /**
+     * Compose 里 java-a / java-b 注入不同值；本机 bootRun 默认为 local。
+     *
+     * @param instanceId {@code PRODUCTION_INSTANCE_ID}
+     * @return 本进程短名
+     */
+    @Bean
+    public ProductionInstanceIdentity productionInstanceIdentity(
+        @Value("${PRODUCTION_INSTANCE_ID:local}") String instanceId
+    ) {
+        return new ProductionInstanceIdentity(instanceId);
+    }
+
+    /**
+     * @param identity 本进程短名
+     * @return 给 /api/v1 打 {@code X-Instance-Id}
+     */
+    @Bean
+    public FilterRegistrationBean<InstanceIdFilter> instanceIdFilter(ProductionInstanceIdentity identity) {
+        FilterRegistrationBean<InstanceIdFilter> bean = new FilterRegistrationBean<>(new InstanceIdFilter(identity));
+        bean.addUrlPatterns("/api/v1/*");
+        bean.setOrder(Ordered.HIGHEST_PRECEDENCE + 10);
+        bean.setName("productionInstanceIdFilter");
+        return bean;
+    }
 
     /**
      * Redis 事件日志：跨实例可续传，生产默认。

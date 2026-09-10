@@ -138,6 +138,22 @@ class ProductionSseMvcTest {
     }
 
     @Test
+    void sseProbeShouldReplayHaProbeWithoutLlm() throws Exception {
+        String first = streamBody("/api/v1/sse-probe");
+        assertTrue(first.contains("ha-probe"), first);
+        assertTrue(first.contains("event:done"), first);
+        String runId = runIdOf(first);
+
+        MvcResult result = mockMvc.perform(get("/api/v1/runs/{runId}/stream", runId)
+                .header("Last-Event-ID", "-1"))
+            .andExpect(request().asyncStarted())
+            .andReturn();
+        String replayed = awaitBody(result);
+        assertTrue(replayed.contains("ha-probe"), replayed);
+        assertTrue(replayed.contains("event:done"), replayed);
+    }
+
+    @Test
     void resumeOfUnknownRunShouldBeGone() throws Exception {
         mockMvc.perform(get("/api/v1/runs/{runId}/stream", "not-a-run"))
             .andExpect(status().isGone())

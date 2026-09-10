@@ -110,7 +110,7 @@ docker compose ps
 调试时如需从宿主机直连 `5432`、`6379`、`8080`、`8081`：
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build --wait
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build --wait --remove-orphans
 ```
 
 健康检查与日志：
@@ -119,7 +119,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build --w
 curl -fsS http://localhost:8088/healthz
 curl -fsS http://localhost:8088/ai-example/actuator/health/readiness
 curl -fsS http://localhost:8088/ai-example/
-docker compose logs -f java mcp-server frontend
+docker compose logs -f java-a java-b mcp-server frontend
 ```
 
 验证 SSE 时使用 `curl -N`，避免客户端缓冲掩盖代理问题：
@@ -140,7 +140,7 @@ docker compose down
 
 ## 本地开发（宿主机）
 
-改 Java / 前端时不要用整套 Compose 跑 `java` 与 `frontend` 容器，让依赖进 Docker、应用留在本机。四个终端（或等价后台进程）：
+改 Java / 前端时不要用整套 Compose 跑 `java-a` / `java-b` 与 `frontend` 容器，让依赖进 Docker、应用留在本机。四个终端（或等价后台进程）：
 
 ```bash
 cp .env.example .env
@@ -165,7 +165,7 @@ cd frontend && pnpm install && pnpm dev
 | ---------- | ------------------------------------------------------------------------------ |
 | 教学场        | [http://localhost:5173/](http://localhost:5173/)                               |
 | 工业级        | [http://localhost:5173/industrial.html](http://localhost:5173/industrial.html) |
-| Java 直连    | [http://localhost:8080/ai-example/](http://localhost:8080/ai-example/)         |
+| Java 直连    | [http://localhost:8080/ai-example/](http://localhost:8080/ai-example/)（compose.dev 下 java-b 为 :8082） |
 | Jaeger UI  | [http://localhost:16686/](http://localhost:16686/)                             |
 | MCP Server | [http://localhost:8081/mcp](http://localhost:8081/mcp)                         |
 
@@ -281,13 +281,14 @@ RUN_REDIS_IT=true REDIS_IT_HOST=localhost REDIS_IT_PORT=6379 \
 
 后端包 `com.feike.ai.production`，HTTP 前缀 `/ai-example/api/v1/**`，与教学样例路径不重叠。前端独立入口 [industrial.html](frontend/industrial.html)（样例场侧栏也有跳转）。
 
-这是**工业级链路**（第四阶段 Playwright E2E + 第五阶段本机 k6），与课程**第四期 Hybrid RAG + Eval**（[docs/phase4.md](docs/phase4.md)）不是同一件事。
+这是**工业级链路**（第四阶段 Playwright E2E、第五阶段本机 k6、第六阶段双 Java 多实例），与课程**第四期 Hybrid RAG + Eval**（[docs/phase4.md](docs/phase4.md)）不是同一件事。
 
 - 配置前缀 `app.production.*`（环境变量 `PRODUCTION_*` / `REDIS_*`）
 - RAG 拆成 ingest / retrieve / generate，不含教学用的 compare 分支
 - SSE 契约：`meta → sources → delta* → step* → usage → done|error`，带 `runId` / `seq`；断线用 `GET /api/v1/runs/{runId}/stream` + `Last-Event-ID` 续传
 - **第四阶段 E2E**：`cd frontend && pnpm test:e2e`。默认套件覆盖登录、安全/可观测面板、401、alice ingest 403、输入护栏（不打 Chat LLM）。空检索会先走 Embedding，因此 `pnpm test:e2e:keys` 仅在已配 `PROVIDER_DASHSCOPE_API_KEY` 时跑。可选 `PLAYWRIGHT_BASE_URL=http://localhost:8088` 打 Compose 前端；不要用 `vite preview`（无 API 代理）。
 - **第五阶段压测**：`./loadtest/run.sh all`（Java 需在 8080 且已设 `PRODUCTION_KEK`）。本机 k6 打 `/api/v1`：廉价读、护栏 422、令牌桶 429、登录限流。默认不打 Chat LLM / Embedding，不进 CI。说明见 [loadtest/README.md](loadtest/README.md)。
+- **第六阶段多实例**：Compose 起 `java-a` + `java-b`，Nginx `:8088` 负载均衡。验证步骤（起栈、脚本、手工 curl、端口冲突）见 [docs/industrial-ha.md](docs/industrial-ha.md)；一键对照 `./scripts/industrial-ha.sh`。
 
 ### 鉴权 / 信封加密 / 指标
 

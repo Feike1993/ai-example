@@ -19,7 +19,8 @@ describe('productionApi 鉴权头', () => {
       username: 'alice', tenant: 'tenant-a', roles: ['USER'],
     }), { status: 200, headers: { 'X-RateLimit-Remaining': '29' } }))
     await getMe(fetchImpl as unknown as typeof fetch)
-    const headers = new Headers(fetchImpl.mock.calls[0][1]?.headers)
+    const [, init] = fetchImpl.mock.calls[0] as unknown as [RequestInfo, RequestInit?]
+    const headers = new Headers(init?.headers)
     expect(headers.get('Authorization')).toBe('Bearer tok-1')
   })
 

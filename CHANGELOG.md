@@ -208,3 +208,10 @@ Hybrid RAG、golden 评测、Redis 持久会话、逐步 tool SSE、流式 token
 - `loadtest/`：k6 脚本打 `/api/v1`（smoke / guardrail / rate_limit / login_limit）
 - 默认不打 Chat LLM / Embedding；不进 CI；容量基线只记录本机数字
 - 见 [loadtest/README.md](loadtest/README.md)
+
+## [Unreleased] — 工业级第六阶段（多实例演示）
+
+- Compose `java-a` / `java-b` 共用镜像与 Redis；Nginx `:8088` `least_conn`
+- 响应头 `X-Instance-Id`；`POST /api/v1/sessions/{id}/lock-probe`、`GET /api/v1/sse-probe`（不打 LLM）
+- 对照脚本：`./scripts/industrial-ha.sh`；逐步验证见 [docs/industrial-ha.md](docs/industrial-ha.md)
+- 顺手：`productionApi.test.ts` 的 fetch mock 补上参数类型，避免 `tsc -b` 拦住前端镜像

@@ -1,6 +1,8 @@
 package com.feike.ai.production.chat.controller;
 
 import com.feike.ai.production.chat.model.ChatRequestDTO;
+import com.feike.ai.production.chat.model.LockProbeQuery;
+import com.feike.ai.production.chat.model.LockProbeVO;
 import com.feike.ai.production.chat.model.SessionVO;
 import com.feike.ai.production.chat.service.ProductionChatService;
 
@@ -8,6 +10,7 @@ import com.feike.ai.production.agent.service.ProductionAgentService;
 import com.feike.ai.production.audit.service.AuditService;
 import com.feike.ai.production.auth.controller.JwtAuthFilter;
 import com.feike.ai.production.auth.model.ProductionPrincipal;
+import com.feike.ai.production.config.ProductionInstanceIdentity;
 import com.feike.ai.production.observability.service.ProductionMetrics;
 import com.feike.ai.production.rag.ingest.service.ProductionIngestService;
 import com.feike.ai.production.ratelimit.manager.IdempotencyManager;
@@ -41,6 +44,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -65,6 +70,7 @@ public class ProductionChatController {
     private final ProductionMetrics metrics;
     private final JsonMapper jsonMapper;
     private final Tracer tracer;
+    private final ProductionInstanceIdentity instanceIdentity;
 
     /**
      * 单测用的窄构造：不接限流 / 审计 / Agent。
@@ -78,7 +84,8 @@ public class ProductionChatController {
         ProductionIngestService ingestService,
         SseRunExecutor runExecutor
     ) {
-        this(chatService, ingestService, runExecutor, null, null, null, null, null, null, null);
+        this(chatService, ingestService, runExecutor, null, null, null, null, null, null, null,
+            new ProductionInstanceIdentity("test"));
     }
 
     /**
@@ -91,7 +98,8 @@ public class ProductionChatController {
      * @param audit         审计
      * @param metrics       指标
      * @param jsonMapper    幂等哈希
-     * @param tracer        可选 Trace
+     * @param tracer            可选 Trace
+     * @param instanceIdentity  本进程短名
      */
     @Autowired
     public ProductionChatController(
@@ -104,7 +112,8 @@ public class ProductionChatController {
         AuditService audit,
         ProductionMetrics metrics,
         JsonMapper jsonMapper,
-        ObjectProvider<Tracer> tracer
+        ObjectProvider<Tracer> tracer,
+        ProductionInstanceIdentity instanceIdentity
     ) {
         this.chatService = chatService;
         this.ingestService = ingestService;
@@ -116,6 +125,9 @@ public class ProductionChatController {
         this.metrics = metrics;
         this.jsonMapper = jsonMapper;
         this.tracer = tracer == null ? null : tracer.getIfAvailable();
+        this.instanceIdentity = instanceIdentity == null
+            ? new ProductionInstanceIdentity("test")
+            : instanceIdentity;
     }
 
     /**
@@ -316,6 +328,48 @@ public class ProductionChatController {
     ) {
         principal(http);
         return runExecutor.resume(runId, lastEventId == null ? -1L : lastEventId);
+    }
+
+    /**
+     * 占用会话锁一段时间。给多实例演示用，不调 LLM。
+     *
+     * @param sessionId 会话
+     * @param query     持锁时长
+     * @param http      身份
+     * @return 持锁结果，含 instanceId
+     */
+    @PostMapping("/sessions/{sessionId}/lock-probe")
+    public LockProbeVO lockProbe(
+        @PathVariable String sessionId,
+        @RequestBody(required = false) LockProbeQuery query,
+        HttpServletRequest http
+    ) {
+        ProductionPrincipal principal = principal(http);
+        Integer holdMs = query == null ? null : query.holdMs();
+        ProductionChatService.LockHold hold = chatService.probeLock(principal, sessionId, holdMs);
+        return new LockProbeVO(hold.sessionId(), instanceIdentity.id(), hold.heldMs());
+    }
+
+    /**
+     * 写几条假 SSE 事件后结束。给跨实例 Last-Event-ID 续传演示用，不调 LLM。
+     *
+     * @param http 身份
+     * @return SSE
+     */
+    @GetMapping(value = "/sse-probe", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter sseProbe(HttpServletRequest http) {
+        principal(http);
+        String instance = instanceIdentity.id();
+        return runExecutor.start(writer -> {
+            Map<String, Object> meta = new LinkedHashMap<>();
+            meta.put("instanceId", instance);
+            meta.put("probe", true);
+            writer.meta(meta);
+            writer.delta("ha-probe");
+            Map<String, Object> done = new LinkedHashMap<>();
+            done.put("instanceId", instance);
+            writer.done(done);
+        });
     }
 
     /**

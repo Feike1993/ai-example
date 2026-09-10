@@ -291,6 +291,24 @@ class ProductionChatServiceImplTest {
         }
 
         @Test
+        void probeLockShouldOccupyThenRelease() {
+            ProductionChatService.LockHold hold = sessionService.probeLock(ALICE, "s-ha", 1);
+            assertEquals("s-ha", hold.sessionId());
+            assertEquals(1, hold.heldMs());
+            sessionService.probeLock(ALICE, "s-ha", 1);
+        }
+
+        @Test
+        void probeLockShouldConflictWhenAlreadyHeld() {
+            try (SessionLock.Handle ignored = lock.tryAcquire("s-ha-busy").orElseThrow()) {
+                assertThrows(
+                    SessionBusyException.class,
+                    () -> sessionService.probeLock(ALICE, "s-ha-busy", 1)
+                );
+            }
+        }
+
+        @Test
         void lockShouldBeReleasedAfterFailedTurn() {
             when(retrieval.retrieve(anyString(), any(), any())).thenReturn(hits());
             doThrow(new IllegalStateException("模型网关 502"))

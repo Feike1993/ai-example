@@ -5,6 +5,7 @@ import com.feike.ai.production.auth.manager.JwtService;
 import com.feike.ai.production.chat.service.impl.ProductionChatServiceImpl;
 
 import com.feike.ai.production.config.ProductionProperties;
+import com.feike.ai.production.config.ProductionInstanceIdentity;
 import com.feike.ai.production.audit.service.AuditService;
 import com.feike.ai.production.chat.controller.ProductionChatController;
 import com.feike.ai.production.chat.service.ProductionChatService;
@@ -85,7 +86,8 @@ class ProductionJwtMvcTest {
             users, jwtService, bucket, properties, audit, metrics);
         ProductionChatController chat = new ProductionChatController(
             chatService, ingestService, runExecutor,
-            null, bucket, null, audit, metrics, JsonMapper.builder().build(), null
+            null, bucket, null, audit, metrics, JsonMapper.builder().build(), null,
+            new ProductionInstanceIdentity("test")
         );
         JwtAuthFilter filter = new JwtAuthFilter(jwtService, secrets, metrics);
     mockMvc = MockMvcBuilders.standaloneSetup(auth, chat)
@@ -143,6 +145,19 @@ class ProductionJwtMvcTest {
         mockMvc.perform(post("/api/v1/rag/ingest").header("Authorization", "Bearer " + token))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.chunkCount").value(1));
+    }
+
+    @Test
+    void lockProbeShouldEchoSessionWithoutLlm() throws Exception {
+        String token = login("alice");
+        mockMvc.perform(post("/api/v1/sessions/s-probe/lock-probe")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"holdMs\":1}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.sessionId").value("s-probe"))
+            .andExpect(jsonPath("$.instanceId").value("test"))
+            .andExpect(jsonPath("$.heldMs").value(1));
     }
 
     @Test

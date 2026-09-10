@@ -345,6 +345,38 @@ public class ProductionChatServiceImpl implements ProductionChatService {
         guardrail.checkCitations(answer, sources);
     }
 
+    private static final int DEFAULT_LOCK_PROBE_HOLD_MS = 3_000;
+    private static final int MAX_LOCK_PROBE_HOLD_MS = 10_000;
+
+    /**
+     * 占用会话锁一段时间后释放。给多实例演示用，不调 LLM。
+     *
+     * @param principal 当前用户
+     * @param sessionId 会话；空则新建
+     * @param holdMs    持锁毫秒
+     * @return 实际 sessionId 与持锁时长
+     */
+    @Override
+    public ProductionChatService.LockHold probeLock(ProductionPrincipal principal, String sessionId, Integer holdMs) {
+        requireSession();
+        String id = sessionStore.resolveSessionId(sessionId);
+        int ms = clampHoldMs(holdMs);
+        try (SessionLock.Handle ignored = acquireOrThrow(id)) {
+            Thread.sleep(ms);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("会话锁探针被中断", ex);
+        }
+        return new ProductionChatService.LockHold(id, ms);
+    }
+
+    private static int clampHoldMs(Integer holdMs) {
+        if (holdMs == null || holdMs < 1) {
+            return DEFAULT_LOCK_PROBE_HOLD_MS;
+        }
+        return Math.min(holdMs, MAX_LOCK_PROBE_HOLD_MS);
+    }
+
     private SessionLock.Handle acquireOrThrow(String sessionId) {
         return sessionLock.tryAcquire(sessionId).orElseThrow(() -> new SessionBusyException(sessionId));
     }
