@@ -1,21 +1,30 @@
 package com.feike.ai.production.observability.controller;
 
 import com.feike.ai.production.observability.service.ProductionMetrics;
+import com.feike.ai.production.rag.ingest.service.ProductionIngestJobService;
 
 import com.feike.ai.production.audit.model.AuditEntryDO;
 import com.feike.ai.production.audit.service.AuditService;
 import com.feike.ai.production.auth.controller.JwtAuthFilter;
 import com.feike.ai.production.auth.model.ProductionPrincipal;
+import com.feike.ai.production.web.BusinessException;
+import com.feike.ai.production.web.ErrorCodeEnum;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.json.JsonMapper;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,20 +40,32 @@ public class ProductionOpsController {
     private final AuditService audit;
     private final ProductionMetrics metrics;
     private final ObjectProvider<Tracer> tracer;
+    private final ProductionIngestJobService ingestJobs;
+    private final JsonMapper jsonMapper;
+    private final String loadtestSummaryPath;
 
     /**
-     * @param audit   审计
-     * @param metrics 指标
-     * @param tracer  可空
+     * @param audit                审计
+     * @param metrics              指标
+     * @param tracer               可空
+     * @param ingestJobs           最近入库任务；可空
+     * @param jsonMapper           读压测摘要
+     * @param loadtestSummaryPath  摘要文件；空则按常见相对路径探测
      */
     public ProductionOpsController(
         AuditService audit,
         ProductionMetrics metrics,
-        ObjectProvider<Tracer> tracer
+        ObjectProvider<Tracer> tracer,
+        ObjectProvider<ProductionIngestJobService> ingestJobs,
+        JsonMapper jsonMapper,
+        @Value("${PRODUCTION_LOADTEST_SUMMARY:}") String loadtestSummaryPath
     ) {
         this.audit = audit;
         this.metrics = metrics;
         this.tracer = tracer;
+        this.ingestJobs = ingestJobs == null ? null : ingestJobs.getIfAvailable();
+        this.jsonMapper = jsonMapper;
+        this.loadtestSummaryPath = loadtestSummaryPath;
     }
 
     /**
@@ -82,6 +103,46 @@ public class ProductionOpsController {
             }
         }
         body.put("traceId", traceId);
+        if (ingestJobs != null) {
+            ingestJobs.getLatest().ifPresent(job -> {
+                body.put("ingestJobId", job.jobId());
+                body.put("ingestStatus", job.status());
+                body.put("ingestChunkCount", job.chunkCount());
+                body.put("ingestError", job.errorMessage());
+            });
+        }
         return body;
+    }
+
+    /**
+     * 最近一次本机 k6 摘要。文件不存在时 404，不是服务故障。
+     *
+     * @param http 身份
+     * @return k6 summary-export JSON
+     */
+    @GetMapping("/ops/loadtest")
+    public Map<String, Object> loadtest(HttpServletRequest http) {
+        JwtAuthFilter.require(http);
+        Path file = resolveLoadtestSummary();
+        if (file == null || !Files.isRegularFile(file)) {
+            throw new BusinessException(ErrorCodeEnum.LOADTEST_SUMMARY_MISSING);
+        }
+        try {
+            return jsonMapper.readValue(Files.readString(file), new TypeReference<Map<String, Object>>() {});
+        } catch (IOException ex) {
+            throw new BusinessException(ErrorCodeEnum.LOADTEST_SUMMARY_MISSING, "压测摘要无法读取");
+        }
+    }
+
+    private Path resolveLoadtestSummary() {
+        if (loadtestSummaryPath != null && !loadtestSummaryPath.isBlank()) {
+            return Path.of(loadtestSummaryPath).toAbsolutePath().normalize();
+        }
+        Path cwd = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath();
+        Path nested = cwd.resolve("loadtest/results/latest-summary.json").normalize();
+        if (Files.isRegularFile(nested)) {
+            return nested;
+        }
+        return cwd.resolve("../loadtest/results/latest-summary.json").normalize();
     }
 }

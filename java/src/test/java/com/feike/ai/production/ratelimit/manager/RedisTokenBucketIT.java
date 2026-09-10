@@ -111,7 +111,7 @@ class RedisTokenBucketIT {
         return new ProductionProperties(
             true, "c", 4, 400, 1, true, 60, 4, null, null, null,
             new ProductionProperties.RateLimit(capacity, window, 10, Duration.ofMinutes(10)),
-            null, null
+            null, null, null
         );
     }
 }

@@ -243,6 +243,20 @@ describe('ProductionChatPanel', () => {
     expect(headers.get('Authorization')).toBe('Bearer tok-1')
   })
 
+  it('选择 HyDE 后流式 URL 带 queryExpansion', async () => {
+    const inner = fakeFetch([META, SOURCES, DELTA, USAGE, DONE])
+    const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) => inner(input, init))
+    vi.stubGlobal('fetch', fetchImpl as unknown as typeof fetch)
+    renderPanel(<ProductionChatPanel provider="deepseek" />)
+
+    await userEvent.click(screen.getByRole('radio', { name: 'HyDE' }))
+    await userEvent.click(screen.getByRole('button', { name: '流式提问' }))
+    await waitFor(() => expect(screen.getByText('已完成')).toBeInTheDocument())
+
+    const streamCall = fetchImpl.mock.calls.find((call) => String(call[0]).includes('/chat/stream'))
+    expect(String(streamCall?.[0])).toContain('queryExpansion=hyde')
+  })
+
   it('Agent 模式合并 step 并展示拒绝标记', async () => {
     vi.stubGlobal(
       'fetch',

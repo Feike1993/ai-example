@@ -31,6 +31,25 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
     private final SecretResolver secrets;
     private final ProductionMetrics metrics;
+    private final String metricsToken;
+
+    /**
+     * @param jwtService    令牌
+     * @param secrets       用于判定信封是否可用
+     * @param metrics       鉴权失败计数；可空
+     * @param metricsToken  Prometheus 刮取用的独立 Bearer；空则 prometheus 仍要 JWT
+     */
+    public JwtAuthFilter(
+        JwtService jwtService,
+        SecretResolver secrets,
+        ProductionMetrics metrics,
+        String metricsToken
+    ) {
+        this.jwtService = jwtService;
+        this.secrets = secrets;
+        this.metrics = metrics;
+        this.metricsToken = metricsToken == null || metricsToken.isBlank() ? null : metricsToken.trim();
+    }
 
     /**
      * @param jwtService 令牌
@@ -42,9 +61,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         SecretResolver secrets,
         ProductionMetrics metrics
     ) {
-        this.jwtService = jwtService;
-        this.secrets = secrets;
-        this.metrics = metrics;
+        this(jwtService, secrets, metrics, null);
     }
 
     /**
@@ -78,6 +95,10 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         HttpServletResponse response,
         FilterChain filterChain
     ) throws ServletException, IOException {
+        if (isPrometheus(request) && scrapeTokenMatches(request)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
         if (!secrets.available()) {
             writeJson(response, ErrorCodeEnum.SECRET_UNAVAILABLE, "密钥不可用（未配置 PRODUCTION_KEK 或无法解密）");
             return;
@@ -120,6 +141,25 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             MDC.remove("tenant");
             MDC.remove("sub");
         }
+    }
+
+    private boolean isPrometheus(HttpServletRequest request) {
+        String path = request.getServletPath();
+        if (path == null || path.isBlank()) {
+            path = request.getRequestURI();
+        }
+        return path != null && path.contains("/actuator/prometheus");
+    }
+
+    private boolean scrapeTokenMatches(HttpServletRequest request) {
+        if (metricsToken == null) {
+            return false;
+        }
+        String header = request.getHeader("Authorization");
+        if (header == null || !header.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            return false;
+        }
+        return metricsToken.equals(header.substring(7).trim());
     }
 
     private void authFail() {

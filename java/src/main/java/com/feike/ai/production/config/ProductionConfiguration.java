@@ -2,7 +2,10 @@ package com.feike.ai.production.config;
 
 import com.feike.ai.production.agent.service.impl.ProductionAgentServiceImpl;
 import com.feike.ai.production.chat.service.impl.ProductionChatServiceImpl;
+import com.feike.ai.production.rag.ingest.service.impl.InMemoryProductionIngestJobServiceImpl;
 import com.feike.ai.production.rag.ingest.service.impl.ProductionIngestServiceImpl;
+import com.feike.ai.production.rag.ingest.service.impl.RedisProductionIngestJobServiceImpl;
+import com.feike.ai.production.rag.retrieve.manager.ProductionQueryExpander;
 import com.feike.ai.production.rag.retrieve.service.impl.ProductionRetrievalServiceImpl;
 
 import com.feike.ai.core.config.AiProperties;
@@ -18,6 +21,7 @@ import com.feike.ai.production.lock.manager.RedisSessionLock;
 import com.feike.ai.production.lock.manager.SessionLock;
 import com.feike.ai.production.observability.service.ProductionMetrics;
 import com.feike.ai.production.rag.generate.service.ProductionAnswerGenerator;
+import com.feike.ai.production.rag.ingest.service.ProductionIngestJobService;
 import com.feike.ai.production.rag.ingest.service.ProductionIngestService;
 import com.feike.ai.production.rag.retrieve.service.ProductionRetrievalService;
 import com.feike.ai.production.ratelimit.manager.IdempotencyManager;
@@ -149,8 +153,54 @@ public class ProductionConfiguration {
     }
 
     /**
+     * Redis Stream 入库管道：双实例只消费一次。
+     *
+     * @param ingest     建索引
+     * @param redis      Redis
+     * @param properties corpus
+     * @param identity   consumer 名
+     * @param metrics    计数
+     * @param jsonMapper sources
+     * @return 任务服务
+     */
+    @Bean
+    @ConditionalOnProperty(prefix = "app.production.stream", name = "event-log", havingValue = "redis", matchIfMissing = true)
+    public ProductionIngestJobService redisIngestJobService(
+        ProductionIngestService ingest,
+        StringRedisTemplate redis,
+        ProductionProperties properties,
+        ProductionInstanceIdentity identity,
+        ProductionMetrics metrics,
+        JsonMapper jsonMapper
+    ) {
+        return new RedisProductionIngestJobServiceImpl(
+            ingest, redis, properties, identity, metrics, jsonMapper);
+    }
+
+    /**
+     * 进程内入库队列：单测与 memory 模式。
+     *
+     * @param ingest     建索引
+     * @param properties corpus
+     * @param identity   实例名
+     * @param metrics    计数
+     * @return 任务服务
+     */
+    @Bean
+    @ConditionalOnProperty(prefix = "app.production.stream", name = "event-log", havingValue = "memory")
+    public ProductionIngestJobService inMemoryIngestJobService(
+        ProductionIngestService ingest,
+        ProductionProperties properties,
+        ProductionInstanceIdentity identity,
+        ProductionMetrics metrics
+    ) {
+        return new InMemoryProductionIngestJobServiceImpl(ingest, properties, identity, metrics);
+    }
+
+    /**
      * @param vectorStore      pgvector
      * @param keywordRetriever 全文路；缺失时退化为纯向量
+     * @param models           查询扩展用的生产 ChatClient
      * @param properties       生产链路配置
      * @return 检索层
      */
@@ -158,9 +208,15 @@ public class ProductionConfiguration {
     public ProductionRetrievalService productionRetrievalService(
         VectorStore vectorStore,
         ObjectProvider<RagKeywordRetriever> keywordRetriever,
+        ProductionModelFactory models,
         ProductionProperties properties
     ) {
-        return new ProductionRetrievalServiceImpl(vectorStore, keywordRetriever.getIfAvailable(), properties);
+        return new ProductionRetrievalServiceImpl(
+            vectorStore,
+            keywordRetriever.getIfAvailable(),
+            new ProductionQueryExpander(models),
+            properties
+        );
     }
 
     /**

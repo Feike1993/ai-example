@@ -4,7 +4,7 @@ import { ApiError, describeError } from '../../api'
 import { ResultBody } from '../../components/ResultBody'
 import { Workbench } from '../../components/Workbench'
 import { DEMO_ACCOUNTS, getProductionUser, getRateRemaining, setSession } from '../lib/auth'
-import { getAudit, postToken, type AuditRow } from '../lib/productionApi'
+import { getAudit, postToken, postSecretRotate, type AuditRow } from '../lib/productionApi'
 
 type SecurityPanelProps = {
   onLogout: () => void
@@ -17,7 +17,9 @@ export function SecurityPanel({ onLogout }: SecurityPanelProps) {
   const user = getProductionUser()
   const [rows, setRows] = useState<AuditRow[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [rotateHint, setRotateHint] = useState<string | null>(null)
   const remaining = getRateRemaining()
+  const admin = user?.roles.includes('ADMIN') === true
 
   const load = async () => {
     setError(null)
@@ -50,6 +52,29 @@ export function SecurityPanel({ onLogout }: SecurityPanelProps) {
           <Button variant="default" data-testid="refresh-audit" onClick={() => void load()}>
             刷新审计
           </Button>
+          {admin ? (
+            <Button
+              variant="light"
+              data-testid="rotate-kek"
+              onClick={async () => {
+                setError(null)
+                setRotateHint(null)
+                try {
+                  const result = await postSecretRotate()
+                  setRotateHint(`已重加密 ${result.rewritten} 行，kek-id=${result.kekId}`)
+                } catch (err) {
+                  setError(err instanceof ApiError ? err.message : describeError(err))
+                }
+              }}
+            >
+              重加密密钥（本地 KEK）
+            </Button>
+          ) : null}
+          {rotateHint ? (
+            <Text size="xs" c="teal">
+              {rotateHint}
+            </Text>
+          ) : null}
           <Button variant="subtle" color="red" data-testid="logout" onClick={onLogout}>
             退出登录
           </Button>

@@ -20,6 +20,9 @@ public class ProductionMetrics {
     private final Counter toolDenied;
     private final Counter rateLimited;
     private final Counter authFail;
+    private final Counter ingestSubmitted;
+    private final Counter ingestSucceeded;
+    private final Counter ingestFailed;
     private final Timer chatTimer;
     private final MeterRegistry registry;
 
@@ -35,6 +38,9 @@ public class ProductionMetrics {
         this.toolDenied = Counter.builder("prod.tool.denied").description("工具策略拒绝").register(registry);
         this.rateLimited = Counter.builder("prod.rate_limited").description("限流").register(registry);
         this.authFail = Counter.builder("prod.auth.fail").description("鉴权失败").register(registry);
+        this.ingestSubmitted = Counter.builder("prod.ingest.submitted").description("入库任务投递").register(registry);
+        this.ingestSucceeded = Counter.builder("prod.ingest.succeeded").description("入库任务成功").register(registry);
+        this.ingestFailed = Counter.builder("prod.ingest.failed").description("入库任务失败").register(registry);
         this.chatTimer = Timer.builder("prod.chat.duration").description("问答耗时").register(registry);
     }
 
@@ -73,6 +79,21 @@ public class ProductionMetrics {
         authFail.increment();
     }
 
+    /** 入库投递。 */
+    public void ingestSubmitted() {
+        ingestSubmitted.increment();
+    }
+
+    /** 入库成功。 */
+    public void ingestSucceeded() {
+        ingestSucceeded.increment();
+    }
+
+    /** 入库失败。 */
+    public void ingestFailed() {
+        ingestFailed.increment();
+    }
+
     /**
      * @param nanos 耗时
      */
@@ -92,6 +113,9 @@ public class ProductionMetrics {
         map.put("toolDenied", toolDenied.count());
         map.put("rateLimited", rateLimited.count());
         map.put("authFail", authFail.count());
+        map.put("ingestSubmitted", ingestSubmitted.count());
+        map.put("ingestSucceeded", ingestSucceeded.count());
+        map.put("ingestFailed", ingestFailed.count());
         map.put("chatDurationCount", chatTimer.count());
         map.put("meters", registry.getMeters().size());
         return map;

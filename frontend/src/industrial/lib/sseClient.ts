@@ -54,6 +54,8 @@ export type SourcesPayload = {
   sources: ProductionSource[]
   retrievalEmpty: boolean
   retrievalMode: string
+  queryExpansion?: string
+  rewrittenQuery?: string | null
 }
 
 export type UsagePayload = {

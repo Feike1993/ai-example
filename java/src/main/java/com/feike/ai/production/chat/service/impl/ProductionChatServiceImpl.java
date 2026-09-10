@@ -15,6 +15,7 @@ import com.feike.ai.production.lock.manager.SessionLock;
 import com.feike.ai.production.rag.model.ProductionSource;
 import com.feike.ai.production.rag.generate.service.ProductionAnswerGenerator;
 import com.feike.ai.production.rag.retrieve.service.ProductionRetrievalService;
+import com.feike.ai.production.rag.retrieve.model.ProductionRetrieveQuery;
 import com.feike.ai.production.session.dao.ProductionChatSessionDAO;
 import com.feike.ai.production.session.model.SessionMessageDO;
 import com.feike.ai.production.sse.service.SseStreamWriter;
@@ -141,13 +142,36 @@ public class ProductionChatServiceImpl implements ProductionChatService {
         String provider,
         Integer topK
     ) {
+        return answer(principal, sessionId, question, provider, topK, null);
+    }
+
+    /**
+     * 同步问答，不走 SSE。
+     *
+     * @param principal      当前用户
+     * @param sessionId      会话 id；空则新建。会话功能关闭时忽略
+     * @param question       用户问题
+     * @param provider       Chat Provider id
+     * @param topK           覆盖默认 topK
+     * @param queryExpansion none / rewrite / hyde；空则用配置默认
+     * @return 答案与来源
+     * @throws SessionBusyException 同一会话已有一轮在进行
+     */
+    public ChatAnswer answer(
+        ProductionPrincipal principal,
+        String sessionId,
+        String question,
+        String provider,
+        Integer topK,
+        String queryExpansion
+    ) {
         checkInput(question);
         if (!sessionEnabled()) {
-            return answerStateless(principal, null, question, provider, topK, null);
+            return answerStateless(principal, null, question, provider, topK, null, queryExpansion);
         }
         String id = sessionStore.resolveSessionId(sessionId);
         try (SessionLock.Handle ignored = acquireOrThrow(id)) {
-            return answerStateless(principal, id, question, provider, topK, null);
+            return answerStateless(principal, id, question, provider, topK, null, queryExpansion);
         }
     }
 
@@ -169,6 +193,29 @@ public class ProductionChatServiceImpl implements ProductionChatService {
         String provider,
         Integer topK
     ) {
+        streamAnswer(writer, principal, sessionId, question, provider, topK, null);
+    }
+
+    /**
+     * 流式问答。调用方负责在虚拟线程上执行本方法，并在客户端断开时中断该线程。
+     *
+     * @param writer         事件出口
+     * @param principal      当前用户
+     * @param sessionId      会话 id；空则新建。会话功能关闭时忽略
+     * @param question       用户问题
+     * @param provider       Chat Provider id
+     * @param topK           覆盖默认 topK
+     * @param queryExpansion none / rewrite / hyde；空则用配置默认
+     */
+    public void streamAnswer(
+        SseStreamWriter writer,
+        ProductionPrincipal principal,
+        String sessionId,
+        String question,
+        String provider,
+        Integer topK,
+        String queryExpansion
+    ) {
         try {
             checkInput(question);
         } catch (GuardrailBlockedException ex) {
@@ -176,7 +223,7 @@ public class ProductionChatServiceImpl implements ProductionChatService {
             return;
         }
         if (!sessionEnabled()) {
-            streamWithin(writer, principal, null, question, provider, topK);
+            streamWithin(writer, principal, null, question, provider, topK, queryExpansion);
             return;
         }
         String id = sessionStore.resolveSessionId(sessionId);
@@ -188,7 +235,7 @@ public class ProductionChatServiceImpl implements ProductionChatService {
             return;
         }
         try (SessionLock.Handle ignored = handle.get()) {
-            streamWithin(writer, principal, id, question, provider, topK);
+            streamWithin(writer, principal, id, question, provider, topK, queryExpansion);
         }
     }
 
@@ -198,7 +245,8 @@ public class ProductionChatServiceImpl implements ProductionChatService {
         String sessionId,
         String question,
         String provider,
-        Integer topK
+        Integer topK,
+        String queryExpansion
     ) {
         try {
             History history = loadHistory(principal, sessionId);
@@ -218,11 +266,15 @@ public class ProductionChatServiceImpl implements ProductionChatService {
             writer.meta(meta);
 
             ProductionRetrievalService.RetrievalResult hits = retrieval.retrieve(
-                question, topK, principal.tenantId());
+                new ProductionRetrieveQuery(question, topK, principal.tenantId(), queryExpansion, provider));
             Map<String, Object> sourcesPayload = new LinkedHashMap<>();
             sourcesPayload.put("sources", hits.sources());
             sourcesPayload.put("retrievalEmpty", hits.empty());
             sourcesPayload.put("retrievalMode", hits.retrievalMode());
+            sourcesPayload.put("queryExpansion", hits.queryExpansion());
+            if (hits.rewrittenQuery() != null) {
+                sourcesPayload.put("rewrittenQuery", hits.rewrittenQuery());
+            }
             writer.emit(StreamEventTypeEnum.SOURCES, sourcesPayload);
 
             if (hits.empty()) {
@@ -267,11 +319,12 @@ public class ProductionChatServiceImpl implements ProductionChatService {
         String question,
         String provider,
         Integer topK,
-        String runId
+        String runId,
+        String queryExpansion
     ) {
         History history = loadHistory(principal, sessionId);
         ProductionRetrievalService.RetrievalResult hits = retrieval.retrieve(
-            question, topK, principal.tenantId());
+            new ProductionRetrieveQuery(question, topK, principal.tenantId(), queryExpansion, provider));
         String answer;
         if (hits.empty()) {
             answer = ProductionAnswerGenerator.EMPTY_REFUSAL;
@@ -287,7 +340,8 @@ public class ProductionChatServiceImpl implements ProductionChatService {
             hits.empty(),
             hits.retrievalMode(),
             history.messages().size(),
-            persisted
+            persisted,
+            hits.queryExpansion()
         );
     }
 

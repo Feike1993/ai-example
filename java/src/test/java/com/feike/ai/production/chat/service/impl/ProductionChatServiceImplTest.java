@@ -12,6 +12,7 @@ import com.feike.ai.production.lock.manager.SessionLock;
 import com.feike.ai.production.rag.model.ProductionSource;
 import com.feike.ai.production.rag.generate.service.ProductionAnswerGenerator;
 import com.feike.ai.production.rag.retrieve.service.ProductionRetrievalService;
+import com.feike.ai.production.rag.retrieve.model.ProductionRetrieveQuery;
 import com.feike.ai.production.session.dao.impl.FakeProductionChatSessionDAOImpl;
 import com.feike.ai.production.session.model.SessionMessageDO;
 import com.feike.ai.production.sse.service.EventSink;
@@ -38,7 +39,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -67,7 +67,7 @@ class ProductionChatServiceImplTest {
 
     @Test
     void shouldEmitContractOrderOnHappyPath() {
-        when(retrieval.retrieve(anyString(), any(), any())).thenReturn(hits());
+        when(retrieval.retrieve(any(ProductionRetrieveQuery.class))).thenReturn(hits());
         stubStream("答", "案");
 
         CollectingSink sink = new CollectingSink();
@@ -88,7 +88,7 @@ class ProductionChatServiceImplTest {
 
     @Test
     void emptyRetrievalShouldRefuseWithoutCallingModel() {
-        when(retrieval.retrieve(anyString(), any(), any())).thenReturn(empty());
+        when(retrieval.retrieve(any(ProductionRetrieveQuery.class))).thenReturn(empty());
 
         CollectingSink sink = new CollectingSink();
         service.streamAnswer(writer(sink), ALICE, null, "无关问题", null, null);
@@ -109,8 +109,31 @@ class ProductionChatServiceImplTest {
     }
 
     @Test
+    void streamShouldForwardQueryExpansionAndEchoItOnSources() {
+        when(retrieval.retrieve(any(ProductionRetrieveQuery.class))).thenReturn(
+            new ProductionRetrievalService.RetrievalResult(
+                hits().hits(),
+                hits().sources(),
+                false,
+                "hybrid",
+                "hyde",
+                null
+            )
+        );
+        stubStream("答");
+
+        CollectingSink sink = new CollectingSink();
+        service.streamAnswer(writer(sink), ALICE, null, "什么是 RAG", "deepseek", null, "hyde");
+
+        verify(retrieval).retrieve(org.mockito.ArgumentMatchers.argThat(query ->
+            query != null && "hyde".equals(query.queryExpansion()) && "deepseek".equals(query.provider())
+        ));
+        assertTrue(sink.dataOf(StreamEventTypeEnum.SOURCES).contains("\"queryExpansion\":\"hyde\""));
+    }
+
+    @Test
     void upstreamFailureShouldCollapseIntoSingleErrorEvent() {
-        when(retrieval.retrieve(anyString(), any(), any())).thenReturn(hits());
+        when(retrieval.retrieve(any(ProductionRetrieveQuery.class))).thenReturn(hits());
         doThrow(new IllegalStateException("模型网关 502"))
             .when(generator).stream(anyString(), any(), any(), any(), any());
 
@@ -128,7 +151,8 @@ class ProductionChatServiceImplTest {
 
     @Test
     void retrievalFailureShouldAlsoBecomeErrorEvent() {
-        when(retrieval.retrieve(anyString(), eq(3), any())).thenThrow(new IllegalStateException("pgvector 连接失败"));
+        when(retrieval.retrieve(any(ProductionRetrieveQuery.class)))
+            .thenThrow(new IllegalStateException("pgvector 连接失败"));
 
         CollectingSink sink = new CollectingSink();
         service.streamAnswer(writer(sink), ALICE, null, "什么是 RAG", null, 3);
@@ -138,7 +162,7 @@ class ProductionChatServiceImplTest {
 
     @Test
     void syncAnswerShouldSkipModelOnEmptyRetrieval() {
-        when(retrieval.retrieve(anyString(), any(), any())).thenReturn(empty());
+        when(retrieval.retrieve(any(ProductionRetrieveQuery.class))).thenReturn(empty());
 
         ProductionChatService.ChatAnswer answer = service.answer(ALICE, null, "无关问题", null, null);
 
@@ -156,7 +180,7 @@ class ProductionChatServiceImplTest {
 
     @Test
     void disabledSessionShouldNotBlockPlainStreaming() {
-        when(retrieval.retrieve(anyString(), any(), any())).thenReturn(hits());
+        when(retrieval.retrieve(any(ProductionRetrieveQuery.class))).thenReturn(hits());
         stubStream("答案");
 
         CollectingSink sink = new CollectingSink();
@@ -177,7 +201,7 @@ class ProductionChatServiceImplTest {
 
         @Test
         void doneShouldPersistWholeTurnAndEchoSessionId() {
-            when(retrieval.retrieve(anyString(), any(), any())).thenReturn(hits());
+            when(retrieval.retrieve(any(ProductionRetrieveQuery.class))).thenReturn(hits());
             stubStream("答", "案");
 
             CollectingSink sink = new CollectingSink();
@@ -198,7 +222,7 @@ class ProductionChatServiceImplTest {
 
         @Test
         void secondTurnShouldSendPriorHistoryToModel() {
-            when(retrieval.retrieve(anyString(), any(), any())).thenReturn(hits());
+            when(retrieval.retrieve(any(ProductionRetrieveQuery.class))).thenReturn(hits());
             stubStream("第一轮");
             sessionService.streamAnswer(writer(new CollectingSink()), ALICE, "s-2", "问题一", null, null);
 
@@ -220,7 +244,7 @@ class ProductionChatServiceImplTest {
 
         @Test
         void cancelShouldNotLeaveOrphanUserMessage() {
-            when(retrieval.retrieve(anyString(), any(), any())).thenReturn(hits());
+            when(retrieval.retrieve(any(ProductionRetrieveQuery.class))).thenReturn(hits());
             doAnswer(invocation -> {
                 Consumer<String> onChunk = invocation.getArgument(4);
                 onChunk.accept("半截");
@@ -243,7 +267,7 @@ class ProductionChatServiceImplTest {
 
         @Test
         void upstreamErrorShouldNotPersist() {
-            when(retrieval.retrieve(anyString(), any(), any())).thenReturn(hits());
+            when(retrieval.retrieve(any(ProductionRetrieveQuery.class))).thenReturn(hits());
             doThrow(new IllegalStateException("模型网关 502"))
                 .when(generator).stream(anyString(), any(), any(), any(), any());
 
@@ -254,7 +278,7 @@ class ProductionChatServiceImplTest {
 
         @Test
         void persistFailureShouldStillReportDone() {
-            when(retrieval.retrieve(anyString(), any(), any())).thenReturn(hits());
+            when(retrieval.retrieve(any(ProductionRetrieveQuery.class))).thenReturn(hits());
             stubStream("答案");
             store.appendFailure = new IllegalStateException("数据库连接中断");
 
@@ -277,7 +301,7 @@ class ProductionChatServiceImplTest {
 
             assertEquals(List.of(StreamEventTypeEnum.ERROR), sink.types());
             assertTrue(sink.dataOf(StreamEventTypeEnum.ERROR).contains(ProductionChatService.SESSION_BUSY));
-            verify(retrieval, never()).retrieve(anyString(), any(), any());
+            verify(retrieval, never()).retrieve(any(ProductionRetrieveQuery.class));
         }
 
         @Test
@@ -310,7 +334,7 @@ class ProductionChatServiceImplTest {
 
         @Test
         void lockShouldBeReleasedAfterFailedTurn() {
-            when(retrieval.retrieve(anyString(), any(), any())).thenReturn(hits());
+            when(retrieval.retrieve(any(ProductionRetrieveQuery.class))).thenReturn(hits());
             doThrow(new IllegalStateException("模型网关 502"))
                 .when(generator).stream(anyString(), any(), any(), any(), any());
             sessionService.streamAnswer(writer(new CollectingSink()), ALICE, "s-8", "什么是 RAG", null, null);
@@ -321,7 +345,7 @@ class ProductionChatServiceImplTest {
 
         @Test
         void clearShouldDropHistory() {
-            when(retrieval.retrieve(anyString(), any(), any())).thenReturn(hits());
+            when(retrieval.retrieve(any(ProductionRetrieveQuery.class))).thenReturn(hits());
             stubStream("答案");
             sessionService.streamAnswer(writer(new CollectingSink()), ALICE, "s-9", "什么是 RAG", null, null);
 
@@ -351,7 +375,7 @@ class ProductionChatServiceImplTest {
             true, "prod-corpus", 4, 400, 1, true, 60, 4,
             null,
             new ProductionProperties.Session(sessionEnabled, "memory", 20, 2000, Duration.ofMinutes(1), 3),
-            null, null, null, null
+            null, null, null, null, null
         );
     }
 

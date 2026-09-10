@@ -25,10 +25,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class ProductionSecurityConfiguration {
 
     /**
-     * @param jwtService 令牌
-     * @param secrets    信封是否可用
-     * @param metrics    鉴权失败计数
-     * @param http       构建器
+     * @param jwtService   令牌
+     * @param secrets      信封是否可用
+     * @param metrics      鉴权失败计数
+     * @param http         构建器
+     * @param metricsToken Prometheus 刮取 Bearer；空则仍要 JWT
      * @return 过滤器链
      * @throws Exception 配置失败
      */
@@ -37,9 +38,10 @@ public class ProductionSecurityConfiguration {
         JwtService jwtService,
         SecretResolver secrets,
         ProductionMetrics metrics,
-        HttpSecurity http
+        HttpSecurity http,
+        @org.springframework.beans.factory.annotation.Value("${PRODUCTION_METRICS_TOKEN:}") String metricsToken
     ) throws Exception {
-        JwtAuthFilter jwtFilter = new JwtAuthFilter(jwtService, secrets, metrics);
+        JwtAuthFilter jwtFilter = new JwtAuthFilter(jwtService, secrets, metrics, metricsToken);
         return http
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

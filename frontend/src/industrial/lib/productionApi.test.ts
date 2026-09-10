@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api'
 import { getAccessToken, setSession, UNAUTHORIZED_EVENT } from './auth'
-import { getAudit, getMe, postChat, postIngest } from './productionApi'
+import { getAudit, getMe, postChat, postIngest, chatStreamUrl } from './productionApi'
 
 describe('productionApi 鉴权头', () => {
   beforeEach(() => {
@@ -79,5 +79,10 @@ describe('productionApi 鉴权头', () => {
     const rows = await getAudit(10, fetchImpl as unknown as typeof fetch)
     expect(rows).toHaveLength(1)
     expect(rows[0].action).toBe('chat')
+  })
+
+  it('流式地址默认不带 queryExpansion，HyDE 才写入', () => {
+    expect(chatStreamUrl({ question: 'hi', topK: 4 })).not.toContain('queryExpansion')
+    expect(chatStreamUrl({ question: 'hi', queryExpansion: 'hyde' })).toContain('queryExpansion=hyde')
   })
 })

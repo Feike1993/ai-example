@@ -243,6 +243,10 @@ app:
     hybrid-enabled: ${PRODUCTION_HYBRID:true}
     rrf-k: ${PRODUCTION_RRF_K:60}
     keyword-top-k: ${PRODUCTION_KEYWORD_TOP_K:4}
+    # 默认 none：不额外打 LLM。rewrite / hyde 由请求覆盖，工业页可开关。
+    query-expansion:
+      default: ${PRODUCTION_QUERY_EXPANSION:none}
+      hyde-fuse-with-original: ${PRODUCTION_HYDE_FUSE:true}
     stream:
       # redis=跨实例可续传；memory=单进程，仅测试用
       event-log: ${PRODUCTION_EVENT_LOG:redis}
@@ -267,6 +271,8 @@ app:
       # Base64 的 32 字节 AES-256 KEK。生成：openssl rand -base64 32
       # 空则 /api/v1 503，教学样例不受影响
       kek: ${PRODUCTION_KEK:}
+      # 轮换窗口：旧密文仍用上一把解，重加密后可去掉
+      kek-previous: ${PRODUCTION_KEK_PREVIOUS:}
       # postgres=密文进 prod_secret；env=仅内存，单测用
       secret-store: ${PRODUCTION_SECRET_STORE:postgres}
       kek-id: ${PRODUCTION_KEK_ID:v1}

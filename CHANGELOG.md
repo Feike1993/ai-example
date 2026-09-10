@@ -215,3 +215,11 @@ Hybrid RAG、golden 评测、Redis 持久会话、逐步 tool SSE、流式 token
 - 响应头 `X-Instance-Id`；`POST /api/v1/sessions/{id}/lock-probe`、`GET /api/v1/sse-probe`（不打 LLM）
 - 对照脚本：`./scripts/industrial-ha.sh`；逐步验证见 [docs/industrial-ha.md](docs/industrial-ha.md)
 - 顺手：`productionApi.test.ts` 的 fetch mock 补上参数类型，避免 `tsc -b` 拦住前端镜像
+
+## [Unreleased] — 工业级第七阶段（ops）
+
+- 生产 RAG 可选 `queryExpansion=rewrite|hyde`（默认 none），假想文档不进 sources；复用 `core/rag/RagQueryExpander`
+- ADMIN ingest 改为 Redis Stream 任务（202 + `GET /api/v1/rag/ingest/jobs/{id}`）；教学 `/rag/ingest` 仍同步
+- 本地 KEK 轮换：`PRODUCTION_KEK_PREVIOUS` 解旧密文，`POST /api/v1/secrets/rotate` 重加密；不上云 KMS
+- Compose Prometheus `:9090` + Grafana `:3000`；刮取用 `PRODUCTION_METRICS_TOKEN`，不匿名放开 actuator
+- `./loadtest/run.sh` 写 `loadtest/results/latest-summary.json`；工业页可观测面板展示 p95

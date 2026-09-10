@@ -66,8 +66,8 @@
 | 主题 | 首次提出 | 现状 | 为何当时不做 | 若要做 |
 | --- | --- | --- | --- | --- |
 | 混合检索（向量 + BM25 + RRF） | 第二期 | 已覆盖 | 第四期 | 见 [09-hybrid-rag.md](samples/09-hybrid-rag.md) |
-| 查询改写 / HyDE | 第二期 | 已覆盖 | 第四期最小 rewrite；第六期完整 HyDE | 见 [14-hyde.md](samples/14-hyde.md) |
-| 异步索引管道（如 Redis Stream） | 第二期 | 候选 | 依赖 Redis | 业务项目 |
+| 查询改写 / HyDE | 第二期 | 已覆盖 | 第四期最小 rewrite；第六期完整 HyDE；工业级第七阶段生产链路默认可关 | 见 [14-hyde.md](samples/14-hyde.md)；`/api/v1` 请求字段 `queryExpansion` |
+| 异步索引管道（如 Redis Stream） | 第二期 | 已覆盖（工业级第七阶段） | 教学 ingest 仍同步 | 生产 `POST /api/v1/rag/ingest` 202 + Redis consumer group |
 | 语义分块 / 父子文档 | 第二期 | 已覆盖 | 第七期 7a/7b | 见 [15](samples/15-semantic-chunk.md)、[16](samples/16-parent-child.md) |
 
 ### 上下文 / 记忆进阶
@@ -96,10 +96,10 @@
 | SSE / 流式 token 累加、Agent 逐步 usage | v0.2.0 补丁 A2 后 | 已覆盖 | 第十期 | 见 [21-stream-token-usage.md](samples/21-stream-token-usage.md) |
 | Agent 逐步 tool_call 实时 SSE | v0.2.0 补丁 A4 后 | 已覆盖 | 第十期 | 见 [20-agent-tool-sse.md](samples/20-agent-tool-sse.md) |
 | 鉴权、限流、审计落库 | 全程 | 教学样例仍不做；工业级第三阶段已覆盖 | 样例路径保持匿名，避免挡住课程点击即跑 | JWT / Redis 限流 / `prod_audit_log` 见 `/api/v1` |
-| 信封加密存 LLM Key | 工业级 | 已覆盖（第三阶段） | 不用 HashiCorp Vault，密文进 Postgres，KEK 只在 `PRODUCTION_KEK` | 云 KMS / 自动轮换仍不做 |
-| Prometheus + OTel / Jaeger | 工业级 | 已覆盖（第三阶段） | 浏览器走 `/api/v1/ops/snapshot`，不直连 actuator | Grafana 容器不做 |
+| 信封加密存 LLM Key | 工业级 | 已覆盖（第三阶段 + 第七阶段本地轮换） | 不用 HashiCorp Vault，密文进 Postgres，KEK 只在 `PRODUCTION_KEK` | 云 KMS / 定时自动轮换仍不做 |
+| Prometheus + OTel / Jaeger | 工业级 | 已覆盖（第三阶段 + 第七阶段 Grafana） | 浏览器走 `/api/v1/ops/snapshot`，不直连 actuator | 云托管 Grafana 仍不做 |
 | Playwright E2E | 工业级第三阶段后 | 已覆盖（第四阶段） | 默认套件不打 Chat LLM；空检索仍要 Embedding，故 `@keys` 本机选跑 | 与教学第四期 Hybrid RAG 不是同一件事 |
-| 压测（k6 / JMeter） | 工业级 | 已覆盖（第五阶段） | 本机 k6 打 `/api/v1`；默认不打 LLM；不进 CI | 见 [loadtest/README.md](../loadtest/README.md)；JMeter / 云压测仍不做 |
+| 压测（k6 / JMeter） | 工业级 | 已覆盖（第五阶段 + 第七阶段摘要可见） | 本机 k6 打 `/api/v1`；默认不打 LLM；不进 CI | 见 [loadtest/README.md](../loadtest/README.md)；JMeter / 云压测仍不做 |
 | 多实例 Java（会话锁 / SSE 续传） | 工业级 | 已覆盖（第六阶段） | Redis 锁与事件回放本就为跨进程；Compose 现为双副本 | 见 [industrial-ha.md](industrial-ha.md)；`./scripts/industrial-ha.sh` |
 | 有副作用的真实外部工具 | 第一期 | 明确不做（本仓） | 演示工具保持幂等、可离线 | 业务项目 |
 | 仓库根目录 `package.json` / `pnpm start` | 前端引入后 | 已覆盖（仅脚本转发） | 根 `package.json` 无依赖、无 `start`，只转发 `test:e2e`，避免 pnpm 11 在 git 根误跑 install | 不要把 Vite 工程升到仓库根 |

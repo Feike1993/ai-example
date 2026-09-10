@@ -6,7 +6,7 @@ import { ResultBody } from '../../components/ResultBody'
 import { Workbench } from '../../components/Workbench'
 import { authHeaders, notifyUnauthorized, rememberTraceId } from '../lib/auth'
 import { mergeAgentSteps } from '../lib/agentSteps'
-import { agentStreamUrl, chatStreamUrl, clearSession, getSession, postIngest, resumeUrl } from '../lib/productionApi'
+import { agentStreamUrl, chatStreamUrl, clearSession, getIngestJob, getSession, postIngest, resumeUrl } from '../lib/productionApi'
 import { toTurns, type Turn } from '../lib/sessionTurns'
 import {
   StreamAbortedError,
@@ -43,12 +43,13 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
   const [question, setQuestion] = useState('这个项目的 RAG 是怎么做的？')
   const [mode, setMode] = useState<'chat' | 'agent'>('chat')
   const [topK, setTopK] = useState<number | string>(4)
+  const [queryExpansion, setQueryExpansion] = useState<'none' | 'rewrite' | 'hyde'>('none')
   const [sessionId, setSessionId] = useState<string | null>(
     () => localStorage.getItem(SESSION_STORAGE_KEY),
   )
   const [turns, setTurns] = useState<Turn[]>([])
   const [pending, setPending] = useState<Turn | null>(null)
-  const [meta, setMeta] = useState<{ runId: string; retrievalMode?: string } | null>(null)
+  const [meta, setMeta] = useState<{ runId: string; retrievalMode?: string; queryExpansion?: string } | null>(null)
   const [malformed, setMalformed] = useState(0)
   const [status, setStatus] = useState<'idle' | 'streaming' | 'done' | 'cancelled' | 'aborted'>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -112,7 +113,13 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
     try {
       const url = mode === 'agent'
         ? agentStreamUrl({ question: asked, sessionId, provider })
-        : chatStreamUrl({ question: asked, sessionId, provider, topK: Number(topK) || undefined })
+        : chatStreamUrl({
+            question: asked,
+            sessionId,
+            provider,
+            topK: Number(topK) || undefined,
+            queryExpansion,
+          })
       const result = await streamRun(
         url,
         {
@@ -133,7 +140,13 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
             onSources: (payload: SourcesPayload) => {
               update({ sources: payload.sources ?? [] })
               setMeta((prev) =>
-                prev ? { ...prev, retrievalMode: payload.retrievalMode } : prev,
+                prev
+                  ? {
+                      ...prev,
+                      retrievalMode: payload.retrievalMode,
+                      queryExpansion: payload.queryExpansion,
+                    }
+                  : prev,
               )
             },
             onDelta: (text) => update({ answer: current.answer + text }),
@@ -232,12 +245,24 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
     setError(null)
     setErrorCode(null)
     try {
-      const result = await postIngest()
-      setError(null)
-      setErrorCode(null)
+      let job = await postIngest()
+      const started = Date.now()
+      while (job.status === 'queued' || job.status === 'running') {
+        if (Date.now() - started > 120_000) {
+          throw new Error('入库超时，请到可观测面板查看任务状态')
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500))
+        job = await getIngestJob(job.jobId)
+      }
+      if (job.status === 'failed') {
+        setError(job.errorMessage || '入库失败')
+        setErrorCode('ingest_failed')
+        setStatus('aborted')
+        return
+      }
       setPending({
         question: '重建语料',
-        answer: `已重建语料 ${result.corpus}：${result.chunkCount} 块，来自 ${result.sources.length} 个文件。`,
+        answer: `已重建语料 ${job.corpus}：${job.chunkCount ?? 0} 块，来自 ${(job.sources ?? []).length} 个文件。`,
         sources: [],
         usage: null,
       })
@@ -260,7 +285,7 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
       hint={
         mode === 'agent'
           ? 'Agent 模式会多发 step 事件。被角色策略拒绝的工具带 denied:true，不会静默吞掉。'
-          : '严格 SSE 契约：meta → sources → delta → usage → done。只有收到 done 才算成功，且该轮才会写入会话历史。'
+          : '严格 SSE 契约：meta → sources → delta → usage → done。查询扩展默认关闭，打开 rewrite / HyDE 会多打一趟 Chat。'
       }
       streaming={streaming}
       form={
@@ -282,7 +307,18 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
             onChange={(event) => setQuestion(event.currentTarget.value)}
           />
           {mode === 'chat' ? (
-            <NumberInput label="topK" min={1} max={20} value={topK} onChange={setTopK} />
+            <>
+              <NumberInput label="topK" min={1} max={20} value={topK} onChange={setTopK} />
+              <SegmentedControl
+                value={queryExpansion}
+                onChange={(value) => setQueryExpansion(value as 'none' | 'rewrite' | 'hyde')}
+                data={[
+                  { value: 'none', label: '无扩展' },
+                  { value: 'rewrite', label: '改写' },
+                  { value: 'hyde', label: 'HyDE' },
+                ]}
+              />
+            </>
           ) : null}
           <Group gap="sm">
             <Button data-testid="stream-submit" onClick={onStream} loading={streaming} disabled={!question.trim()}>
@@ -320,6 +356,11 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
               <Group gap="xs">
                 <StatusBadge status={status} />
                 {meta?.retrievalMode ? <Badge variant="light">{meta.retrievalMode}</Badge> : null}
+                {meta?.queryExpansion && meta.queryExpansion !== 'none' ? (
+                  <Badge variant="light" color="violet">
+                    {meta.queryExpansion}
+                  </Badge>
+                ) : null}
                 {malformed > 0 ? (
                   <Badge color="orange" variant="light">
                     {malformed} 条事件无法解析

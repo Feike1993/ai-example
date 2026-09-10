@@ -85,7 +85,7 @@ class ProductionJwtMvcTest {
         ProductionAuthController auth = new ProductionAuthController(
             users, jwtService, bucket, properties, audit, metrics);
         ProductionChatController chat = new ProductionChatController(
-            chatService, ingestService, runExecutor,
+            chatService, ingestService, null, runExecutor,
             null, bucket, null, audit, metrics, JsonMapper.builder().build(), null,
             new ProductionInstanceIdentity("test")
         );
@@ -143,7 +143,7 @@ class ProductionJwtMvcTest {
             new ProductionIngestService.IngestResult("c", 1, List.of("a.md")));
         String token = login("admin");
         mockMvc.perform(post("/api/v1/rag/ingest").header("Authorization", "Bearer " + token))
-            .andExpect(status().isOk())
+            .andExpect(status().isAccepted())
             .andExpect(jsonPath("$.chunkCount").value(1));
     }
 
@@ -212,7 +212,7 @@ class ProductionJwtMvcTest {
             .text("RAG")
             .metadata(Map.of("source", "03-rag.md"))
             .build();
-        when(retrieval.retrieve(anyString(), any(), any())).thenReturn(
+        when(retrieval.retrieve(any(com.feike.ai.production.rag.retrieve.model.ProductionRetrieveQuery.class))).thenReturn(
             new ProductionRetrievalService.RetrievalResult(
                 List.of(doc),
                 List.of(new ProductionSource("doc-1", "03-rag.md", "RAG", null)),
@@ -231,7 +231,7 @@ class ProductionJwtMvcTest {
             true, "prod-corpus", 4, 400, 1, true, 60, 4,
             new ProductionProperties.Stream("memory", Duration.ofMinutes(1), Duration.ofSeconds(30), Duration.ofSeconds(10)),
             new ProductionProperties.Session(true, "memory", 20, 2000, Duration.ofMinutes(1), 3),
-            null, null, null, null
+            null, null, null, null, null
         );
     }
 }

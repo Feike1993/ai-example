@@ -55,6 +55,15 @@ public interface SecretResolver {
     boolean contains(String name);
 
     /**
+     * 用当前 KEK / kek-id 重加密全部行。env 实现返回 0。
+     *
+     * @return 重写行数
+     */
+    default int reencryptAll() {
+        return 0;
+    }
+
+    /**
      * 必有项，否则 503。
      *
      * @param name 逻辑名

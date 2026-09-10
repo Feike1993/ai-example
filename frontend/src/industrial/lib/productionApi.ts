@@ -19,13 +19,20 @@ export type ProductionChatAnswer = {
   retrievalMode: string
   historyMessages: number
   persisted: boolean
+  queryExpansion?: string
 }
 
-export type ProductionIngestResult = {
+export type ProductionIngestJob = {
+  jobId: string
+  status: string
   corpus: string
-  chunkCount: number
-  sources: string[]
+  chunkCount?: number | null
+  sources?: string[]
+  errorMessage?: string | null
+  instanceId?: string | null
 }
+
+export type ProductionIngestResult = ProductionIngestJob
 
 export type TokenResponse = {
   token: string
@@ -57,9 +64,16 @@ export type OpsSnapshot = {
   toolDenied: number
   rateLimited: number
   authFail: number
+  ingestSubmitted?: number
+  ingestSucceeded?: number
+  ingestFailed?: number
   chatDurationCount: number
   meters: number
   traceId: string | null
+  ingestJobId?: string | null
+  ingestStatus?: string | null
+  ingestChunkCount?: number | null
+  ingestError?: string | null
 }
 
 /** 一条已落库的会话消息，与后端 SessionMessage 对齐。 */
@@ -125,6 +139,32 @@ export async function getOpsSnapshot(fetchImpl: typeof fetch = fetch): Promise<O
 }
 
 /**
+ * 最近一次本机 k6 摘要。
+ *
+ * @param fetchImpl 便于测试注入
+ */
+export async function getLoadtestSummary(
+  fetchImpl: typeof fetch = fetch,
+): Promise<Record<string, unknown>> {
+  return requestJson<Record<string, unknown>>(`${PRODUCTION_BASE}/ops/loadtest`, { method: 'GET' }, fetchImpl)
+}
+
+/**
+ * 用当前 KEK 重加密 prod_secret。仅 ADMIN。
+ *
+ * @param fetchImpl 便于测试注入
+ */
+export async function postSecretRotate(
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ rewritten: number; kekId: string }> {
+  return requestJson<{ rewritten: number; kekId: string }>(
+    `${PRODUCTION_BASE}/secrets/rotate`,
+    { method: 'POST' },
+    fetchImpl,
+  )
+}
+
+/**
  * 同步问答。
  *
  * @param body      问题与可选 sessionId / provider / topK
@@ -133,7 +173,13 @@ export async function getOpsSnapshot(fetchImpl: typeof fetch = fetch): Promise<O
  * @throws ApiError HTTP 失败或后端不可达；会话被占用时为 409
  */
 export async function postChat(
-  body: { question: string; sessionId?: string; provider?: string; topK?: number },
+  body: {
+    question: string
+    sessionId?: string
+    provider?: string
+    topK?: number
+    queryExpansion?: string
+  },
   fetchImpl: typeof fetch = fetch,
 ): Promise<ProductionChatAnswer> {
   return requestJson<ProductionChatAnswer>(`${PRODUCTION_BASE}/chat`, {
@@ -182,14 +228,31 @@ export async function clearSession(
 }
 
 /**
- * 重建生产语料索引。
+ * 投递重建生产语料索引（202 任务）。
  *
  * @param fetchImpl 便于测试注入
- * @returns 入库结果
+ * @returns 入库任务
  * @throws ApiError HTTP 失败或后端不可达
  */
-export async function postIngest(fetchImpl: typeof fetch = fetch): Promise<ProductionIngestResult> {
-  return requestJson<ProductionIngestResult>(`${PRODUCTION_BASE}/rag/ingest`, { method: 'POST' }, fetchImpl)
+export async function postIngest(fetchImpl: typeof fetch = fetch): Promise<ProductionIngestJob> {
+  return requestJson<ProductionIngestJob>(`${PRODUCTION_BASE}/rag/ingest`, { method: 'POST' }, fetchImpl)
+}
+
+/**
+ * 查询入库任务。
+ *
+ * @param jobId     任务 id
+ * @param fetchImpl 便于测试注入
+ */
+export async function getIngestJob(
+  jobId: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<ProductionIngestJob> {
+  return requestJson<ProductionIngestJob>(
+    `${PRODUCTION_BASE}/rag/ingest/jobs/${encodeURIComponent(jobId)}`,
+    { method: 'GET' },
+    fetchImpl,
+  )
 }
 
 /**
@@ -203,6 +266,7 @@ export function chatStreamUrl(params: {
   sessionId?: string | null
   provider?: string
   topK?: number
+  queryExpansion?: string
 }): string {
   const query = new URLSearchParams({ question: params.question })
   if (params.sessionId) {
@@ -213,6 +277,9 @@ export function chatStreamUrl(params: {
   }
   if (params.topK) {
     query.set('topK', String(params.topK))
+  }
+  if (params.queryExpansion && params.queryExpansion !== 'none') {
+    query.set('queryExpansion', params.queryExpansion)
   }
   return `${PRODUCTION_BASE}/chat/stream?${query.toString()}`
 }

@@ -12,6 +12,8 @@ import com.feike.ai.production.auth.controller.JwtAuthFilter;
 import com.feike.ai.production.auth.model.ProductionPrincipal;
 import com.feike.ai.production.config.ProductionInstanceIdentity;
 import com.feike.ai.production.observability.service.ProductionMetrics;
+import com.feike.ai.production.rag.ingest.model.IngestJobVO;
+import com.feike.ai.production.rag.ingest.service.ProductionIngestJobService;
 import com.feike.ai.production.rag.ingest.service.ProductionIngestService;
 import com.feike.ai.production.ratelimit.manager.IdempotencyManager;
 import com.feike.ai.production.ratelimit.service.RateLimitExceededException;
@@ -31,6 +33,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -62,6 +65,7 @@ public class ProductionChatController {
 
     private final ProductionChatService chatService;
     private final ProductionIngestService ingestService;
+    private final ProductionIngestJobService ingestJobService;
     private final SseRunExecutor runExecutor;
     private final ProductionAgentService agentService;
     private final RedisTokenBucket bucket;
@@ -84,20 +88,21 @@ public class ProductionChatController {
         ProductionIngestService ingestService,
         SseRunExecutor runExecutor
     ) {
-        this(chatService, ingestService, runExecutor, null, null, null, null, null, null, null,
+        this(chatService, ingestService, null, runExecutor, null, null, null, null, null, null, null,
             new ProductionInstanceIdentity("test"));
     }
 
     /**
-     * @param chatService   问答
-     * @param ingestService 入库
-     * @param runExecutor   SSE
-     * @param agentService  Agent
-     * @param bucket        限流
-     * @param idempotency   幂等
-     * @param audit         审计
-     * @param metrics       指标
-     * @param jsonMapper    幂等哈希
+     * @param chatService       问答
+     * @param ingestService     同步入库（Agent rebuild_index）
+     * @param ingestJobService  异步入库；测试可空
+     * @param runExecutor       SSE
+     * @param agentService      Agent
+     * @param bucket            限流
+     * @param idempotency       幂等
+     * @param audit             审计
+     * @param metrics           指标
+     * @param jsonMapper        幂等哈希
      * @param tracer            可选 Trace
      * @param instanceIdentity  本进程短名
      */
@@ -105,6 +110,7 @@ public class ProductionChatController {
     public ProductionChatController(
         ProductionChatService chatService,
         ProductionIngestService ingestService,
+        ProductionIngestJobService ingestJobService,
         SseRunExecutor runExecutor,
         ProductionAgentService agentService,
         RedisTokenBucket bucket,
@@ -117,6 +123,7 @@ public class ProductionChatController {
     ) {
         this.chatService = chatService;
         this.ingestService = ingestService;
+        this.ingestJobService = ingestJobService;
         this.runExecutor = runExecutor;
         this.agentService = agentService;
         this.bucket = bucket;
@@ -131,20 +138,50 @@ public class ProductionChatController {
     }
 
     /**
-     * 幂等重建生产语料索引。仅 ADMIN。
+     * 投递幂等重建生产语料索引。仅 ADMIN。立即 202，建索引在后台（Redis Stream / 本进程队列）。
      *
      * @param http HTTP
-     * @return 入库结果
+     * @return 入库任务
      */
     @PostMapping("/rag/ingest")
-    public ProductionIngestService.IngestResult ingest(HttpServletRequest http) {
+    public ResponseEntity<IngestJobVO> ingest(HttpServletRequest http) {
         ProductionPrincipal principal = principal(http);
         if (!principal.admin()) {
             throw new BusinessException(ErrorCodeEnum.INGEST_FORBIDDEN);
         }
-        ProductionIngestService.IngestResult result = ingestService.ingest();
-        audit(principal, "rag.ingest", http, 200, null, null);
-        return result;
+        IngestJobVO job;
+        if (ingestJobService != null) {
+            job = ingestJobService.submit();
+        } else {
+            ProductionIngestService.IngestResult result = ingestService.ingest();
+            job = new IngestJobVO(
+                "sync",
+                "succeeded",
+                result.corpus(),
+                result.chunkCount(),
+                result.sources(),
+                null,
+                instanceIdentity.id()
+            );
+        }
+        audit(principal, "rag.ingest", http, 202, job.jobId(), null);
+        return ResponseEntity.accepted().body(job);
+    }
+
+    /**
+     * 查询入库任务。
+     *
+     * @param jobId 任务 id
+     * @param http  身份
+     * @return 任务视图
+     */
+    @GetMapping("/rag/ingest/jobs/{jobId}")
+    public IngestJobVO ingestJob(@PathVariable String jobId, HttpServletRequest http) {
+        principal(http);
+        if (ingestJobService == null) {
+            throw new BusinessException(ErrorCodeEnum.INGEST_JOB_NOT_FOUND);
+        }
+        return ingestJobService.get(jobId);
     }
 
     /**
@@ -178,7 +215,8 @@ public class ProductionChatController {
             metrics.chatRun();
         }
         ProductionChatService.ChatAnswer answer = chatService.answer(
-            principal, request.sessionId(), request.question(), request.provider(), request.topK());
+            principal, request.sessionId(), request.question(), request.provider(), request.topK(),
+            request.queryExpansion());
         if (metrics != null) {
             metrics.recordDuration(System.nanoTime() - start);
             if (answer.retrievalEmpty()) {
@@ -193,12 +231,13 @@ public class ProductionChatController {
     /**
      * 流式问答。
      *
-     * @param question  问题
-     * @param sessionId 会话
-     * @param provider  模型
-     * @param topK      topK
-     * @param http      身份
-     * @param response  限流头
+     * @param question        问题
+     * @param sessionId       会话
+     * @param provider        模型
+     * @param topK            topK
+     * @param queryExpansion  none / rewrite / hyde
+     * @param http            身份
+     * @param response        限流头
      * @return SSE
      */
     @GetMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -207,6 +246,7 @@ public class ProductionChatController {
         @RequestParam(required = false) String sessionId,
         @RequestParam(required = false) String provider,
         @RequestParam(required = false) Integer topK,
+        @RequestParam(required = false) String queryExpansion,
         HttpServletRequest http,
         HttpServletResponse response
     ) {
@@ -218,7 +258,7 @@ public class ProductionChatController {
         audit(principal, "chat.stream", http, 200, null, question);
         ProductionPrincipal frozen = principal;
         return runExecutor.start(writer ->
-            chatService.streamAnswer(writer, frozen, sessionId, question, provider, topK));
+            chatService.streamAnswer(writer, frozen, sessionId, question, provider, topK, queryExpansion));
     }
 
     /**

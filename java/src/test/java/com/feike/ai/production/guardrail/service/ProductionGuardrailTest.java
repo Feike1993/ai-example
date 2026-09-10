@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class ProductionGuardrailTest {
 
     private final ProductionGuardrail guardrail = new ProductionGuardrail(
-        new ProductionProperties(true, "c", 4, 400, 1, true, 60, 4, null, null, null, null, null, null)
+        new ProductionProperties(true, "c", 4, 400, 1, true, 60, 4, null, null, null, null, null, null, null)
     );
 
     @Test

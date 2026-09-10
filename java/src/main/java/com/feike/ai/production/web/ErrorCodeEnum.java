@@ -30,6 +30,8 @@ public enum ErrorCodeEnum {
     RUN_GONE("run_gone", HttpStatus.GONE, "run 不存在或已超出事件保留窗口，请重新发起请求"),
     AGENT_NOT_ASSEMBLED("agent_not_assembled", HttpStatus.NOT_IMPLEMENTED, "Agent 未装配"),
     INGEST_FAILED("ingest_failed", HttpStatus.INTERNAL_SERVER_ERROR, "读取语料失败"),
+    INGEST_JOB_NOT_FOUND("ingest_job_not_found", HttpStatus.NOT_FOUND, "入库任务不存在或已过期"),
+    LOADTEST_SUMMARY_MISSING("loadtest_summary_missing", HttpStatus.NOT_FOUND, "本机还没有压测摘要，请先跑 ./loadtest/run.sh smoke"),
     EVENT_LOG_UNAVAILABLE("event_log_unavailable", HttpStatus.SERVICE_UNAVAILABLE,
         "事件日志暂不可用（Redis 连接异常），工业级流式接口无法保证断线续传"),
     INTERNAL_ERROR("internal_error", HttpStatus.INTERNAL_SERVER_ERROR, "系统繁忙，请稍后重试");

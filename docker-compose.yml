@@ -10,6 +10,9 @@ x-java-environment: &java-environment
   REDIS_PASSWORD: ${REDIS_PASSWORD:-}
   PRODUCTION_ENABLED: ${PRODUCTION_ENABLED:-true}
   PRODUCTION_KEK: ${PRODUCTION_KEK:-}
+  PRODUCTION_KEK_PREVIOUS: ${PRODUCTION_KEK_PREVIOUS:-}
+  PRODUCTION_KEK_ID: ${PRODUCTION_KEK_ID:-v1}
+  PRODUCTION_METRICS_TOKEN: ${PRODUCTION_METRICS_TOKEN:-dev-metrics-token}
   PRODUCTION_RATE_CAPACITY: ${PRODUCTION_RATE_CAPACITY:-30}
   PRODUCTION_RATE_WINDOW: ${PRODUCTION_RATE_WINDOW:-60s}
   PRODUCTION_LOGIN_CAPACITY: ${PRODUCTION_LOGIN_CAPACITY:-10}
@@ -175,6 +178,38 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
+    restart: unless-stopped
+
+  # 本机看板：Prometheus 用 scrape token 打两台 Java 的 actuator，浏览器不直连。
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    depends_on:
+      java-a:
+        condition: service_healthy
+      java-b:
+        condition: service_healthy
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.6.0
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
     restart: unless-stopped
 
 volumes:

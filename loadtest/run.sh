@@ -20,12 +20,16 @@ run_k6() {
     usage
   fi
   echo "=== k6 ${name} ==="
+  mkdir -p "${SCRIPT_DIR}/results"
+  local summary="${SCRIPT_DIR}/results/latest-summary.json"
   if command -v k6 >/dev/null 2>&1; then
     env BASE_URL="${BASE_URL:-http://127.0.0.1:8080/ai-example}" \
-      k6 run -e BASE_URL="${BASE_URL:-http://127.0.0.1:8080/ai-example}" \
+      k6 run --summary-export="${summary}" \
+        -e BASE_URL="${BASE_URL:-http://127.0.0.1:8080/ai-example}" \
         -e USERNAME="${USERNAME:-alice}" \
         -e PASSWORD="${PASSWORD:-demo}" \
         "$file"
+    echo "摘要已写入 ${summary}"
     return
   fi
   if ! command -v docker >/dev/null 2>&1; then
@@ -47,7 +51,9 @@ run_k6() {
     -e USERNAME="${USERNAME:-alice}" \
     -e PASSWORD="${PASSWORD:-demo}" \
     -v "${K6_DIR}:/scripts:ro" \
-    "${K6_IMAGE}" run "/scripts/${name}.js"
+    -v "${SCRIPT_DIR}/results:/results" \
+    "${K6_IMAGE}" run --summary-export=/results/latest-summary.json "/scripts/${name}.js"
+  echo "摘要已写入 ${SCRIPT_DIR}/results/latest-summary.json"
 }
 
 case "$SCENARIO" in

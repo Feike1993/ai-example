@@ -22,14 +22,15 @@ import java.util.List;
  * @param chunkSize     分块目标长度（字符近似）
  * @param minSources    命中数低于此值视为空检索，直接拒答不调 LLM
  * @param hybridEnabled 是否启用向量 + 全文 + RRF 混合检索
- * @param rrfK          RRF 常数 k
- * @param keywordTopK   关键词路 topK
- * @param stream        SSE 流控参数
- * @param session       多轮会话参数
- * @param security      JWT / 信封加密
- * @param rateLimit     限流与幂等
- * @param agent         Agent 步数
- * @param users         演示账号
+ * @param rrfK           RRF 常数 k
+ * @param keywordTopK    关键词路 topK
+ * @param stream         SSE 流控参数
+ * @param session        多轮会话参数
+ * @param security       JWT / 信封加密
+ * @param rateLimit      限流与幂等
+ * @param agent          Agent 步数
+ * @param users          演示账号
+ * @param queryExpansion 查询扩展；默认 none，避免检索层额外打 LLM
  */
 @ConfigurationProperties(prefix = "app.production")
 public record ProductionProperties(
@@ -46,7 +47,8 @@ public record ProductionProperties(
     Security security,
     RateLimit rateLimit,
     Agent agent,
-    List<DemoUser> users
+    List<DemoUser> users,
+    QueryExpansion queryExpansion
 ) {
 
     public ProductionProperties {
@@ -75,7 +77,7 @@ public record ProductionProperties(
             session = new Session(false, null, 0, 0, null, 0);
         }
         if (security == null) {
-            security = new Security(null, null, null, null, null);
+            security = new Security(null, null, null, null, null, null);
         }
         if (rateLimit == null) {
             rateLimit = new RateLimit(0, null, 0, null);
@@ -89,6 +91,39 @@ public record ProductionProperties(
                 new DemoUser("bob", "demo", "tenant-b", List.of("USER")),
                 new DemoUser("admin", "demo", "tenant-a", List.of("ADMIN", "USER"))
             );
+        }
+        if (queryExpansion == null) {
+            queryExpansion = new QueryExpansion(null, null);
+        }
+    }
+
+    /**
+     * 查询扩展。默认 none：检索层不额外打 LLM，避免首字延迟和费用翻倍。
+     * 打开 rewrite / hyde 是可灰度策略，请求字段可覆盖配置。
+     *
+     * @param defaultMode          none / rewrite / hyde
+     * @param hydeFuseWithOriginal HyDE 向量路是否与原问题向量路 RRF 融合；缺省 true
+     */
+    public record QueryExpansion(String defaultMode, Boolean hydeFuseWithOriginal) {
+        public QueryExpansion {
+            if (defaultMode == null || defaultMode.isBlank()) {
+                defaultMode = "none";
+            } else {
+                defaultMode = defaultMode.trim().toLowerCase().replace('-', '_');
+                if (!"none".equals(defaultMode) && !"rewrite".equals(defaultMode) && !"hyde".equals(defaultMode)) {
+                    defaultMode = "none";
+                }
+            }
+            if (hydeFuseWithOriginal == null) {
+                hydeFuseWithOriginal = Boolean.TRUE;
+            }
+        }
+
+        /**
+         * @return 是否把 HyDE 命中与原问题向量路融合
+         */
+        public boolean fuseHydeWithOriginal() {
+            return Boolean.TRUE.equals(hydeFuseWithOriginal);
         }
     }
 
@@ -176,18 +211,20 @@ public record ProductionProperties(
     /**
      * JWT 与信封加密。
      *
-     * @param kek         Base64 的 32 字节 AES KEK；空则工业级接口 503
-     * @param secretStore {@code postgres}（默认）或 {@code env}
-     * @param kekId       写入密文行的版本号，本阶段只支持一个
-     * @param jwtTtl      访问令牌有效期
-     * @param denyWords   Prompt Injection 输入/输出词表
+     * @param kek          Base64 的 32 字节 AES KEK；空则工业级接口 503
+     * @param secretStore  {@code postgres}（默认）或 {@code env}
+     * @param kekId        写入密文行的版本号
+     * @param jwtTtl       访问令牌有效期
+     * @param denyWords    Prompt Injection 输入/输出词表
+     * @param kekPrevious  轮换窗口内的上一把 KEK；空则只认当前钥匙
      */
     public record Security(
         String kek,
         String secretStore,
         String kekId,
         Duration jwtTtl,
-        List<String> denyWords
+        List<String> denyWords,
+        String kekPrevious
     ) {
         public Security {
             if (secretStore == null || secretStore.isBlank()) {
@@ -206,6 +243,9 @@ public record ProductionProperties(
             }
             if (denyWords == null || denyWords.isEmpty()) {
                 denyWords = List.of("违禁演示词", "BLOCKED_DEMO");
+            }
+            if (kekPrevious != null && kekPrevious.isBlank()) {
+                kekPrevious = null;
             }
         }
     }

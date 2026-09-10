@@ -66,12 +66,7 @@ curl -s http://127.0.0.1:8080/ai-example/api/v1/ops/snapshot \
 只测廉价读（`smoke`），数字只对你这台机器有意义，不要当云上 SLA。
 
 1. Java / Redis / Postgres 已热身。
-2. `./loadtest/run.sh smoke`，记下摘要里的 `http_reqs`、`http_req_duration` p95。
+2. `./loadtest/run.sh smoke`，脚本会把 k6 `--summary-export` 写到 `loadtest/results/latest-summary.json`（gitignore）。工业页可观测面板会读 `GET /api/v1/ops/loadtest`。
 3. 需要更高到达率时改 `smoke.js` 的 `vus` / `duration`，或临时 `PRODUCTION_RATE_CAPACITY=1000` 后**重启 Java**（这只影响 chat/agent，不影响 smoke）。
-4. 把 k6 输出存到 `loadtest/results/`（该目录 json 已 gitignore）。例如：
-
-```bash
-k6 run --out json=loadtest/results/smoke-$(date +%Y%m%d).json loadtest/k6/smoke.js
-```
 
 默认 **30/min** 是 chat 限流教学数字，不是「本机能打多少次 LLM」。真实 Chat 吞吐本阶段不做。

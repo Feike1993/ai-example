@@ -281,14 +281,16 @@ RUN_REDIS_IT=true REDIS_IT_HOST=localhost REDIS_IT_PORT=6379 \
 
 后端包 `com.feike.ai.production`，HTTP 前缀 `/ai-example/api/v1/**`，与教学样例路径不重叠。前端独立入口 [industrial.html](frontend/industrial.html)（样例场侧栏也有跳转）。
 
-这是**工业级链路**（第四阶段 Playwright E2E、第五阶段本机 k6、第六阶段双 Java 多实例），与课程**第四期 Hybrid RAG + Eval**（[docs/phase4.md](docs/phase4.md)）不是同一件事。
+这是**工业级链路**（第四阶段 Playwright E2E、第五阶段本机 k6、第六阶段双 Java、第七阶段查询扩展 / 异步入库 / 本地 KEK 轮换 / Grafana / 压测摘要），与课程**第四期 Hybrid RAG + Eval**（[docs/phase4.md](docs/phase4.md)）不是同一件事。
 
 - 配置前缀 `app.production.*`（环境变量 `PRODUCTION_*` / `REDIS_*`）
-- RAG 拆成 ingest / retrieve / generate，不含教学用的 compare 分支
+- RAG 拆成 ingest / retrieve / generate，不含教学用的 compare 分支；查询扩展默认 `none`，请求可开 `rewrite` / `hyde`（复用 `core/rag`）
+- `POST /api/v1/rag/ingest` 仅 ADMIN，**202** 任务；进度 `GET /api/v1/rag/ingest/jobs/{jobId}` 与 ops snapshot
 - SSE 契约：`meta → sources → delta* → step* → usage → done|error`，带 `runId` / `seq`；断线用 `GET /api/v1/runs/{runId}/stream` + `Last-Event-ID` 续传
 - **第四阶段 E2E**：`cd frontend && pnpm test:e2e`。默认套件覆盖登录、安全/可观测面板、401、alice ingest 403、输入护栏（不打 Chat LLM）。空检索会先走 Embedding，因此 `pnpm test:e2e:keys` 仅在已配 `PROVIDER_DASHSCOPE_API_KEY` 时跑。可选 `PLAYWRIGHT_BASE_URL=http://localhost:8088` 打 Compose 前端；不要用 `vite preview`（无 API 代理）。
 - **第五阶段压测**：`./loadtest/run.sh all`（Java 需在 8080 且已设 `PRODUCTION_KEK`）。本机 k6 打 `/api/v1`：廉价读、护栏 422、令牌桶 429、登录限流。默认不打 Chat LLM / Embedding，不进 CI。说明见 [loadtest/README.md](loadtest/README.md)。
 - **第六阶段多实例**：Compose 起 `java-a` + `java-b`，Nginx `:8088` 负载均衡。验证步骤（起栈、脚本、手工 curl、端口冲突）见 [docs/industrial-ha.md](docs/industrial-ha.md)；一键对照 `./scripts/industrial-ha.sh`。
+- **第七阶段**：生产 RAG 可选 rewrite/HyDE；ADMIN ingest 走 Redis Stream；`POST /api/v1/secrets/rotate` 本地重加密；Compose Prometheus `:9090` + Grafana `:3000`（scrape token，不匿名）；`./loadtest/run.sh` 写 `loadtest/results/latest-summary.json`，可观测面板展示。
 
 ### 鉴权 / 信封加密 / 指标
 
@@ -304,13 +306,13 @@ RUN_REDIS_IT=true REDIS_IT_HOST=localhost REDIS_IT_PORT=6379 \
 | admin | tenant-a | ADMIN + USER |
 
 
-跨租户访问会话返回 **404**（不暴露存在性）。`POST /api/v1/rag/ingest` 仅 ADMIN。限流超限 **429** + `Retry-After`；同一会话并发是 **409** `session_busy`，两件事不要混。
+跨租户访问会话返回 **404**（不暴露存在性）。`POST /api/v1/rag/ingest` 仅 ADMIN，返回 **202** 任务。限流超限 **429** + `Retry-After`；同一会话并发是 **409** `session_busy`，两件事不要混。
 
 失败时保持真实 HTTP 状态（401/403/429 等），JSON 为 `{ "code", "message" }`：`code` 是稳定机器码（与 SSE `error` 事件对齐），`message` 是给用户看的简体中文。未知异常只回 `internal_error` / 「系统繁忙，请稍后重试」，不回堆栈。成功体仍是现有 DTO，不套一层 `data`。教学样例路径（`/rag`、`/chat` 等）的错误形态不变。
 
-**信封加密，不用 Vault。** LLM Key 与 JWT HMAC 用 AES-256-GCM 写入 Postgres 表 `prod_secret`。能解开密文的主密钥 KEK 只来自环境变量 `PRODUCTION_KEK`（`openssl rand -base64 32`），**永不入库**。这保护的是库备份和 `SELECT *`，不保护已经拿到 KEK 的进程。KEK 与密文必须分开放；缺 KEK 时应用照常启动，`/api/v1` 返回 503。
+**信封加密，不用 Vault。** LLM Key 与 JWT HMAC 用 AES-256-GCM 写入 Postgres 表 `prod_secret`。能解开密文的主密钥 KEK 只来自环境变量 `PRODUCTION_KEK`（`openssl rand -base64 32`），**永不入库**。轮换窗口内可同时设 `PRODUCTION_KEK_PREVIOUS`，ADMIN `POST /api/v1/secrets/rotate` 用当前 KEK 重加密；云 KMS 仍不做。缺 KEK 时应用照常启动，`/api/v1` 返回 503。
 
-**可观测。** 业务指标见 `GET /api/v1/ops/snapshot`（需登录）。Prometheus 刮取 `/ai-example/actuator/prometheus` 不放行匿名。Compose 含 Jaeger all-in-one（UI `http://localhost:16686`，OTLP 4318）。响应头带 `traceparent`，SSE `meta` 带 `traceId`。
+**可观测。** 业务指标见 `GET /api/v1/ops/snapshot`（需登录）。Prometheus 刮取 `/ai-example/actuator/prometheus` 用 `PRODUCTION_METRICS_TOKEN`（Compose 默认 `dev-metrics-token`），不放行匿名。Grafana `http://localhost:3000`（默认 admin/admin），Jaeger `http://localhost:16686`。压测摘要 `GET /api/v1/ops/loadtest`。响应头带 `traceparent`，SSE `meta` 带 `traceId`。
 
 **Agent。** `POST /api/v1/agent` 与 `GET /api/v1/agent/stream`。USER 能用 `search_kb` / `add` / `get_weather`；`rebuild_index` 仅 ADMIN。被拒工具会发 `step` 且 `denied:true`。
 

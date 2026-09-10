@@ -24,7 +24,7 @@ class ProductionToolsTest {
             mock(ProductionRetrievalService.class),
             ingest,
             new ProductionPrincipal("alice", "tenant-a", Set.of("USER")),
-            new ProductionProperties(true, "c", 4, 400, 1, true, 60, 4, null, null, null, null, null, null)
+            new ProductionProperties(true, "c", 4, 400, 1, true, 60, 4, null, null, null, null, null, null, null)
         );
         String result = tools.rebuildIndex();
         assertTrue(result.startsWith("denied"));

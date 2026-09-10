@@ -18,6 +18,8 @@ import java.util.Optional;
 /**
  * 从 {@code prod_secret} 读写密文，用 {@code PRODUCTION_KEK} 解。
  * <p>
+ * 轮换窗口内可同时持有 {@code PRODUCTION_KEK_PREVIOUS}：当前钥匙解不开时再试上一把。
+ * ADMIN {@code POST /api/v1/secrets/rotate} 会按当前 kek-id 重加密全部行。
  * KEK 解析失败时 {@link #available()} 为 false：此时 get/put 抛 503 语义异常，
  * 应用其余部分（教学样例）不受影响。
  */
@@ -28,6 +30,7 @@ public class JdbcSecretDAOImpl implements SecretResolver {
     private final JdbcTemplate jdbc;
     private final ProductionProperties properties;
     private volatile SecretKey kek;
+    private volatile SecretKey previousKek;
     private volatile String kekError;
 
     /**
@@ -42,6 +45,14 @@ public class JdbcSecretDAOImpl implements SecretResolver {
         } catch (SecretUnavailableException ex) {
             this.kekError = ex.getMessage();
             log.warn("工业级信封密钥不可用，/api/v1 将返回 503: {}", ex.getMessage());
+        }
+        String previous = properties.security().kekPrevious();
+        if (previous != null && !previous.isBlank()) {
+            try {
+                this.previousKek = EnvelopeCrypto.parseKek(previous);
+            } catch (SecretUnavailableException ex) {
+                log.warn("PRODUCTION_KEK_PREVIOUS 无法解析，轮换窗口内旧密文可能解不开: {}", ex.getMessage());
+            }
         }
     }
 
@@ -66,7 +77,7 @@ public class JdbcSecretDAOImpl implements SecretResolver {
             (byte[]) row.get("nonce"),
             String.valueOf(row.get("kek_id"))
         );
-        return Optional.of(EnvelopeCrypto.decryptString(kek, blob));
+        return Optional.of(decryptWithFallback(blob));
     }
 
     @Override
@@ -103,6 +114,43 @@ public class JdbcSecretDAOImpl implements SecretResolver {
             name
         );
         return count != null && count > 0;
+    }
+
+    /**
+     * 用当前 KEK 重加密所有行，kek_id 写成配置中的新版本。
+     *
+     * @return 重写行数
+     */
+    @Override
+    public int reencryptAll() {
+        ensureKek();
+        List<Map<String, Object>> rows = jdbc.queryForList(
+            "SELECT name, ciphertext, nonce, kek_id FROM prod_secret"
+        );
+        int rewritten = 0;
+        for (Map<String, Object> row : rows) {
+            EnvelopeCrypto.EncryptedBlob blob = new EnvelopeCrypto.EncryptedBlob(
+                (byte[]) row.get("ciphertext"),
+                (byte[]) row.get("nonce"),
+                String.valueOf(row.get("kek_id"))
+            );
+            String plaintext = decryptWithFallback(blob);
+            put(String.valueOf(row.get("name")), plaintext);
+            rewritten++;
+        }
+        log.info("KEK 重加密完成: rows={}, kekId={}", rewritten, properties.security().kekId());
+        return rewritten;
+    }
+
+    private String decryptWithFallback(EnvelopeCrypto.EncryptedBlob blob) {
+        try {
+            return EnvelopeCrypto.decryptString(kek, blob);
+        } catch (SecretUnavailableException ex) {
+            if (previousKek == null) {
+                throw ex;
+            }
+            return EnvelopeCrypto.decryptString(previousKek, blob);
+        }
     }
 
     private void ensureKek() {
