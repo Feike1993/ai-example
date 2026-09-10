@@ -318,6 +318,13 @@ public class ProductionChatController {
         return runExecutor.resume(runId, lastEventId == null ? -1L : lastEventId);
     }
 
+    /**
+     * 限流。
+     *
+     * @param http      身份
+     * @param response  限流头
+     * @return 身份
+     */
     private ProductionPrincipal rateLimit(HttpServletRequest http, HttpServletResponse response) {
         ProductionPrincipal principal = principal(http);
         if (bucket == null) {
