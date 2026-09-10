@@ -202,3 +202,9 @@ Hybrid RAG、golden 评测、Redis 持久会话、逐步 tool SSE、流式 token
 ### 文档
 
 - [phase13.md](docs/phase13.md)
+
+## [Unreleased] — 工业级第五阶段（本机 k6 压测）
+
+- `loadtest/`：k6 脚本打 `/api/v1`（smoke / guardrail / rate_limit / login_limit）
+- 默认不打 Chat LLM / Embedding；不进 CI；容量基线只记录本机数字
+- 见 [loadtest/README.md](loadtest/README.md)
