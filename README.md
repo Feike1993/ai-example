@@ -290,7 +290,7 @@ RUN_REDIS_IT=true REDIS_IT_HOST=localhost REDIS_IT_PORT=6379 \
 - **第四阶段 E2E**：`cd frontend && pnpm test:e2e`。默认套件覆盖登录、安全/可观测面板、401、alice ingest 403、输入护栏（不打 Chat LLM）。空检索会先走 Embedding，因此 `pnpm test:e2e:keys` 仅在已配 `PROVIDER_DASHSCOPE_API_KEY` 时跑。可选 `PLAYWRIGHT_BASE_URL=http://localhost:8088` 打 Compose 前端；不要用 `vite preview`（无 API 代理）。
 - **第五阶段压测**：`./loadtest/run.sh all`（Java 需在 8080 且已设 `PRODUCTION_KEK`）。本机 k6 打 `/api/v1`：廉价读、护栏 422、令牌桶 429、登录限流。默认不打 Chat LLM / Embedding，不进 CI。说明见 [loadtest/README.md](loadtest/README.md)。
 - **第六阶段多实例**：Compose 起 `java-a` + `java-b`，Nginx `:8088` 负载均衡。验证步骤（起栈、脚本、手工 curl、端口冲突）见 [docs/industrial-ha.md](docs/industrial-ha.md)；一键对照 `./scripts/industrial-ha.sh`。
-- **第七阶段**：生产 RAG 可选 rewrite/HyDE；ADMIN ingest 走 Redis Stream；`POST /api/v1/secrets/rotate` 本地重加密；Compose Prometheus `:9090` + Grafana `:3000`（scrape token，不匿名）；`./loadtest/run.sh` 写 `loadtest/results/latest-summary.json`，可观测面板展示。
+- **第七阶段**：生产 RAG 可选 rewrite/HyDE；ADMIN ingest 走 Redis Stream；`POST /api/v1/secrets/rotate` 本地重加密；Compose Prometheus `:9090` + Grafana `:3000`（scrape token，不匿名）；`./loadtest/run.sh` 写 `loadtest/results/latest-summary.json`，可观测面板展示。人工验证（起栈、curl、页面、KEK 轮换、Grafana、压测摘要）见 [docs/industrial-ops.md](docs/industrial-ops.md)。
 
 ### 鉴权 / 信封加密 / 指标
 

@@ -217,4 +217,4 @@ Java 日志：`docker compose logs java-a java-b`。Redis：`docker compose exec
 - 用 Vite 演示双实例
 - 把 `session_busy` 绑在真实问答上（见文首「为何用探针」）
 
-Grafana / 本地 KEK 轮换 / 异步入库属于工业级第七阶段，不在本对照脚本范围内。
+Grafana / 本地 KEK 轮换 / 异步入库属于工业级第七阶段，不在本对照脚本范围内；逐步验证见 [industrial-ops.md](industrial-ops.md)。

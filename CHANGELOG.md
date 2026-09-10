@@ -223,3 +223,4 @@ Hybrid RAG、golden 评测、Redis 持久会话、逐步 tool SSE、流式 token
 - 本地 KEK 轮换：`PRODUCTION_KEK_PREVIOUS` 解旧密文，`POST /api/v1/secrets/rotate` 重加密；不上云 KMS
 - Compose Prometheus `:9090` + Grafana `:3000`；刮取用 `PRODUCTION_METRICS_TOKEN`，不匿名放开 actuator
 - `./loadtest/run.sh` 写 `loadtest/results/latest-summary.json`；工业页可观测面板展示 p95
+- 人工验证步骤见 [docs/industrial-ops.md](docs/industrial-ops.md)

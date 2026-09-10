@@ -67,7 +67,7 @@
 | --- | --- | --- | --- | --- |
 | 混合检索（向量 + BM25 + RRF） | 第二期 | 已覆盖 | 第四期 | 见 [09-hybrid-rag.md](samples/09-hybrid-rag.md) |
 | 查询改写 / HyDE | 第二期 | 已覆盖 | 第四期最小 rewrite；第六期完整 HyDE；工业级第七阶段生产链路默认可关 | 见 [14-hyde.md](samples/14-hyde.md)；`/api/v1` 请求字段 `queryExpansion` |
-| 异步索引管道（如 Redis Stream） | 第二期 | 已覆盖（工业级第七阶段） | 教学 ingest 仍同步 | 生产 `POST /api/v1/rag/ingest` 202 + Redis consumer group |
+| 异步索引管道（如 Redis Stream） | 第二期 | 已覆盖（工业级第七阶段） | 教学 ingest 仍同步 | 生产 `POST /api/v1/rag/ingest` 202 + Redis consumer group；验证见 [industrial-ops.md](industrial-ops.md) |
 | 语义分块 / 父子文档 | 第二期 | 已覆盖 | 第七期 7a/7b | 见 [15](samples/15-semantic-chunk.md)、[16](samples/16-parent-child.md) |
 
 ### 上下文 / 记忆进阶
