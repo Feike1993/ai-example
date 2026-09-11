@@ -37,6 +37,8 @@ public class ProductionRetrievalServiceImpl implements ProductionRetrievalServic
     private static final String META_CORPUS = "corpus";
     public static final String META_TENANT_ID = "tenant_id";
     private static final int EXCERPT_LIMIT = 240;
+    /** 与 {@code ChatRequestDTO.MAX_TOP_K} 对齐，防止请求把向量检索打满。 */
+    private static final int MAX_TOP_K = 32;
 
     private final VectorStore vectorStore;
     private final RagKeywordRetriever keywordRetriever;
@@ -94,7 +96,7 @@ public class ProductionRetrievalServiceImpl implements ProductionRetrievalServic
         String question = query == null ? null : query.question();
         Integer topK = query == null ? null : query.topK();
         String tenantId = query == null ? null : query.tenantId();
-        int k = topK == null || topK < 1 ? properties.topK() : topK;
+        int k = topK == null || topK < 1 ? properties.topK() : Math.min(topK, MAX_TOP_K);
         String corpus = properties.corpus();
         String tenant = sanitizeTenant(tenantId);
         boolean hybrid = properties.hybridEnabled() && keywordRetriever != null;

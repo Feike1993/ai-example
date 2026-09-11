@@ -19,11 +19,21 @@ import java.util.Optional;
 public interface RunEventLogDAO {
 
     /**
-     * 登记一次新的 run。
+     * 登记一次新的 run（不绑租户）。仅单测或无法取得身份时使用。
      *
      * @param runId run 唯一标识
      */
-    void begin(String runId);
+    default void begin(String runId) {
+        begin(runId, null);
+    }
+
+    /**
+     * 登记一次新的 run，并记下租户，供续传时校验所有权。
+     *
+     * @param runId    run 唯一标识
+     * @param tenantId 创建者租户；空则续传时只能靠 meta.tenant 兜底
+     */
+    void begin(String runId, String tenantId);
 
     /**
      * 追加一条事件。调用方负责保证 seq 单调递增。

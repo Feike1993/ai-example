@@ -87,4 +87,9 @@ public class FakeProductionChatSessionDAOImpl implements ProductionChatSessionDA
     public boolean ownedBy(String tenantId, String sessionId) {
         return Objects.equals(owners.get(sessionId), tenantId);
     }
+
+    @Override
+    public boolean exists(String sessionId) {
+        return owners.containsKey(sessionId);
+    }
 }

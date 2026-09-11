@@ -35,6 +35,7 @@ public class InMemoryProductionIngestJobServiceImpl implements ProductionIngestJ
     private final ProductionInstanceIdentity identity;
     private final ProductionMetrics metrics;
     private final ConcurrentHashMap<String, IngestJobVO> jobs = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, String> tenants = new ConcurrentHashMap<>();
     private final AtomicReference<String> latestId = new AtomicReference<>();
     private final AtomicReference<String> activeId = new AtomicReference<>();
     private final ExecutorService workers = Executors.newVirtualThreadPerTaskExecutor();
@@ -61,7 +62,7 @@ public class InMemoryProductionIngestJobServiceImpl implements ProductionIngestJ
      * {@inheritDoc}
      */
     @Override
-    public IngestJobVO submit() {
+    public IngestJobVO submit(String tenantId) {
         String existing = activeId.get();
         if (existing != null) {
             IngestJobVO current = jobs.get(existing);
@@ -80,6 +81,9 @@ public class InMemoryProductionIngestJobServiceImpl implements ProductionIngestJ
             null
         );
         jobs.put(jobId, queued);
+        if (tenantId != null && !tenantId.isBlank()) {
+            tenants.put(jobId, tenantId.trim());
+        }
         latestId.set(jobId);
         if (!activeId.compareAndSet(null, jobId) && !activeId.compareAndSet(existing, jobId)) {
             IngestJobVO raced = jobs.get(activeId.get());
@@ -99,9 +103,13 @@ public class InMemoryProductionIngestJobServiceImpl implements ProductionIngestJ
      * {@inheritDoc}
      */
     @Override
-    public IngestJobVO get(String jobId) {
+    public IngestJobVO get(String jobId, String tenantId) {
         IngestJobVO job = jobs.get(jobId);
         if (job == null) {
+            throw new BusinessException(ErrorCodeEnum.INGEST_JOB_NOT_FOUND);
+        }
+        String owner = tenants.get(jobId);
+        if (tenantId != null && !tenantId.isBlank() && owner != null && !owner.equals(tenantId)) {
             throw new BusinessException(ErrorCodeEnum.INGEST_JOB_NOT_FOUND);
         }
         return job;

@@ -24,6 +24,9 @@ import com.feike.ai.production.secret.dao.SecretResolver;
 import com.feike.ai.production.session.dao.impl.FakeProductionChatSessionDAOImpl;
 import com.feike.ai.production.sse.dao.RunEventLogDAO;
 import com.feike.ai.production.sse.dao.impl.InMemoryRunEventLogDAOImpl;
+import com.feike.ai.production.sse.model.RunStateEnum;
+import com.feike.ai.production.sse.model.StreamEvent;
+import com.feike.ai.production.sse.model.StreamEventTypeEnum;
 import com.feike.ai.production.sse.service.SseRunExecutor;
 import com.feike.ai.production.web.ProductionExceptionHandler;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -220,6 +223,30 @@ class ProductionJwtMvcTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.allowed").value(true))
             .andExpect(jsonPath("$.denied").value(false));
+    }
+
+    @Test
+    void bobShouldNotLockAlicesSession() throws Exception {
+        sessionStore.appendTurn("tenant-a", "s-alice", UUID.randomUUID(), "run", "问", "答");
+        String bob = login("bob");
+        mockMvc.perform(post("/api/v1/sessions/s-alice/lock-probe")
+                .header("Authorization", "Bearer " + bob)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"holdMs\":1}"))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.code").value("session_not_found"));
+    }
+
+    @Test
+    void bobShouldNotResumeAlicesRun() throws Exception {
+        eventLog.begin("run-alice", "tenant-a");
+        eventLog.append("run-alice", new StreamEvent(0, StreamEventTypeEnum.DONE, "{}"));
+        eventLog.finish("run-alice", RunStateEnum.DONE);
+        String bob = login("bob");
+        mockMvc.perform(get("/api/v1/runs/{runId}/stream", "run-alice")
+                .header("Authorization", "Bearer " + bob))
+            .andExpect(status().isGone())
+            .andExpect(jsonPath("$.code").value("run_gone"));
     }
 
     @Test

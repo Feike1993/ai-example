@@ -22,11 +22,17 @@ public class InMemoryRunEventLogDAOImpl implements RunEventLogDAO {
 
     private final Map<String, CopyOnWriteArrayList<StreamEvent>> events = new ConcurrentHashMap<>();
     private final Map<String, RunStateEnum> states = new ConcurrentHashMap<>();
+    private final Map<String, String> tenants = new ConcurrentHashMap<>();
 
     @Override
-    public void begin(String runId) {
+    public void begin(String runId, String tenantId) {
         events.put(runId, new CopyOnWriteArrayList<>());
         states.put(runId, RunStateEnum.PENDING);
+        if (tenantId != null && !tenantId.isBlank()) {
+            tenants.put(runId, tenantId.trim());
+        } else {
+            tenants.remove(runId);
+        }
     }
 
     @Override
@@ -52,7 +58,7 @@ public class InMemoryRunEventLogDAOImpl implements RunEventLogDAO {
         }
         List<StreamEvent> stored = events.getOrDefault(runId, new CopyOnWriteArrayList<>());
         long lastSeq = stored.isEmpty() ? -1 : stored.getLast().seq();
-        return Optional.of(new RunSnapshot(runId, state, lastSeq));
+        return Optional.of(new RunSnapshot(runId, state, lastSeq, tenants.get(runId)));
     }
 
     @Override

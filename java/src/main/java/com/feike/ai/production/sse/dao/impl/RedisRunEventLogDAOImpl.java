@@ -47,6 +47,7 @@ public class RedisRunEventLogDAOImpl implements RunEventLogDAO {
     private static final String FIELD_DATA = "data";
     private static final String FIELD_STATE = "state";
     private static final String FIELD_LAST_SEQ = "lastSeq";
+    private static final String FIELD_TENANT = "tenantId";
 
     private final StringRedisTemplate redis;
     private final Duration ttl;
@@ -61,11 +62,14 @@ public class RedisRunEventLogDAOImpl implements RunEventLogDAO {
     }
 
     @Override
-    public void begin(String runId) {
+    public void begin(String runId, String tenantId) {
         guard(() -> {
             Map<String, String> state = new LinkedHashMap<>();
             state.put(FIELD_STATE, RunStateEnum.PENDING.name());
             state.put(FIELD_LAST_SEQ, "-1");
+            if (tenantId != null && !tenantId.isBlank()) {
+                state.put(FIELD_TENANT, tenantId.trim());
+            }
             redis.opsForHash().putAll(stateKey(runId), state);
             redis.expire(stateKey(runId), ttl);
             return null;
@@ -114,13 +118,14 @@ public class RedisRunEventLogDAOImpl implements RunEventLogDAO {
     public Optional<RunSnapshot> snapshot(String runId) {
         return guard(() -> {
             List<Object> values = redis.opsForHash()
-                .multiGet(stateKey(runId), List.of(FIELD_STATE, FIELD_LAST_SEQ));
+                .multiGet(stateKey(runId), List.of(FIELD_STATE, FIELD_LAST_SEQ, FIELD_TENANT));
             Object rawState = values.isEmpty() ? null : values.getFirst();
             if (rawState == null) {
                 return Optional.empty();
             }
             long lastSeq = parseSeq(values.size() > 1 ? values.get(1) : null);
-            return Optional.of(new RunSnapshot(runId, parseState(rawState), lastSeq));
+            String tenant = values.size() > 2 ? blankToNull(values.get(2)) : null;
+            return Optional.of(new RunSnapshot(runId, parseState(rawState), lastSeq, tenant));
         });
     }
 
@@ -177,6 +182,14 @@ public class RedisRunEventLogDAOImpl implements RunEventLogDAO {
         } catch (IllegalArgumentException ex) {
             return RunStateEnum.PENDING;
         }
+    }
+
+    private static String blankToNull(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        String text = String.valueOf(raw).trim();
+        return text.isEmpty() ? null : text;
     }
 
     private static long parseSeq(Object raw) {

@@ -174,6 +174,7 @@ public class ProductionChatServiceImpl implements ProductionChatService {
             return answerStateless(principal, null, question, provider, topK, null, queryExpansion);
         }
         String id = sessionStore.resolveSessionId(sessionId);
+        rejectForeignSession(principal, sessionId, id);
         try (SessionLock.Handle ignored = acquireOrThrow(id)) {
             return answerStateless(principal, id, question, provider, topK, null, queryExpansion);
         }
@@ -291,6 +292,12 @@ public class ProductionChatServiceImpl implements ProductionChatService {
             return;
         }
         String id = sessionStore.resolveSessionId(sessionId);
+        try {
+            rejectForeignSession(principal, sessionId, id);
+        } catch (SessionNotOwnedException ex) {
+            writer.error("session_not_found", "会话不存在");
+            return;
+        }
         Optional<SessionLock.Handle> handle = sessionLock.tryAcquire(id);
         if (handle.isEmpty()) {
             // 不是生成失败，而是用户在同一会话里连点了两次。给专门的错误码，
@@ -407,7 +414,7 @@ public class ProductionChatServiceImpl implements ProductionChatService {
             writer.error(ex.code(), ex.getMessage());
         } catch (RuntimeException ex) {
             log.error("run={} 生成失败", writer.runId(), ex);
-            writer.error("upstream_error", "生成失败：" + rootMessage(ex));
+            writer.error("upstream_error", "生成失败，请稍后重试");
         }
     }
 
@@ -572,6 +579,7 @@ public class ProductionChatServiceImpl implements ProductionChatService {
     public ProductionChatService.LockHold probeLock(ProductionPrincipal principal, String sessionId, Integer holdMs) {
         requireSession();
         String id = sessionStore.resolveSessionId(sessionId);
+        rejectForeignSession(principal, sessionId, id);
         int ms = clampHoldMs(holdMs);
         try (SessionLock.Handle ignored = acquireOrThrow(id)) {
             Thread.sleep(ms);
@@ -593,6 +601,19 @@ public class ProductionChatServiceImpl implements ProductionChatService {
         return sessionLock.tryAcquire(sessionId).orElseThrow(() -> new SessionBusyException(sessionId));
     }
 
+    /**
+     * 客户端带来的 sessionId 若已存在且不属于本租户，在抢锁之前拒绝。
+     * 尚未建档的 id 允许认领，与 {@code appendTurn} 首次插入语义一致。
+     */
+    private void rejectForeignSession(ProductionPrincipal principal, String requested, String resolved) {
+        if (sessionStore == null || requested == null || requested.isBlank()) {
+            return;
+        }
+        if (sessionStore.exists(resolved) && !sessionStore.ownedBy(principal.tenantId(), resolved)) {
+            throw new SessionNotOwnedException(resolved);
+        }
+    }
+
     private void requireSession() {
         if (!sessionEnabled()) {
             throw new SessionDisabledException();
@@ -612,15 +633,6 @@ public class ProductionChatServiceImpl implements ProductionChatService {
         payload.put("answerChars", answerChars);
         payload.put("sourceCount", sourceCount);
         return payload;
-    }
-
-    private static String rootMessage(Throwable ex) {
-        Throwable cursor = ex;
-        while (cursor.getCause() != null && cursor.getCause() != cursor) {
-            cursor = cursor.getCause();
-        }
-        String message = cursor.getMessage();
-        return message == null || message.isBlank() ? cursor.getClass().getSimpleName() : message;
     }
 
     /** 裁剪后的历史窗口。 */

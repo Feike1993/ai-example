@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 /**
  * Chat 样例 HTTP 入口。
@@ -56,6 +57,6 @@ public class ChatSampleController {
         @RequestParam @NotBlank String prompt,
         @RequestParam(required = false) String provider
     ) {
-        return chatSampleService.stream(prompt, provider);
+        return chatSampleService.stream(prompt, provider).concatWith(Mono.just("[DONE]"));
     }
 }

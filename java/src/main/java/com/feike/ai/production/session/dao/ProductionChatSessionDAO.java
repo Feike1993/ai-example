@@ -79,4 +79,12 @@ public interface ProductionChatSessionDAO {
      * @return 该租户是否拥有此会话
      */
     boolean ownedBy(String tenantId, String sessionId);
+
+    /**
+     * 会话行是否存在（任意租户）。用于抢锁前区分「尚未建档」与「属于别人」。
+     *
+     * @param sessionId 会话 id
+     * @return 是否已有会话行
+     */
+    boolean exists(String sessionId);
 }

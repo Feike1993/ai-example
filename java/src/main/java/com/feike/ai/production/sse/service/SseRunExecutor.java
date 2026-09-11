@@ -1,13 +1,11 @@
 package com.feike.ai.production.sse.service;
 
-import com.feike.ai.production.chat.service.ProductionChatService;
+import com.feike.ai.production.config.ProductionProperties;
 import com.feike.ai.production.sse.dao.RunEventLogDAO;
 import com.feike.ai.production.sse.model.RunSnapshot;
 import com.feike.ai.production.sse.model.RunStateEnum;
 import com.feike.ai.production.sse.model.StreamEvent;
 import com.feike.ai.production.sse.model.StreamEventTypeEnum;
-
-import com.feike.ai.production.config.ProductionProperties;
 import com.feike.ai.production.web.BusinessException;
 import com.feike.ai.production.web.ErrorCodeEnum;
 import jakarta.annotation.PreDestroy;
@@ -79,7 +77,7 @@ public class SseRunExecutor {
      * @return 立即返回给客户端的 emitter
      */
     public SseEmitter start(Consumer<SseStreamWriter> pipeline) {
-        return start(pipeline, runId -> { });
+        return start(pipeline, runId -> { }, null);
     }
 
     /**
@@ -90,13 +88,27 @@ public class SseRunExecutor {
      * @return emitter
      */
     public SseEmitter start(Consumer<SseStreamWriter> pipeline, Consumer<String> onBegin) {
+        return start(pipeline, onBegin, null);
+    }
+
+    /**
+     * 启动一次新的 run。
+     *
+     * @param pipeline 业务管线
+     * @param onBegin  拿到 runId；可空
+     * @param tenantId 创建者租户，写入事件日志供续传校验
+     * @return emitter
+     */
+    public SseEmitter start(Consumer<SseStreamWriter> pipeline, Consumer<String> onBegin, String tenantId) {
         String runId = UUID.randomUUID().toString();
         if (onBegin != null) {
             onBegin.accept(runId);
         }
         long timeoutMs = properties.stream().timeout().toMillis();
         SseEmitter emitter = new SseEmitter(timeoutMs + EMITTER_GRACE_MS);
-        SseStreamWriter writer = new SseStreamWriter(runId, new SseEmitterSink(emitter), eventLog, jsonMapper);
+        String owner = tenantId == null || tenantId.isBlank() ? MDC.get("tenant") : tenantId;
+        SseStreamWriter writer = new SseStreamWriter(
+            runId, new SseEmitterSink(emitter), eventLog, jsonMapper, owner);
 
         AtomicReference<Future<?>> taskRef = new AtomicReference<>();
         writer.onDisconnect(() -> cancelTask(taskRef));
@@ -151,11 +163,27 @@ public class SseRunExecutor {
      * @param runId       原 run 标识
      * @param lastEventId 客户端已收到的最大 seq；首次连接传 -1
      * @return emitter
-     * @throws BusinessException run 不存在或已过保留窗口时 410
+     * @throws BusinessException run 不存在、已过保留窗口或租户不匹配时 410
      */
     public SseEmitter resume(String runId, long lastEventId) {
+        return resume(runId, lastEventId, MDC.get("tenant"));
+    }
+
+    /**
+     * 断线续传：校验租户后把 {@code lastEventId} 之后的事件补齐。
+     *
+     * @param runId       原 run 标识
+     * @param lastEventId 客户端已收到的最大 seq；首次连接传 -1
+     * @param tenantId    调用方租户
+     * @return emitter
+     * @throws BusinessException run 不存在、已过保留窗口或租户不匹配时 410，不暴露存在性
+     */
+    public SseEmitter resume(String runId, long lastEventId, String tenantId) {
         RunSnapshot snapshot = eventLog.snapshot(runId)
             .orElseThrow(() -> new BusinessException(ErrorCodeEnum.RUN_GONE));
+        if (!ownedBy(snapshot, tenantId, runId)) {
+            throw new BusinessException(ErrorCodeEnum.RUN_GONE);
+        }
 
         long timeoutMs = properties.stream().timeout().toMillis();
         SseEmitter emitter = new SseEmitter(timeoutMs + EMITTER_GRACE_MS);
@@ -227,6 +255,42 @@ public class SseRunExecutor {
         } finally {
             sink.complete();
         }
+    }
+
+    /**
+     * 续传所有权：状态里的 tenant 优先；旧 run 没有该字段时回退读 meta.tenant。
+     * 都没有则拒绝，避免未绑租户的日志被任意登录用户回放。
+     */
+    private boolean ownedBy(RunSnapshot snapshot, String tenantId, String runId) {
+        if (tenantId == null || tenantId.isBlank()) {
+            return false;
+        }
+        String owner = snapshot.tenantId();
+        if (owner == null || owner.isBlank()) {
+            owner = tenantFromMeta(runId);
+        }
+        return tenantId.equals(owner);
+    }
+
+    private String tenantFromMeta(String runId) {
+        List<StreamEvent> events = eventLog.replay(runId, -1L);
+        for (StreamEvent event : events) {
+            if (event.type() != StreamEventTypeEnum.META || event.data() == null) {
+                continue;
+            }
+            try {
+                Map<?, ?> body = jsonMapper.readValue(event.data(), Map.class);
+                Object tenant = body.get("tenant");
+                if (tenant instanceof String text && !text.isBlank()) {
+                    return text;
+                }
+            } catch (RuntimeException ex) {
+                log.debug("run={} 解析 meta.tenant 失败: {}", runId, ex.toString());
+                return null;
+            }
+            return null;
+        }
+        return null;
     }
 
     private static void cancelTask(AtomicReference<Future<?>> taskRef) {

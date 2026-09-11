@@ -6,7 +6,7 @@ import { ResultBody } from '../../components/ResultBody'
 import { Workbench } from '../../components/Workbench'
 import { authHeaders, notifyUnauthorized, rememberRunId, rememberTraceId } from '../lib/auth'
 import { mergeAgentSteps } from '../lib/agentSteps'
-import { agentStreamForm, agentStreamPostUrl, agentStreamUrl, chatStreamForm, chatStreamPostUrl, chatStreamUrl, clearSession, getIngestJob, getSession, postIngest, postSpeak, postTranscribe, PRODUCTION_MAX_DOCUMENTS, PRODUCTION_MAX_IMAGES, resumeUrl } from '../lib/productionApi'
+import { agentStreamForm, agentStreamPostUrl, chatStreamForm, chatStreamPostUrl, clearSession, getIngestJob, getSession, postIngest, postSpeak, postTranscribe, PRODUCTION_MAX_DOCUMENTS, PRODUCTION_MAX_IMAGES, resumeUrl } from '../lib/productionApi'
 import { toTurns, type Turn } from '../lib/sessionTurns'
 import {
   StreamAbortedError,
@@ -62,6 +62,7 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
   const [recording, setRecording] = useState(false)
   const [speaking, setSpeaking] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
+  const streamGenRef = useRef(0)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
 
@@ -93,7 +94,11 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
           setTurns(toTurns(view.messages))
         }
       })
-      .catch(() => undefined)
+      .catch(() => {
+        if (!cancelled) {
+          setError('无法加载历史会话，可重试或开新会话')
+        }
+      })
     return () => {
       cancelled = true
     }
@@ -112,6 +117,8 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
     abortRef.current?.abort()
     const controller = new AbortController()
     abortRef.current = controller
+    const requestId = streamGenRef.current + 1
+    streamGenRef.current = requestId
     setError(null)
     setErrorCode(null)
     setMeta(null)
@@ -133,28 +140,16 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
     }
 
     let persisted = true
+    const withAttachment = images.length > 0 || documents.length > 0
+    const url = mode === 'agent' ? agentStreamPostUrl() : chatStreamPostUrl()
     try {
-      const withAttachment = images.length > 0 || documents.length > 0
-      const url = mode === 'agent'
-        ? withAttachment
-          ? agentStreamPostUrl()
-          : agentStreamUrl({ question: asked, sessionId, provider })
-        : withAttachment
-          ? chatStreamPostUrl()
-          : chatStreamUrl({
-              question: asked,
-              sessionId,
-              provider,
-              topK: Number(topK) || undefined,
-              queryExpansion,
-            })
       const result = await streamRun(
         url,
         {
           signal: controller.signal,
           resumeUrl,
           maxResumes: 2,
-          method: withAttachment ? 'POST' : 'GET',
+          method: 'POST',
           body: withAttachment
             ? (mode === 'agent'
               ? agentStreamForm({
@@ -173,8 +168,17 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
                   images,
                   documents,
                 }))
-            : undefined,
-          headers: authHeaders(),
+            : JSON.stringify({
+                question: asked,
+                sessionId: sessionId ?? undefined,
+                provider,
+                topK: mode === 'agent' ? undefined : Number(topK) || undefined,
+                queryExpansion: mode === 'agent' || queryExpansion === 'none' ? undefined : queryExpansion,
+              }),
+          headers: {
+            ...authHeaders(),
+            ...(withAttachment ? {} : { 'Content-Type': 'application/json' }),
+          },
           handlers: {
             onMeta: (payload) => {
               setMeta({ runId: payload.runId })
@@ -213,24 +217,32 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
           },
         },
       )
+      if (streamGenRef.current !== requestId) {
+        return
+      }
       if (result.outcome === 'cancelled') {
         // 取消的一轮后端没有落库，留在待定区并标注，不混进历史
         setStatus('cancelled')
         update({ incomplete: true })
       } else {
         setStatus('done')
-        setTurns((prev) => [...prev, { ...current, unpersisted: !persisted }])
+        setTurns((prev) => [...prev, {
+          ...current,
+          unpersisted: !persisted,
+          incomplete: result.malformedCount > 0,
+        }])
         setPending(null)
         setQuestion('')
       }
     } catch (err) {
+      if (streamGenRef.current !== requestId) {
+        return
+      }
       setStatus('aborted')
       update({ incomplete: true })
       if (err instanceof StreamServerError) {
         if (err.code === SESSION_BUSY) {
-          // 这不是生成失败，而是同一会话上一轮还没结束。走单独的黄色提示而不是红色「请求失败」：
-          // ResultBody 一旦拿到 error 就只渲染错误框，历史会整段消失，
-          // 而这种情况下用户最需要看到的恰恰是「上一轮还在那里跑」。
+          // 同一会话上一轮还没结束，用黄色提示而不是当成生成失败
           setBusy(true)
           setPending(null)
         } else {
@@ -250,16 +262,18 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
         setErrorCode(null)
       }
     } finally {
-      abortRef.current = null
+      if (abortRef.current === controller) {
+        abortRef.current = null
+      }
     }
   }
 
   const onStop = () => {
     abortRef.current?.abort()
-    abortRef.current = null
   }
 
   const onNewSession = () => {
+    streamGenRef.current += 1
     abortRef.current?.abort()
     abortRef.current = null
     rememberSession(null)
@@ -386,7 +400,9 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
       const blob = await postSpeak(lastAnswer)
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
-      audio.onended = () => URL.revokeObjectURL(url)
+      const revoke = () => URL.revokeObjectURL(url)
+      audio.onended = revoke
+      audio.onerror = revoke
       await audio.play()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : describeError(err))
@@ -397,6 +413,9 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
   }
 
   const onIngest = async () => {
+    if (status === 'streaming' || ingesting) {
+      return
+    }
     setIngesting(true)
     setError(null)
     setErrorCode(null)
@@ -574,7 +593,7 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
             </Group>
           ) : null}
           <Group gap="sm">
-            <Button data-testid="stream-submit" onClick={onStream} loading={streaming} disabled={!question.trim()}>
+            <Button data-testid="stream-submit" onClick={onStream} loading={streaming} disabled={!question.trim() || ingesting}>
               流式提问
             </Button>
             <Button variant="default" onClick={onStop} disabled={!streaming}>
@@ -586,7 +605,7 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
             <Button variant="subtle" color="red" onClick={onClearSession} disabled={streaming || !sessionId}>
               清空会话
             </Button>
-            <Button variant="subtle" data-testid="ingest" onClick={onIngest} loading={ingesting}>
+            <Button variant="subtle" data-testid="ingest" onClick={onIngest} loading={ingesting} disabled={streaming}>
               重建语料
             </Button>
             <Button

@@ -160,14 +160,7 @@ public class ProductionMediaController {
     }
 
     private ProductionPrincipal principal(HttpServletRequest http) {
-        if (http == null) {
-            return new ProductionPrincipal("anonymous", "default", java.util.Set.of("USER"));
-        }
-        Object attr = http.getAttribute(ProductionPrincipal.ATTR);
-        if (attr instanceof ProductionPrincipal p) {
-            return p;
-        }
-        return new ProductionPrincipal("anonymous", "default", java.util.Set.of("USER"));
+        return JwtAuthFilter.require(http);
     }
 
     private void audit(

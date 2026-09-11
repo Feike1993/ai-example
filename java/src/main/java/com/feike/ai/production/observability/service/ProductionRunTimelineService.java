@@ -39,7 +39,7 @@ public class ProductionRunTimelineService {
     public RunTimelineVO get(String runId, String tenantId) {
         RunSnapshot snapshot = eventLog.snapshot(runId).orElseThrow(this::missing);
         List<StreamEvent> events = eventLog.replay(runId, -1L);
-        String tenant = null;
+        String tenant = snapshot.tenantId();
         String mode = null;
         List<Map<String, Object>> steps = new ArrayList<>();
         Map<String, Object> done = null;
@@ -47,7 +47,9 @@ public class ProductionRunTimelineService {
         for (StreamEvent event : events) {
             Map<String, Object> body = asMap(event.data());
             if (event.type() == StreamEventTypeEnum.META) {
-                tenant = stringVal(body.get("tenant"));
+                if (tenant == null || tenant.isBlank()) {
+                    tenant = stringVal(body.get("tenant"));
+                }
                 mode = stringVal(body.get("mode"));
             } else if (event.type() == StreamEventTypeEnum.STEP) {
                 steps.add(body);

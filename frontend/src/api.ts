@@ -428,7 +428,11 @@ export function streamChat(
   }
 
   source.onmessage = (event) => {
-    if (event.data === '' || event.data === '[DONE]') {
+    if (event.data === '') {
+      return
+    }
+    if (event.data === '[DONE]') {
+      finish()
       return
     }
     received = true
@@ -436,11 +440,9 @@ export function streamChat(
   }
 
   source.onerror = () => {
-    if (received) {
-      finish()
-      return
-    }
-    finish(new Error('后端服务不可用或流式响应中断，请检查部署状态或稍后重试'))
+    finish(new Error(received
+      ? '流式响应中断，未收到结束标记'
+      : '后端服务不可用或流式响应中断，请检查部署状态或稍后重试'))
   }
 
   return () => finish()
@@ -550,6 +552,7 @@ export function streamAgentReact(
     } catch {
       handlers.onDone?.(false)
     }
+    finish()
   })
 
   source.onmessage = (event) => {
@@ -561,11 +564,9 @@ export function streamAgentReact(
   }
 
   source.onerror = () => {
-    if (received) {
-      finish()
-      return
-    }
-    finish(new Error('后端服务不可用或流式响应中断，请检查部署状态或稍后重试'))
+    finish(new Error(received
+      ? '流式响应中断，未收到结束标记'
+      : '后端服务不可用或流式响应中断，请检查部署状态或稍后重试'))
   }
 
   return () => finish()
@@ -625,8 +626,13 @@ export function streamRag(
     }
   })
 
+  source.addEventListener('done', () => {
+    finish()
+  })
+
   source.onmessage = (event) => {
     if (event.data === '' || event.data === '[DONE]') {
+      finish()
       return
     }
     received = true
@@ -634,11 +640,9 @@ export function streamRag(
   }
 
   source.onerror = () => {
-    if (received) {
-      finish()
-      return
-    }
-    finish(new Error('后端服务不可用、流式响应中断或知识库尚未导入'))
+    finish(new Error(received
+      ? '流式响应中断，未收到结束标记'
+      : '后端服务不可用、流式响应中断或知识库尚未导入'))
   }
 
   return () => finish()

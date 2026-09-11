@@ -30,6 +30,8 @@ import com.feike.ai.production.ratelimit.manager.IdempotencyManager;
 import com.feike.ai.production.ratelimit.service.RateLimitExceededException;
 import com.feike.ai.production.ratelimit.manager.RedisTokenBucket;
 import com.feike.ai.production.sse.service.SseRunExecutor;
+import com.feike.ai.production.sse.service.SseStreamWriter;
+import com.feike.ai.production.sse.model.RunStateEnum;
 import com.feike.ai.production.web.BusinessException;
 import com.feike.ai.production.web.ErrorCodeEnum;
 import org.slf4j.MDC;
@@ -39,6 +41,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -183,7 +186,7 @@ public class ProductionChatController {
         }
         IngestJobVO job;
         if (ingestJobService != null) {
-            job = ingestJobService.submit();
+            job = ingestJobService.submit(principal.tenantId());
         } else {
             ProductionIngestService.IngestResult result = ingestService.ingest();
             job = new IngestJobVO(
@@ -209,11 +212,11 @@ public class ProductionChatController {
      */
     @GetMapping("/rag/ingest/jobs/{jobId}")
     public IngestJobVO ingestJob(@PathVariable String jobId, HttpServletRequest http) {
-        principal(http);
+        ProductionPrincipal principal = principal(http);
         if (ingestJobService == null) {
             throw new BusinessException(ErrorCodeEnum.INGEST_JOB_NOT_FOUND);
         }
-        return ingestJobService.get(jobId);
+        return ingestJobService.get(jobId, principal.tenantId());
     }
 
     /**
@@ -246,9 +249,15 @@ public class ProductionChatController {
         if (metrics != null) {
             metrics.chatRun();
         }
-        ProductionChatService.ChatAnswer answer = chatService.answer(
-            principal, request.sessionId(), request.question(), request.provider(), request.topK(),
-            request.queryExpansion());
+        ProductionChatService.ChatAnswer answer;
+        try {
+            answer = chatService.answer(
+                principal, request.sessionId(), request.question(), request.provider(), request.topK(),
+                request.queryExpansion());
+        } catch (RuntimeException ex) {
+            abortIdempotency(principal, idempotencyKey);
+            throw ex;
+        }
         if (metrics != null) {
             metrics.recordDuration(System.nanoTime() - start);
             if (answer.retrievalEmpty()) {
@@ -274,7 +283,8 @@ public class ProductionChatController {
      */
     @GetMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chatStream(
-        @RequestParam @NotBlank(message = "问题不能为空") String question,
+        @RequestParam @NotBlank(message = "问题不能为空")
+        @Size(max = ChatRequestDTO.MAX_QUESTION_CHARS, message = "问题过长") String question,
         @RequestParam(required = false) String sessionId,
         @RequestParam(required = false) String provider,
         @RequestParam(required = false) Integer topK,
@@ -290,7 +300,31 @@ public class ProductionChatController {
         audit(principal, "chat.stream", http, 200, null, question);
         ProductionPrincipal frozen = principal;
         return runExecutor.start(writer ->
-            chatService.streamAnswer(writer, frozen, sessionId, question, provider, topK, queryExpansion));
+            chatService.streamAnswer(writer, frozen, sessionId, question, provider, topK, queryExpansion),
+            null, frozen.tenantId());
+    }
+
+    /**
+     * 纯文本流式问答。问句走请求体，避免进入 access log / 浏览器历史。
+     *
+     * @param request  问句
+     * @param http     身份
+     * @param response 限流头
+     * @return SSE
+     */
+    @PostMapping(
+        value = "/chat/stream",
+        consumes = MediaType.APPLICATION_JSON_VALUE,
+        produces = MediaType.TEXT_EVENT_STREAM_VALUE
+    )
+    public SseEmitter chatStreamJson(
+        @Valid @RequestBody ChatRequestDTO request,
+        HttpServletRequest http,
+        HttpServletResponse response
+    ) {
+        return chatStream(
+            request.question(), request.sessionId(), request.provider(), request.topK(),
+            request.queryExpansion(), http, response);
     }
 
     /**
@@ -317,7 +351,8 @@ public class ProductionChatController {
         produces = MediaType.TEXT_EVENT_STREAM_VALUE
     )
     public SseEmitter chatStreamPost(
-        @RequestParam @NotBlank(message = "问题不能为空") String question,
+        @RequestParam @NotBlank(message = "问题不能为空")
+        @Size(max = ChatRequestDTO.MAX_QUESTION_CHARS, message = "问题过长") String question,
         @RequestParam(required = false) String sessionId,
         @RequestParam(required = false) String provider,
         @RequestParam(required = false) Integer topK,
@@ -341,7 +376,8 @@ public class ProductionChatController {
         return runExecutor.start(writer ->
             chatService.streamAnswer(
                 writer, frozen, sessionId, question, provider, topK, queryExpansion,
-                frozenImages, frozenDocs, frozenOcr));
+                frozenImages, frozenDocs, frozenOcr),
+            null, frozen.tenantId());
     }
 
     /**
@@ -371,8 +407,14 @@ public class ProductionChatController {
             return jsonMapper.readValue(cached.get(), ProductionAgentService.AgentAnswer.class);
         }
         long startNanos = System.nanoTime();
-        ProductionAgentService.AgentAnswer answer = agentService.run(
-            principal, request.sessionId(), request.question(), request.provider());
+        ProductionAgentService.AgentAnswer answer;
+        try {
+            answer = agentService.run(
+                principal, request.sessionId(), request.question(), request.provider());
+        } catch (RuntimeException ex) {
+            abortIdempotency(principal, idempotencyKey);
+            throw ex;
+        }
         completeIdempotency(principal, idempotencyKey, bodyHash, answer);
         long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
         audit(principal, "agent", http, 200, answer.runId(), request.question());
@@ -393,7 +435,8 @@ public class ProductionChatController {
      */
     @GetMapping(value = "/agent/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter agentStream(
-        @RequestParam @NotBlank(message = "问题不能为空") String question,
+        @RequestParam @NotBlank(message = "问题不能为空")
+        @Size(max = ChatRequestDTO.MAX_QUESTION_CHARS, message = "问题过长") String question,
         @RequestParam(required = false) String sessionId,
         @RequestParam(required = false) String provider,
         HttpServletRequest http,
@@ -412,9 +455,30 @@ public class ProductionChatController {
                 agentService.stream(writer, frozen, sessionId, question, provider);
             } finally {
                 int durationMs = (int) TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
-                audit(frozen, "agent.done", http, 200, writer.runId(), question, durationMs, null, null);
+                audit(frozen, "agent.done", http, auditStatus(writer), writer.runId(), question, durationMs, null, null);
             }
-        }, runId -> audit(frozen, "agent.stream", http, 200, runId, question));
+        }, runId -> audit(frozen, "agent.stream", http, 200, runId, question), frozen.tenantId());
+    }
+
+    /**
+     * 纯文本流式 Agent。问句走请求体，避免进入 access log / 浏览器历史。
+     *
+     * @param request  任务
+     * @param http     身份
+     * @param response 头
+     * @return SSE
+     */
+    @PostMapping(
+        value = "/agent/stream",
+        consumes = MediaType.APPLICATION_JSON_VALUE,
+        produces = MediaType.TEXT_EVENT_STREAM_VALUE
+    )
+    public SseEmitter agentStreamJson(
+        @Valid @RequestBody ChatRequestDTO request,
+        HttpServletRequest http,
+        HttpServletResponse response
+    ) {
+        return agentStream(request.question(), request.sessionId(), request.provider(), http, response);
     }
 
     /**
@@ -439,7 +503,8 @@ public class ProductionChatController {
         produces = MediaType.TEXT_EVENT_STREAM_VALUE
     )
     public SseEmitter agentStreamPost(
-        @RequestParam @NotBlank(message = "问题不能为空") String question,
+        @RequestParam @NotBlank(message = "问题不能为空")
+        @Size(max = ChatRequestDTO.MAX_QUESTION_CHARS, message = "问题过长") String question,
         @RequestParam(required = false) String sessionId,
         @RequestParam(required = false) String provider,
         @RequestParam(required = false) MultipartFile[] image,
@@ -468,9 +533,9 @@ public class ProductionChatController {
                 agentService.stream(writer, frozen, sessionId, question, provider, media);
             } finally {
                 int durationMs = (int) TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
-                audit(frozen, "agent.done", http, 200, writer.runId(), question, durationMs, null, null);
+                audit(frozen, "agent.done", http, auditStatus(writer), writer.runId(), question, durationMs, null, null);
             }
-        }, runId -> audit(frozen, "agent.stream", http, 200, runId, question));
+        }, runId -> audit(frozen, "agent.stream", http, 200, runId, question), frozen.tenantId());
     }
 
     /**
@@ -548,8 +613,8 @@ public class ProductionChatController {
         @RequestHeader(value = "Last-Event-ID", required = false) Long lastEventId,
         HttpServletRequest http
     ) {
-        principal(http);
-        return runExecutor.resume(runId, lastEventId == null ? -1L : lastEventId);
+        ProductionPrincipal principal = principal(http);
+        return runExecutor.resume(runId, lastEventId == null ? -1L : lastEventId, principal.tenantId());
     }
 
     /**
@@ -592,7 +657,7 @@ public class ProductionChatController {
             Map<String, Object> done = new LinkedHashMap<>();
             done.put("instanceId", instance);
             writer.done(done);
-        });
+        }, null, principal.tenantId());
     }
 
     /**
@@ -623,15 +688,7 @@ public class ProductionChatController {
     }
 
     private ProductionPrincipal principal(HttpServletRequest http) {
-        if (http == null) {
-            return new ProductionPrincipal("anonymous", "default", java.util.Set.of("USER"));
-        }
-        Object attr = http.getAttribute(ProductionPrincipal.ATTR);
-        if (attr instanceof ProductionPrincipal principal) {
-            return principal;
-        }
-        // standalone MockMvc 测试不走 JWT 过滤器
-        return new ProductionPrincipal("anonymous", "default", java.util.Set.of("USER"));
+        return JwtAuthFilter.require(http);
     }
 
     private static boolean hasParts(MultipartFile[] files) {
@@ -740,6 +797,27 @@ public class ProductionChatController {
             return;
         }
         idempotency.complete(principal.tenantId(), key, hash, payload);
+    }
+
+    private void abortIdempotency(ProductionPrincipal principal, String key) {
+        if (idempotency == null || key == null || key.isBlank()) {
+            return;
+        }
+        idempotency.abort(principal.tenantId(), key);
+    }
+
+    private static int auditStatus(SseStreamWriter writer) {
+        RunStateEnum state = writer.terminalState();
+        if (state == RunStateEnum.DONE) {
+            return 200;
+        }
+        if (state == RunStateEnum.CANCELLED) {
+            return 499;
+        }
+        if (state == RunStateEnum.ERROR) {
+            return 500;
+        }
+        return 200;
     }
 
     private String hashBody(Object body) {

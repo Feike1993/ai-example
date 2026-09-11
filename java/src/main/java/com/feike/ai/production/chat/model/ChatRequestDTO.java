@@ -1,6 +1,9 @@
 package com.feike.ai.production.chat.model;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 /**
  * 工业级问答请求体。
@@ -12,9 +15,17 @@ import jakarta.validation.constraints.NotBlank;
  * @param queryExpansion  none / rewrite / hyde；空则用配置默认（通常 none）
  */
 public record ChatRequestDTO(
-    @NotBlank(message = "问题不能为空") String question,
+    @NotBlank(message = "问题不能为空")
+    @Size(max = MAX_QUESTION_CHARS, message = "问题过长")
+    String question,
     String sessionId,
     String provider,
-    Integer topK,
+    @Min(1) @Max(MAX_TOP_K) Integer topK,
     String queryExpansion
-) {}
+) {
+    /** 问句最大字符数，GET/POST 共用，避免超长 prompt 打满上下文。 */
+    public static final int MAX_QUESTION_CHARS = 4000;
+
+    /** 请求侧 topK 上限，检索层再 clamp 一次。 */
+    public static final int MAX_TOP_K = 32;
+}

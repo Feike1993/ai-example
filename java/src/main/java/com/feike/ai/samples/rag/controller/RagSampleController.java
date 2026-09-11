@@ -188,7 +188,11 @@ public class RagSampleController {
         Flux<ServerSentEvent<String>> answerEvents = ragSampleService
             .streamAnswer(question, provider, hits)
             .map(chunk -> ServerSentEvent.<String>builder().data(chunk).build());
-        return Flux.concat(Flux.just(sourcesEvent), answerEvents);
+        ServerSentEvent<String> doneEvent = ServerSentEvent.<String>builder()
+            .event("done")
+            .data("{}")
+            .build();
+        return Flux.concat(Flux.just(sourcesEvent), answerEvents, Flux.just(doneEvent));
     }
 
     private static RetrievalModeEnum parseMode(String mode) {

@@ -19,6 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
 /**
  * 只武装 {@code /api/v1/**}：缺密钥 503，缺/坏令牌 401，登录接口放行。
@@ -159,7 +160,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         if (header == null || !header.regionMatches(true, 0, "Bearer ", 0, 7)) {
             return false;
         }
-        return metricsToken.equals(header.substring(7).trim());
+        byte[] expected = metricsToken.getBytes(StandardCharsets.UTF_8);
+        byte[] actual = header.substring(7).trim().getBytes(StandardCharsets.UTF_8);
+        return MessageDigest.isEqual(expected, actual);
     }
 
     private void authFail() {
@@ -192,7 +195,28 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     }
 
     private static String escapeJson(String value) {
-        return value.replace("\\", "\\\\").replace("\"", "\\\"");
+        if (value == null) {
+            return "";
+        }
+        StringBuilder escaped = new StringBuilder(value.length() + 8);
+        for (int i = 0; i < value.length(); i++) {
+            char ch = value.charAt(i);
+            switch (ch) {
+                case '\\' -> escaped.append("\\\\");
+                case '"' -> escaped.append("\\\"");
+                case '\n' -> escaped.append("\\n");
+                case '\r' -> escaped.append("\\r");
+                case '\t' -> escaped.append("\\t");
+                default -> {
+                    if (ch < 0x20) {
+                        escaped.append(String.format("\\u%04x", (int) ch));
+                    } else {
+                        escaped.append(ch);
+                    }
+                }
+            }
+        }
+        return escaped.toString();
     }
 
     /**

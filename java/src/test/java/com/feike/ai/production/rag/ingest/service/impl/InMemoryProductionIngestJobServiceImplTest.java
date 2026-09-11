@@ -7,6 +7,7 @@ import com.feike.ai.production.rag.ingest.model.IngestJobStatusEnum;
 import com.feike.ai.production.rag.ingest.model.IngestJobVO;
 import com.feike.ai.production.rag.ingest.service.ProductionIngestService;
 import com.feike.ai.production.web.BusinessException;
+import com.feike.ai.production.web.ErrorCodeEnum;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,6 +48,20 @@ class InMemoryProductionIngestJobServiceImplTest {
     void unknownJobShould404() {
         InMemoryProductionIngestJobServiceImpl jobs = service(mock(ProductionIngestService.class));
         assertThrows(BusinessException.class, () -> jobs.get("missing"));
+        jobs.shutdown();
+    }
+
+    @Test
+    void foreignTenantShouldNotSeeJob() {
+        ProductionIngestService ingest = mock(ProductionIngestService.class);
+        when(ingest.ingest()).thenReturn(
+            new ProductionIngestService.IngestResult("prod-corpus", 1, List.of("a.md")));
+        InMemoryProductionIngestJobServiceImpl jobs = service(ingest);
+        IngestJobVO submitted = jobs.submit("tenant-a");
+        BusinessException ex = assertThrows(
+            BusinessException.class, () -> jobs.get(submitted.jobId(), "tenant-b"));
+        assertEquals(ErrorCodeEnum.INGEST_JOB_NOT_FOUND, ex.getErrorCode());
+        assertEquals(submitted.jobId(), jobs.get(submitted.jobId(), "tenant-a").jobId());
         jobs.shutdown();
     }
 

@@ -34,6 +34,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -226,7 +227,8 @@ class ProductionChatServiceImplTest {
         );
         String error = sink.dataOf(StreamEventTypeEnum.ERROR);
         assertTrue(error.contains("upstream_error"));
-        assertTrue(error.contains("模型网关 502"));
+        assertTrue(error.contains("生成失败，请稍后重试"));
+        assertFalse(error.contains("模型网关"));
     }
 
     @Test
@@ -369,6 +371,27 @@ class ProductionChatServiceImplTest {
             assertTrue(sink.types().contains(StreamEventTypeEnum.DONE));
             assertFalse(sink.types().contains(StreamEventTypeEnum.ERROR));
             assertTrue(sink.dataOf(StreamEventTypeEnum.DONE).contains("\"persisted\":false"));
+        }
+
+        @Test
+        void foreignSessionShouldRejectBeforeLock() {
+            store.appendTurn("tenant-a", "s-alice", UUID.randomUUID(), "run", "问", "答");
+            ProductionPrincipal bob = new ProductionPrincipal("bob", "tenant-b", java.util.Set.of("USER"));
+            CollectingSink sink = new CollectingSink();
+            sessionService.streamAnswer(writer(sink), bob, "s-alice", "什么是 RAG", null, null);
+
+            assertEquals(List.of(StreamEventTypeEnum.ERROR), sink.types());
+            assertTrue(sink.dataOf(StreamEventTypeEnum.ERROR).contains("session_not_found"));
+            assertTrue(lock.tryAcquire("s-alice").isPresent(), "跨租户不得占用会话锁");
+            verify(retrieval, never()).retrieve(any(ProductionRetrieveQuery.class));
+        }
+
+        @Test
+        void probeLockShouldRejectForeignSessionBeforeLock() {
+            store.appendTurn("tenant-a", "s-alice", UUID.randomUUID(), "run", "问", "答");
+            ProductionPrincipal bob = new ProductionPrincipal("bob", "tenant-b", java.util.Set.of("USER"));
+            assertThrows(SessionNotOwnedException.class, () -> sessionService.probeLock(bob, "s-alice", 1));
+            assertTrue(lock.tryAcquire("s-alice").isPresent(), "跨租户探测也不得占用会话锁");
         }
 
         @Test

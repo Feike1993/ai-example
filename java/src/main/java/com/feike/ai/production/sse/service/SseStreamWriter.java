@@ -37,6 +37,7 @@ public class SseStreamWriter implements AutoCloseable {
     private final JsonMapper jsonMapper;
     private final AtomicLong nextSeq = new AtomicLong(0);
     private final AtomicBoolean terminated = new AtomicBoolean(false);
+    private volatile RunStateEnum terminalState;
     private volatile boolean sinkBroken;
     private volatile Runnable disconnectListener;
 
@@ -47,11 +48,28 @@ public class SseStreamWriter implements AutoCloseable {
      * @param jsonMapper 事件负载序列化
      */
     public SseStreamWriter(String runId, EventSink sink, RunEventLogDAO eventLog, JsonMapper jsonMapper) {
+        this(runId, sink, eventLog, jsonMapper, null);
+    }
+
+    /**
+     * @param runId      本次 run 标识
+     * @param sink       事件出口
+     * @param eventLog   事件日志，用于断线续传
+     * @param jsonMapper 事件负载序列化
+     * @param tenantId   创建者租户；续传按此校验，可空（仅测试）
+     */
+    public SseStreamWriter(
+        String runId,
+        EventSink sink,
+        RunEventLogDAO eventLog,
+        JsonMapper jsonMapper,
+        String tenantId
+    ) {
         this.runId = runId;
         this.sink = sink;
         this.eventLog = eventLog;
         this.jsonMapper = jsonMapper;
-        eventLog.begin(runId);
+        eventLog.begin(runId, tenantId);
     }
 
     /**
@@ -66,6 +84,13 @@ public class SseStreamWriter implements AutoCloseable {
      */
     public boolean terminated() {
         return terminated.get();
+    }
+
+    /**
+     * @return 终态；尚未结束时为 {@code null}
+     */
+    public RunStateEnum terminalState() {
+        return terminalState;
     }
 
     /**
@@ -135,6 +160,7 @@ public class SseStreamWriter implements AutoCloseable {
             return;
         }
         writeRaw(StreamEventTypeEnum.DONE, payload == null ? Map.of() : payload);
+        terminalState = RunStateEnum.DONE;
         eventLog.finish(runId, RunStateEnum.DONE);
         sink.complete();
     }
@@ -154,6 +180,7 @@ public class SseStreamWriter implements AutoCloseable {
             "code", code == null ? "internal_error" : code,
             "message", message == null ? "服务内部错误" : message
         ));
+        terminalState = RunStateEnum.ERROR;
         eventLog.finish(runId, RunStateEnum.ERROR);
         sink.complete();
     }
@@ -166,6 +193,7 @@ public class SseStreamWriter implements AutoCloseable {
             return;
         }
         eventLog.finish(runId, RunStateEnum.CANCELLED);
+        terminalState = RunStateEnum.CANCELLED;
         sink.complete();
     }
 

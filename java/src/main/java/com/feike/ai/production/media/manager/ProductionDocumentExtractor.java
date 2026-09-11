@@ -33,6 +33,11 @@ public class ProductionDocumentExtractor {
     static final String MD = "text/markdown";
     static final String DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     static final String XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    /** 展开单元格的上限，避免 zip 炸弹把堆打满。 */
+    private static final int MAX_XLSX_ROWS = 2_000;
+    private static final int MAX_XLSX_CELLS = 20_000;
+    /** 数字 PDF 最多抽前 N 页；全文仍受 maxExtractChars 截断。 */
+    private static final int MAX_PDF_PAGES = 50;
 
     private final ProductionProperties.Media media;
 
@@ -75,7 +80,9 @@ public class ProductionDocumentExtractor {
             if (pages < 1) {
                 throw unreadable("PDF 没有页面");
             }
-            String raw = new PDFTextStripper().getText(doc);
+            PDFTextStripper stripper = new PDFTextStripper();
+            stripper.setEndPage(Math.min(pages, MAX_PDF_PAGES));
+            String raw = stripper.getText(doc);
             String text = truncate(raw == null ? "" : raw.strip());
             boolean ocr = text.length() < media.ocrMinChars();
             return new ChatDocument(filename, PDF, text, ocr, ocr ? body : null);
@@ -99,14 +106,24 @@ public class ProductionDocumentExtractor {
         try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(body))) {
             DataFormatter formatter = new DataFormatter();
             StringBuilder sb = new StringBuilder();
+            int rows = 0;
+            int cells = 0;
             for (Sheet sheet : workbook) {
                 if (sb.length() > 0) {
                     sb.append('\n');
                 }
                 sb.append("sheet=").append(sheet.getSheetName()).append('\n');
                 for (Row row : sheet) {
+                    rows += 1;
+                    if (rows > MAX_XLSX_ROWS) {
+                        throw unreadable("表格行数超过上限");
+                    }
                     boolean first = true;
                     for (Cell cell : row) {
+                        cells += 1;
+                        if (cells > MAX_XLSX_CELLS) {
+                            throw unreadable("表格单元格数超过上限");
+                        }
                         if (!first) {
                             sb.append('\t');
                         }

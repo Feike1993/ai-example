@@ -21,6 +21,7 @@ import com.feike.ai.production.rag.retrieve.service.ProductionRetrievalService;
 import com.feike.ai.production.ratelimit.manager.IdempotencyManager;
 import com.feike.ai.production.secret.manager.ProductionModelFactory;
 import com.feike.ai.production.session.dao.ProductionChatSessionDAO;
+import com.feike.ai.production.session.service.SessionNotOwnedException;
 import com.feike.ai.production.sse.service.SseStreamWriter;
 import com.feike.ai.production.sse.model.StreamEventTypeEnum;
 import org.slf4j.Logger;
@@ -104,6 +105,7 @@ public class ProductionAgentServiceImpl implements ProductionAgentService {
         String id = resolve(sessionId);
         String runId = UUID.randomUUID().toString();
         if (id != null) {
+            rejectForeignSession(principal, sessionId, id);
             try (SessionLock.Handle ignored = acquire(id)) {
                 return runUnlocked(principal, id, question, provider, runId);
             }
@@ -140,6 +142,12 @@ public class ProductionAgentServiceImpl implements ProductionAgentService {
         String id = resolve(sessionId);
         if (id == null) {
             streamUnlocked(writer, principal, null, question, provider, frozen);
+            return;
+        }
+        try {
+            rejectForeignSession(principal, sessionId, id);
+        } catch (SessionNotOwnedException ex) {
+            writer.error("session_not_found", "会话不存在");
             return;
         }
         Optional<SessionLock.Handle> handle = sessionLock.tryAcquire(id);
@@ -238,7 +246,7 @@ public class ProductionAgentServiceImpl implements ProductionAgentService {
             writer.error(ex.code(), ex.getMessage());
         } catch (RuntimeException ex) {
             log.error("agent run={} 失败", writer.runId(), ex);
-            writer.error("upstream_error", "Agent 失败：" + ex.getMessage());
+            writer.error("upstream_error", "Agent 失败，请稍后重试");
         }
     }
 
@@ -309,6 +317,15 @@ public class ProductionAgentServiceImpl implements ProductionAgentService {
 
     private SessionLock.Handle acquire(String sessionId) {
         return sessionLock.tryAcquire(sessionId).orElseThrow(() -> new SessionBusyException(sessionId));
+    }
+
+    private void rejectForeignSession(ProductionPrincipal principal, String requested, String resolved) {
+        if (sessionStore == null || requested == null || requested.isBlank()) {
+            return;
+        }
+        if (sessionStore.exists(resolved) && !sessionStore.ownedBy(principal.tenantId(), resolved)) {
+            throw new SessionNotOwnedException(resolved);
+        }
     }
 
     private List<Message> loadHistory(ProductionPrincipal principal, String sessionId) {

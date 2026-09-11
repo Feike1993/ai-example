@@ -127,7 +127,12 @@ public class ProductionAuthController {
     private static String clientIp(HttpServletRequest request) {
         String forwarded = request.getHeader("X-Forwarded-For");
         if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
+            // nginx 用 $proxy_add_x_forwarded_for 追加，客户端可伪造左侧；最右一跳才是对端 IP
+            String[] hops = forwarded.split(",");
+            String last = hops[hops.length - 1].trim();
+            if (!last.isEmpty()) {
+                return last;
+            }
         }
         return request.getRemoteAddr() == null ? "unknown" : request.getRemoteAddr();
     }

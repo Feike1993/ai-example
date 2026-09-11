@@ -141,6 +141,16 @@ public class JdbcProductionChatSessionDAOImpl implements ProductionChatSessionDA
         return count != null && count > 0;
     }
 
+    @Override
+    public boolean exists(String sessionId) {
+        Integer count = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM prod_chat_session WHERE session_id = ?",
+            Integer.class,
+            sessionId
+        );
+        return count != null && count > 0;
+    }
+
     /** 单次尝试的事务体：确保会话行存在 → 查重 → 依次插 user 与 assistant。 */
     private void insertTurn(
         String tenantId,

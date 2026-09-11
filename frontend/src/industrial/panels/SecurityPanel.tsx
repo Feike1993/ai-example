@@ -183,7 +183,7 @@ type LoginFormProps = {
  */
 export function LoginForm({ onLoggedIn }: LoginFormProps) {
   const [username, setUsername] = useState('alice')
-  const [password, setPassword] = useState('demo')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -218,6 +218,16 @@ export function LoginForm({ onLoggedIn }: LoginFormProps) {
           {error}
         </Alert>
       ) : null}
+      <form
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (!username.trim() || loading) {
+            return
+          }
+          void onSubmit()
+        }}
+      >
+        <Stack gap="md">
       <TextInput
         label="用户名"
         data-testid="login-username"
@@ -229,15 +239,18 @@ export function LoginForm({ onLoggedIn }: LoginFormProps) {
         data-testid="login-password"
         value={password}
         onChange={(event) => setPassword(event.currentTarget.value)}
+        placeholder="演示密码为 demo"
       />
       <Button
         data-testid="login-submit"
-        onClick={() => void onSubmit()}
+        type="submit"
         loading={loading}
         disabled={!username.trim()}
       >
         登录
       </Button>
+        </Stack>
+      </form>
       <Group gap="xs">
         {DEMO_ACCOUNTS.map((item) => (
           <Badge key={item.username} variant="light">

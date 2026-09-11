@@ -117,6 +117,27 @@ public class IdempotencyManager {
     }
 
     /**
+     * 失败时清掉 pending，避免同一 key 卡满 TTL。
+     *
+     * @param tenantId 租户
+     * @param key      幂等键
+     */
+    public void abort(String tenantId, String key) {
+        if (key == null || key.isBlank()) {
+            return;
+        }
+        try {
+            String redisKey = redisKey(tenantId, key);
+            String existing = redis.opsForValue().get(redisKey);
+            if (existing != null && existing.startsWith("pending:")) {
+                redis.delete(redisKey);
+            }
+        } catch (RuntimeException ex) {
+            log.warn("清除幂等 pending 失败: {}", ex.toString());
+        }
+    }
+
+    /**
      * SHA-256 十六进制摘要。
      *
      * @param body 原始请求体

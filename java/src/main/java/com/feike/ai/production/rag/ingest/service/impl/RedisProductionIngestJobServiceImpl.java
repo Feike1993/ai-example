@@ -108,7 +108,7 @@ public class RedisProductionIngestJobServiceImpl implements ProductionIngestJobS
      * {@inheritDoc}
      */
     @Override
-    public IngestJobVO submit() {
+    public IngestJobVO submit(String tenantId) {
         String active = redis.opsForValue().get(LOCK_KEY);
         if (active != null && !active.isBlank()) {
             try {
@@ -137,7 +137,7 @@ public class RedisProductionIngestJobServiceImpl implements ProductionIngestJobS
             null,
             null
         );
-        save(queued);
+        save(queued, tenantId);
         redis.opsForValue().set(LATEST_KEY, jobId, JOB_TTL);
         redis.opsForStream().add(StreamRecords.mapBacked(Map.of(FIELD_JOB_ID, jobId)).withStreamKey(STREAM_KEY));
         if (metrics != null) {
@@ -150,9 +150,14 @@ public class RedisProductionIngestJobServiceImpl implements ProductionIngestJobS
      * {@inheritDoc}
      */
     @Override
-    public IngestJobVO get(String jobId) {
+    public IngestJobVO get(String jobId, String tenantId) {
         Map<Object, Object> raw = redis.opsForHash().entries(jobKey(jobId));
         if (raw == null || raw.isEmpty()) {
+            throw new BusinessException(ErrorCodeEnum.INGEST_JOB_NOT_FOUND);
+        }
+        String owner = stringVal(raw.get("tenantId"));
+        if (tenantId != null && !tenantId.isBlank()
+            && owner != null && !owner.isBlank() && !owner.equals(tenantId)) {
             throw new BusinessException(ErrorCodeEnum.INGEST_JOB_NOT_FOUND);
         }
         return toView(raw);
@@ -262,6 +267,10 @@ public class RedisProductionIngestJobServiceImpl implements ProductionIngestJobS
     }
 
     private void save(IngestJobVO job) {
+        save(job, null);
+    }
+
+    private void save(IngestJobVO job, String tenantId) {
         Map<String, String> fields = new LinkedHashMap<>();
         fields.put("jobId", job.jobId());
         fields.put("status", job.status());
@@ -271,6 +280,9 @@ public class RedisProductionIngestJobServiceImpl implements ProductionIngestJobS
             job.sources() == null ? List.of() : job.sources()));
         fields.put("errorMessage", job.errorMessage() == null ? "" : job.errorMessage());
         fields.put("instanceId", job.instanceId() == null ? "" : job.instanceId());
+        if (tenantId != null && !tenantId.isBlank()) {
+            fields.put("tenantId", tenantId.trim());
+        }
         String key = jobKey(job.jobId());
         redis.opsForHash().putAll(key, fields);
         redis.expire(key, JOB_TTL);

@@ -38,6 +38,9 @@ public class CpkTools {
         if (data == null || data.isEmpty()) {
             throw new IllegalArgumentException("样本数据为空，无法计算CPK");
         }
+        if (usl == null && lsl == null) {
+            throw new IllegalArgumentException("USL 与 LSL 不能同时为空");
+        }
         // 添加数据量检查
         if (data.size() < 2) {
             throw new IllegalArgumentException("样本数据量不足，至少需要2个数据点才能计算标准差和CPK");

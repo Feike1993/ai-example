@@ -1,5 +1,6 @@
 package com.feike.ai.production.chat.controller;
 
+import com.feike.ai.production.auth.controller.TestProductionPrincipalFilter;
 import com.feike.ai.production.chat.service.ProductionChatService;
 import com.feike.ai.production.chat.service.impl.ProductionChatServiceImpl;
 
@@ -80,6 +81,7 @@ class ProductionSseMvcTest {
             retrieval, generator, properties, sessionStore, new InMemorySessionLock(), null);
         mockMvc = MockMvcBuilders
             .standaloneSetup(new ProductionChatController(chatService, ingestService, runExecutor))
+            .addFilters(new TestProductionPrincipalFilter())
             .setControllerAdvice(new ProductionExceptionHandler())
             .build();
     }
@@ -114,6 +116,7 @@ class ProductionSseMvcTest {
 
         assertTrue(body.contains("event:error"), body);
         assertTrue(body.contains("upstream_error"), body);
+        assertFalse(body.contains("模型网关"), body);
         assertFalse(body.contains("event:done"), body);
     }
 

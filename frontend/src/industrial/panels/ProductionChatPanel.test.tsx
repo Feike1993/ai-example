@@ -31,7 +31,7 @@ function scriptedFetch(streams: string[][]) {
   let turn = 0
   const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
-    calls.push(`${init?.method ?? 'GET'} ${url}`)
+    calls.push(`${init?.method ?? 'GET'} ${url} ${typeof init?.body === 'string' ? init.body : ''}`)
     if (url.includes('/sessions/')) {
       return new Response(
         JSON.stringify(init?.method === 'DELETE'
@@ -78,7 +78,8 @@ describe('ProductionChatPanel', () => {
     await userEvent.click(screen.getByRole('button', { name: '流式提问' }))
 
     await waitFor(() => expect(screen.getByText('请求失败')).toBeInTheDocument())
-    expect(screen.getByText(/未收到 done 事件/)).toBeInTheDocument()
+    expect(screen.getAllByText(/未收到 done 事件/).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('这是答案。')).toBeInTheDocument()
   })
 
   it('HTTP 错误展示后端中文业务句', async () => {
@@ -137,8 +138,9 @@ describe('ProductionChatPanel', () => {
     await userEvent.click(screen.getByRole('button', { name: '流式提问' }))
     await waitFor(() => expect(screen.getByText('已完成')).toBeInTheDocument())
 
-    // 首轮不带 sessionId，由后端新建
-    expect(calls[0]).not.toContain('sessionId=')
+    // 首轮不带 sessionId，由后端新建；问句走 POST JSON 而不是 URL
+    expect(calls[0]).toContain('POST')
+    expect(calls[0]).not.toContain('"sessionId"')
 
     await userEvent.type(screen.getByLabelText('问题'), '追问')
     await userEvent.click(screen.getByRole('button', { name: '流式提问' }))
@@ -146,7 +148,7 @@ describe('ProductionChatPanel', () => {
 
     const streamCalls = calls.filter((call) => call.includes('/chat/stream'))
     expect(streamCalls).toHaveLength(2)
-    expect(streamCalls[1]).toContain('sessionId=s-1')
+    expect(streamCalls[1]).toContain('"sessionId":"s-1"')
     expect(localStorage.getItem('ai-example.production.sessionId')).toBe('s-1')
   })
 
@@ -239,6 +241,7 @@ describe('ProductionChatPanel', () => {
 
     const streamCall = fetchImpl.mock.calls.find((call) => String(call[0]).includes('/chat/stream'))
     expect(streamCall).toBeTruthy()
+    expect(streamCall?.[1]?.method).toBe('POST')
     const headers = new Headers(streamCall?.[1]?.headers)
     expect(headers.get('Authorization')).toBe('Bearer tok-1')
   })
@@ -254,7 +257,8 @@ describe('ProductionChatPanel', () => {
     await waitFor(() => expect(screen.getByText('已完成')).toBeInTheDocument())
 
     const streamCall = fetchImpl.mock.calls.find((call) => String(call[0]).includes('/chat/stream'))
-    expect(String(streamCall?.[0])).toContain('queryExpansion=hyde')
+    expect(streamCall?.[1]?.method).toBe('POST')
+    expect(String(streamCall?.[1]?.body)).toContain('"queryExpansion":"hyde"')
   })
 
   it('Agent 模式合并 step 并展示拒绝标记', async () => {
