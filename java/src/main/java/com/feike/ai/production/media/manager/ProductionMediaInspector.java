@@ -1,5 +1,6 @@
 package com.feike.ai.production.media.manager;
 
+import com.feike.ai.production.chat.model.ChatImage;
 import com.feike.ai.production.config.ProductionProperties;
 import com.feike.ai.production.media.model.MediaKindEnum;
 import com.feike.ai.production.media.model.MediaProbeVO;
@@ -11,6 +12,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
@@ -52,6 +54,39 @@ public class ProductionMediaInspector {
      */
     public MediaProbeVO inspectImage(MultipartFile file) {
         return inspect(file, MediaKindEnum.IMAGE);
+    }
+
+    /**
+     * 一轮问答的多张图：先数张数，再逐张走 jpeg/png/webp 校验。
+     * <p>
+     * 空数组视为无图。超过 {@code max-images} 直接 422，避免先 accept 再拒把指标打乱。
+     *
+     * @param files 同名 {@code image} parts；可空
+     * @return 已校验的附件；无图时为空列表
+     */
+    public List<ChatImage> inspectImages(MultipartFile[] files) {
+        List<MultipartFile> present = new ArrayList<>();
+        if (files != null) {
+            for (MultipartFile file : files) {
+                if (file != null && !file.isEmpty()) {
+                    present.add(file);
+                }
+            }
+        }
+        if (present.size() > media.maxImages()) {
+            reject(ErrorCodeEnum.MEDIA_TOO_MANY,
+                "一次最多上传 " + media.maxImages() + " 张图片");
+        }
+        List<ChatImage> images = new ArrayList<>();
+        for (MultipartFile file : present) {
+            MediaProbeVO probe = inspectImage(file);
+            try {
+                images.add(new ChatImage(file.getBytes(), probe.mime()));
+            } catch (IOException ex) {
+                throw new BusinessException(ErrorCodeEnum.BAD_REQUEST, "无法读取图片");
+            }
+        }
+        return List.copyOf(images);
     }
 
     /**

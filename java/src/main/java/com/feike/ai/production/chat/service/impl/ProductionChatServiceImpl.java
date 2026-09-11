@@ -9,6 +9,7 @@ import com.feike.ai.production.chat.service.ProductionChatService;
 import com.feike.ai.core.context.ContextBudget;
 import com.feike.ai.production.config.ProductionProperties;
 import com.feike.ai.production.auth.model.ProductionPrincipal;
+import com.feike.ai.production.chat.model.ChatImage;
 import com.feike.ai.production.guardrail.service.GuardrailBlockedException;
 import com.feike.ai.production.guardrail.service.ProductionGuardrail;
 import com.feike.ai.production.lock.manager.SessionLock;
@@ -216,7 +217,7 @@ public class ProductionChatServiceImpl implements ProductionChatService {
         Integer topK,
         String queryExpansion
     ) {
-        streamAnswer(writer, principal, sessionId, question, provider, topK, queryExpansion, null, null);
+        streamAnswer(writer, principal, sessionId, question, provider, topK, queryExpansion, List.of());
     }
 
     /**
@@ -234,6 +235,25 @@ public class ProductionChatServiceImpl implements ProductionChatService {
         byte[] imageBytes,
         String imageMime
     ) {
+        streamAnswer(writer, principal, sessionId, question, provider, topK, queryExpansion,
+            ChatImage.ofNullable(imageBytes, imageMime));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void streamAnswer(
+        SseStreamWriter writer,
+        ProductionPrincipal principal,
+        String sessionId,
+        String question,
+        String provider,
+        Integer topK,
+        String queryExpansion,
+        List<ChatImage> images
+    ) {
+        List<ChatImage> frozenImages = images == null ? List.of() : List.copyOf(images);
         try {
             checkInput(question);
         } catch (GuardrailBlockedException ex) {
@@ -241,7 +261,7 @@ public class ProductionChatServiceImpl implements ProductionChatService {
             return;
         }
         if (!sessionEnabled()) {
-            streamWithin(writer, principal, null, question, provider, topK, queryExpansion, imageBytes, imageMime);
+            streamWithin(writer, principal, null, question, provider, topK, queryExpansion, frozenImages);
             return;
         }
         String id = sessionStore.resolveSessionId(sessionId);
@@ -253,7 +273,7 @@ public class ProductionChatServiceImpl implements ProductionChatService {
             return;
         }
         try (SessionLock.Handle ignored = handle.get()) {
-            streamWithin(writer, principal, id, question, provider, topK, queryExpansion, imageBytes, imageMime);
+            streamWithin(writer, principal, id, question, provider, topK, queryExpansion, frozenImages);
         }
     }
 
@@ -265,10 +285,10 @@ public class ProductionChatServiceImpl implements ProductionChatService {
         String provider,
         Integer topK,
         String queryExpansion,
-        byte[] imageBytes,
-        String imageMime
+        List<ChatImage> images
     ) {
-        boolean hasImage = imageBytes != null && imageBytes.length > 0;
+        int imageCount = images == null ? 0 : images.size();
+        boolean hasImage = imageCount > 0;
         String effectiveProvider = provider;
         if (hasImage && (effectiveProvider == null || effectiveProvider.isBlank())) {
             effectiveProvider = properties.media().visionProvider();
@@ -285,6 +305,7 @@ public class ProductionChatServiceImpl implements ProductionChatService {
             meta.put("historyMessages", history.messages().size());
             meta.put("historyDropped", history.dropped());
             meta.put("hasImage", hasImage);
+            meta.put("imageCount", imageCount);
             String traceId = org.slf4j.MDC.get("traceId");
             if (traceId != null) {
                 meta.put("traceId", traceId);
@@ -316,9 +337,19 @@ public class ProductionChatServiceImpl implements ProductionChatService {
             }
 
             StringBuilder answer = new StringBuilder();
-            if (hasImage) {
+            if (imageCount == 1) {
+                ChatImage one = images.get(0);
                 generator.stream(question, effectiveProvider, hits.hits(), history.messages(),
-                    imageBytes, imageMime, chunk -> {
+                    one.bytes(), one.mime(), chunk -> {
+                        if (Thread.currentThread().isInterrupted()) {
+                            throw new CancellationException("客户端已断开");
+                        }
+                        answer.append(chunk);
+                        writer.delta(chunk);
+                    });
+            } else if (imageCount > 1) {
+                generator.stream(question, effectiveProvider, hits.hits(), history.messages(),
+                    images, chunk -> {
                         if (Thread.currentThread().isInterrupted()) {
                             throw new CancellationException("客户端已断开");
                         }
@@ -337,7 +368,7 @@ public class ProductionChatServiceImpl implements ProductionChatService {
             checkGenerated(answer.toString(), hits.sources());
 
             writer.emit(StreamEventTypeEnum.USAGE, usage(answer.length(), hits.sources().size()));
-            boolean persisted = persist(principal, sessionId, writer.runId(), persistQuestion(question, hasImage),
+            boolean persisted = persist(principal, sessionId, writer.runId(), persistQuestion(question, imageCount),
                 answer.toString());
             writer.done(doneBody(false, sessionId, persisted));
         } catch (CancellationException ex) {
@@ -387,19 +418,22 @@ public class ProductionChatServiceImpl implements ProductionChatService {
     /**
      * 落库问句：有图只写占位前缀，不写二进制。刷新后跟问不再带原图。
      *
-     * @param question 用户原句
-     * @param hasImage 本轮是否带图
+     * @param question   用户原句
+     * @param imageCount 本轮张数
      * @return 写入会话的文本
      */
-    static String persistQuestion(String question, boolean hasImage) {
+    static String persistQuestion(String question, int imageCount) {
         String text = question == null ? "" : question;
-        if (!hasImage) {
+        if (imageCount <= 0) {
             return text;
         }
-        if (text.startsWith("[图片]")) {
+        if (text.startsWith("[图片")) {
             return text;
         }
-        return "[图片] " + text;
+        if (imageCount == 1) {
+            return "[图片] " + text;
+        }
+        return "[图片×" + imageCount + "] " + text;
     }
 
     /** 读历史并按预算裁剪；会话关闭时返回空。 */

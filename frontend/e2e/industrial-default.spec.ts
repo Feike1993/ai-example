@@ -146,6 +146,32 @@ test.describe('工业级默认 E2E', () => {
     expect(body.sha256).toHaveLength(64)
   })
 
+  test('无 JWT 时带图流式 401', async ({ request }) => {
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01])
+    const form = new FormData()
+    form.set('question', '描述这张图')
+    form.append('image', new File([jpeg], 'tiny.jpg', { type: 'image/jpeg' }))
+    const res = await request.post('/ai-example/api/v1/chat/stream', { multipart: form })
+    expect(res.status()).toBe(401)
+    expect(((await res.json()) as { code: string }).code).toBe('auth_missing_token')
+  })
+
+  test('alice 四张 jpeg 流式 422 media_too_many', async ({ request }) => {
+    const token = await fetchToken(request, 'alice')
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01])
+    const form = new FormData()
+    form.set('question', '对比这些图')
+    for (let i = 0; i < 4; i += 1) {
+      form.append('image', new File([jpeg], `tiny${i}.jpg`, { type: 'image/jpeg' }))
+    }
+    const res = await request.post('/ai-example/api/v1/chat/stream', {
+      headers: { Authorization: `Bearer ${token}` },
+      multipart: form,
+    })
+    expect(res.status()).toBe(422)
+    expect(((await res.json()) as { code: string }).code).toBe('media_too_many')
+  })
+
   test('alice 重建语料返回 403', async ({ page }) => {
     await login(page, 'alice')
     await page.getByRole('button', { name: '重建语料' }).click()

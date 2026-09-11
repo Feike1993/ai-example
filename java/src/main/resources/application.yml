@@ -50,9 +50,9 @@ spring:
       enabled: true
       force: true
     multipart:
-      # 略大于 app.production.media.max-bytes（默认 2MiB），让超限走到业务 422 而不是容器先拒
+      # 略大于单张 max-bytes；请求上限约 3×2MiB，让超张/超体积走到业务 422
       max-file-size: 3MB
-      max-request-size: 4MB
+      max-request-size: 8MB
   application:
     name: ai-example
   threads:
@@ -309,6 +309,8 @@ app:
       tts-model: ${PRODUCTION_TTS_MODEL:qwen3-tts-flash}
       tts-voice: ${PRODUCTION_TTS_VOICE:Cherry}
       max-speak-chars: ${PRODUCTION_TTS_MAX_CHARS:200}
+      # 一轮最多几张；超过走 422 media_too_many，不调模型
+      max-images: ${PRODUCTION_MEDIA_MAX_IMAGES:3}
     users:
       - username: alice
         password: demo

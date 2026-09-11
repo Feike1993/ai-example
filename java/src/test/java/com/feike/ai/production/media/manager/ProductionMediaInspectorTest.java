@@ -43,6 +43,35 @@ class ProductionMediaInspectorTest {
     }
 
     @Test
+    void fourImagesShouldBeTooManyWithoutAccepting() {
+        MockMultipartFile jpeg = jpegFile();
+        BusinessException ex = assertThrows(BusinessException.class, () ->
+            inspector.inspectImages(new MockMultipartFile[] {jpeg, jpeg, jpeg, jpeg}));
+        assertEquals("media_too_many", ex.getErrorCode().getCode());
+        assertEquals(1.0, metrics.snapshot().get("mediaRejected").doubleValue());
+        assertEquals(0.0, metrics.snapshot().get("mediaAccepted").doubleValue());
+    }
+
+    @Test
+    void emptyImagesShouldBeNoOp() {
+        assertTrue(inspector.inspectImages(null).isEmpty());
+        assertTrue(inspector.inspectImages(new MockMultipartFile[0]).isEmpty());
+    }
+
+    @Test
+    void threeJpegsShouldPass() {
+        MockMultipartFile jpeg = jpegFile();
+        var images = inspector.inspectImages(new MockMultipartFile[] {jpeg, jpeg, jpeg});
+        assertEquals(3, images.size());
+        assertEquals("image/jpeg", images.get(0).mime());
+        assertEquals(3.0, metrics.snapshot().get("mediaAccepted").doubleValue());
+    }
+
+    private static MockMultipartFile jpegFile() {
+        return new MockMultipartFile("image", "tiny.jpg", "image/jpeg", TINY_JPEG);
+    }
+
+    @Test
     void oversizedShouldBeTooLarge() {
         byte[] body = new byte[(int) ProductionProperties.Media.DEFAULT_MAX_BYTES + 1];
         body[0] = (byte) 0xFF;

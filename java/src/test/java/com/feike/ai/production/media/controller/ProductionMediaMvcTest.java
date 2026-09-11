@@ -48,6 +48,7 @@ import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -209,6 +210,47 @@ class ProductionMediaMvcTest {
             .andExpect(jsonPath("$.code").value("media_unsupported"));
         verify(generator, never()).stream(anyString(), any(), any(), any(), any());
         verify(generator, never()).stream(anyString(), any(), any(), any(), any(), any(), any());
+        verify(generator, never()).stream(anyString(), any(), any(), any(), anyList(), any());
+    }
+
+    @Test
+    void postStreamWithTooManyJpegsShouldRejectBeforeModel() throws Exception {
+        String token = login();
+        var request = multipart("/api/v1/chat/stream")
+            .param("question", "这是什么")
+            .header("Authorization", "Bearer " + token);
+        for (int i = 0; i < 4; i++) {
+            request.file(new MockMultipartFile("image", "tiny" + i + ".jpg", "image/jpeg", TINY_JPEG));
+        }
+        mockMvc.perform(request)
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.code").value("media_too_many"));
+        verify(generator, never()).stream(anyString(), any(), any(), any(), any());
+        verify(generator, never()).stream(anyString(), any(), any(), any(), any(), any(), any());
+        verify(generator, never()).stream(anyString(), any(), any(), any(), anyList(), any());
+    }
+
+    @Test
+    void postStreamWithTwoJpegsShouldSetImageCount() throws Exception {
+        when(retrieval.retrieve(any())).thenReturn(
+            new ProductionRetrievalService.RetrievalResult(List.of(), List.of(), true, "hybrid"));
+        doAnswer(invocation -> {
+            Consumer<String> onChunk = invocation.getArgument(5);
+            onChunk.accept("两张示例图。");
+            return null;
+        }).when(generator).stream(anyString(), any(), any(), any(), anyList(), any());
+        String token = login();
+        MvcResult result = mockMvc.perform(multipart("/api/v1/chat/stream")
+                .file(new MockMultipartFile("image", "a.jpg", "image/jpeg", TINY_JPEG))
+                .file(new MockMultipartFile("image", "b.jpg", "image/jpeg", TINY_JPEG))
+                .param("question", "对比这两张图")
+                .header("Authorization", "Bearer " + token))
+            .andExpect(request().asyncStarted())
+            .andReturn();
+        String body = awaitBody(result);
+        assertTrue(body.contains("\"hasImage\":true"), body);
+        assertTrue(body.contains("\"imageCount\":2"), body);
+        assertTrue(body.contains("event:done"), body);
     }
 
     @Test
@@ -229,6 +271,7 @@ class ProductionMediaMvcTest {
             .andReturn();
         String body = awaitBody(result);
         assertTrue(body.contains("\"hasImage\":true"), body);
+        assertTrue(body.contains("\"imageCount\":1"), body);
         assertTrue(body.contains("event:done"), body);
     }
 

@@ -1,5 +1,6 @@
 package com.feike.ai.production.chat.controller;
 
+import com.feike.ai.production.chat.model.ChatImage;
 import com.feike.ai.production.chat.model.ChatRequestDTO;
 import com.feike.ai.production.chat.model.LockProbeQuery;
 import com.feike.ai.production.chat.model.LockProbeVO;
@@ -16,7 +17,6 @@ import com.feike.ai.production.auth.controller.JwtAuthFilter;
 import com.feike.ai.production.auth.model.ProductionPrincipal;
 import com.feike.ai.production.config.ProductionInstanceIdentity;
 import com.feike.ai.production.media.manager.ProductionMediaInspector;
-import com.feike.ai.production.media.model.MediaProbeVO;
 import com.feike.ai.production.observability.service.ProductionMetrics;
 import com.feike.ai.production.rag.ingest.model.IngestJobVO;
 import com.feike.ai.production.rag.ingest.service.ProductionIngestJobService;
@@ -277,16 +277,16 @@ public class ProductionChatController {
     }
 
     /**
-     * 图文流式问答。SSE 契约与 GET 相同；{@code meta.hasImage} 标明本轮是否带图。
+     * 图文流式问答。SSE 契约与 GET 相同；{@code meta.hasImage} / {@code meta.imageCount} 标明本轮是否带图。
      * <p>
-     * 有图时先做 mime / 大小校验再进生成，避免无 Key 时把坏文件打到网关。
+     * 同名 {@code image} 可重复；有图时先做 mime / 大小 / 张数校验再进生成，避免无 Key 时把坏文件打到网关。
      *
      * @param question       问题
      * @param sessionId      会话
      * @param provider       模型
      * @param topK           topK
      * @param queryExpansion 查询扩展
-     * @param image          可选单图
+     * @param image          可选同名多图
      * @param http           身份
      * @param response       限流头
      * @return SSE
@@ -302,24 +302,17 @@ public class ProductionChatController {
         @RequestParam(required = false) String provider,
         @RequestParam(required = false) Integer topK,
         @RequestParam(required = false) String queryExpansion,
-        @RequestParam(required = false) MultipartFile image,
+        @RequestParam(required = false) MultipartFile[] image,
         HttpServletRequest http,
         HttpServletResponse response
     ) {
         ProductionPrincipal principal = rateLimit(http, response);
-        byte[] imageBytes = null;
-        String imageMime = null;
-        if (image != null && !image.isEmpty()) {
+        List<ChatImage> images = List.of();
+        if (image != null && image.length > 0) {
             if (mediaInspector == null) {
                 throw new BusinessException(ErrorCodeEnum.MEDIA_UNSUPPORTED, "不支持的媒体类型");
             }
-            MediaProbeVO probe = mediaInspector.inspectImage(image);
-            try {
-                imageBytes = image.getBytes();
-            } catch (java.io.IOException ex) {
-                throw new BusinessException(ErrorCodeEnum.BAD_REQUEST, "无法读取图片");
-            }
-            imageMime = probe.mime();
+            images = mediaInspector.inspectImages(image);
         }
         if (metrics != null) {
             metrics.chatRun();
@@ -327,11 +320,10 @@ public class ProductionChatController {
         attachTrace(response);
         audit(principal, "chat.stream", http, 200, null, question);
         ProductionPrincipal frozen = principal;
-        byte[] frozenImage = imageBytes;
-        String frozenMime = imageMime;
+        List<ChatImage> frozenImages = images;
         return runExecutor.start(writer ->
             chatService.streamAnswer(
-                writer, frozen, sessionId, question, provider, topK, queryExpansion, frozenImage, frozenMime));
+                writer, frozen, sessionId, question, provider, topK, queryExpansion, frozenImages));
     }
 
     /**

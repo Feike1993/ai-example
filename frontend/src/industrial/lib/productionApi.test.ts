@@ -98,12 +98,19 @@ describe('productionApi 鉴权头', () => {
     expect(chatStreamUrl({ question: 'hi', queryExpansion: 'hyde' })).toContain('queryExpansion=hyde')
   })
 
-  it('图文 FormData 含 question 与 image', () => {
+  it('图文 FormData 含 question 与同名多 image', () => {
     const file = new File([new Uint8Array([1, 2])], 'a.jpg', { type: 'image/jpeg' })
-    const form = chatStreamForm({ question: '这是什么', image: file, provider: 'dashscope' })
+    const form = chatStreamForm({ question: '这是什么', images: [file], provider: 'dashscope' })
     expect(form.get('question')).toBe('这是什么')
     expect(form.get('provider')).toBe('dashscope')
     expect(form.get('image')).toBe(file)
+  })
+
+  it('两张图 POST 的 FormData 有两个 image', () => {
+    const a = new File([new Uint8Array([1])], 'a.jpg', { type: 'image/jpeg' })
+    const b = new File([new Uint8Array([2])], 'b.jpg', { type: 'image/jpeg' })
+    const form = chatStreamForm({ question: '对比', images: [a, b] })
+    expect(form.getAll('image')).toEqual([a, b])
   })
 
   it('媒体探针 POST multipart 且带 Authorization', async () => {

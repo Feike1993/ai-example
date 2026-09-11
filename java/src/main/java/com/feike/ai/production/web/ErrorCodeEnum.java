@@ -27,6 +27,7 @@ public enum ErrorCodeEnum {
     CITATION_REQUIRED("citation_required", HttpStatus.UNPROCESSABLE_ENTITY, "回答缺少有效引用，已拒绝展示"),
     MEDIA_UNSUPPORTED("media_unsupported", HttpStatus.UNPROCESSABLE_ENTITY, "不支持的媒体类型"),
     MEDIA_TOO_LARGE("media_too_large", HttpStatus.UNPROCESSABLE_ENTITY, "文件超过大小上限"),
+    MEDIA_TOO_MANY("media_too_many", HttpStatus.UNPROCESSABLE_ENTITY, "一次上传的图片超过张数上限"),
     SPEECH_FAILED("speech_failed", HttpStatus.BAD_GATEWAY, "语音服务调用失败"),
     BAD_REQUEST("bad_request", HttpStatus.BAD_REQUEST, "请求参数不合法"),
     UNKNOWN_PROVIDER("unknown_provider", HttpStatus.BAD_REQUEST, "未知 LLM Provider"),

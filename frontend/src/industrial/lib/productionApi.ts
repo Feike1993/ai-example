@@ -342,10 +342,13 @@ export function chatStreamPostUrl(): string {
   return `${PRODUCTION_BASE}/chat/stream`
 }
 
+/** 一轮最多几张图，与后端默认 PRODUCTION_MEDIA_MAX_IMAGES 对齐；后端仍是权威。 */
+export const PRODUCTION_MAX_IMAGES = 3
+
 /**
- * 组装图文流式 FormData。
+ * 组装图文流式 FormData。多张图用同名 `image` 重复 part，兼容第九阶段单图 curl。
  *
- * @param params 问句与可选图片
+ * @param params 问句与图片列表
  */
 export function chatStreamForm(params: {
   question: string
@@ -353,7 +356,7 @@ export function chatStreamForm(params: {
   provider?: string
   topK?: number
   queryExpansion?: string
-  image: File
+  images: File[]
 }): FormData {
   const form = new FormData()
   form.set('question', params.question)
@@ -369,7 +372,9 @@ export function chatStreamForm(params: {
   if (params.queryExpansion && params.queryExpansion !== 'none') {
     form.set('queryExpansion', params.queryExpansion)
   }
-  form.set('image', params.image)
+  for (const image of params.images) {
+    form.append('image', image)
+  }
   return form
 }
 

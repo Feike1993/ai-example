@@ -103,6 +103,7 @@
 | 多实例 Java（会话锁 / SSE 续传） | 工业级 | 已覆盖（第六阶段） | Redis 锁与事件回放本就为跨进程；Compose 现为双副本 | 见 [industrial-ha.md](industrial-ha.md)；`./scripts/industrial-ha.sh` |
 | 生产 Agent 工具策略 / 逐步审计 / 步骤时间线 | 工业级 | 已覆盖（第八阶段） | 真循环要 LLM，故探针 + 默认 E2E 不打 `/agent/stream` | 见 [industrial-agent.md](industrial-agent.md) |
 | 图文多模态 / 语音（本机演示） | 工业级 | 已覆盖（第九阶段） | 不落盘、不进 pgvector；默认 E2E 不打 VL/ASR/TTS | 见 [industrial-media.md](industrial-media.md) |
+| 一轮多图 | 工业级 | 已覆盖（第十阶段） | 第九阶段刻意单图；同名 `image`、默认 3 张、不落 blob | 见 [industrial-multi-image.md](industrial-multi-image.md) |
 | 有副作用的真实外部工具 | 第一期 | 明确不做（本仓） | 演示工具保持幂等、可离线 | 业务项目 |
 | 仓库根目录 `package.json` / `pnpm start` | 前端引入后 | 已覆盖（仅脚本转发） | 根 `package.json` 无依赖、无 `start`，只转发 `test:e2e`，避免 pnpm 11 在 git 根误跑 install | 不要把 Vite 工程升到仓库根 |
 

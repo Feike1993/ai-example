@@ -6,7 +6,7 @@ import { ResultBody } from '../../components/ResultBody'
 import { Workbench } from '../../components/Workbench'
 import { authHeaders, notifyUnauthorized, rememberRunId, rememberTraceId } from '../lib/auth'
 import { mergeAgentSteps } from '../lib/agentSteps'
-import { agentStreamUrl, chatStreamForm, chatStreamPostUrl, chatStreamUrl, clearSession, getIngestJob, getSession, postIngest, postSpeak, postTranscribe, resumeUrl } from '../lib/productionApi'
+import { agentStreamUrl, chatStreamForm, chatStreamPostUrl, chatStreamUrl, clearSession, getIngestJob, getSession, postIngest, postSpeak, postTranscribe, PRODUCTION_MAX_IMAGES, resumeUrl } from '../lib/productionApi'
 import { toTurns, type Turn } from '../lib/sessionTurns'
 import {
   StreamAbortedError,
@@ -56,22 +56,26 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
   const [errorCode, setErrorCode] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [ingesting, setIngesting] = useState(false)
-  const [image, setImage] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [images, setImages] = useState<File[]>([])
+  const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const [recording, setRecording] = useState(false)
   const [speaking, setSpeaking] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
-  const previewUrlRef = useRef<string | null>(null)
 
   useEffect(() => () => {
     abortRef.current?.abort()
     recorderRef.current?.stream.getTracks().forEach((track) => track.stop())
-    if (previewUrlRef.current) {
-      URL.revokeObjectURL(previewUrlRef.current)
-    }
   }, [])
+
+  useEffect(() => {
+    const urls = images.map((file) => URL.createObjectURL(file))
+    setImagePreviews(urls)
+    return () => {
+      urls.forEach((url) => URL.revokeObjectURL(url))
+    }
+  }, [images])
 
   // 刷新页面后把上次会话的历史拉回来，否则界面看着像新会话、后端却还带着上下文。
   // 这里直接读 localStorage 而不依赖 sessionId 状态：只该在挂载时拉一次，
@@ -115,7 +119,9 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
     setStatus('streaming')
 
     const asked = question
-    const displayQuestion = image && mode === 'chat' ? `[图片] ${asked}` : asked
+    const imagePrefix =
+      images.length === 0 ? '' : images.length === 1 ? '[图片] ' : `[图片×${images.length}] `
+    const displayQuestion = mode === 'chat' ? `${imagePrefix}${asked}` : asked
     let current: Turn = { question: displayQuestion, answer: '', sources: [], usage: null, steps: [] }
     setPending(current)
     const update = (patch: Partial<Turn>) => {
@@ -125,7 +131,7 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
 
     let persisted = true
     try {
-      const withImage = mode === 'chat' && image != null
+      const withImage = mode === 'chat' && images.length > 0
       const url = mode === 'agent'
         ? agentStreamUrl({ question: asked, sessionId, provider })
         : withImage
@@ -151,7 +157,7 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
                 provider,
                 topK: Number(topK) || undefined,
                 queryExpansion,
-                image,
+                images,
               })
             : undefined,
           headers: authHeaders(),
@@ -269,27 +275,27 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
     }
   }
 
-  const clearImage = () => {
-    if (previewUrlRef.current) {
-      URL.revokeObjectURL(previewUrlRef.current)
-      previewUrlRef.current = null
-    }
-    setImage(null)
-    setImagePreview(null)
+  const clearImages = () => {
+    setImages([])
   }
 
-  const onPickImage = (file: File | null) => {
-    if (!file) {
-      clearImage()
+  const removeImage = (index: number) => {
+    setImages((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const onPickImages = (files: File[]) => {
+    if (files.length === 0) {
       return
     }
-    if (previewUrlRef.current) {
-      URL.revokeObjectURL(previewUrlRef.current)
-    }
-    const url = URL.createObjectURL(file)
-    previewUrlRef.current = url
-    setImage(file)
-    setImagePreview(url)
+    setImages((prev) => {
+      const merged = [...prev, ...files]
+      if (merged.length > PRODUCTION_MAX_IMAGES) {
+        setError(`一次最多上传 ${PRODUCTION_MAX_IMAGES} 张图片`)
+        setErrorCode('media_too_many')
+        return merged.slice(0, PRODUCTION_MAX_IMAGES)
+      }
+      return merged
+    })
   }
 
   const onToggleRecord = async () => {
@@ -398,7 +404,7 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
       hint={
         mode === 'agent'
           ? 'Agent 模式会多发 step 事件。被角色策略拒绝的工具带 denied:true，不会静默吞掉。'
-          : '严格 SSE 契约：meta → sources → delta → usage → done。可附一张图识图（不入库）；麦克风先转写再提问，朗读走 TTS。查询扩展默认关闭。'
+          : `严格 SSE 契约：meta → sources → delta → usage → done。可附最多 ${PRODUCTION_MAX_IMAGES} 张图识图（不入库）；麦克风先转写再提问，朗读走 TTS。查询扩展默认关闭。`
       }
       streaming={streaming}
       form={
@@ -409,7 +415,7 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
               const next = value as 'chat' | 'agent'
               setMode(next)
               if (next === 'agent') {
-                clearImage()
+                clearImages()
               }
             }}
             data={[
@@ -444,16 +450,17 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
                     data-testid="image-pick"
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
+                    multiple
                     hidden
                     onChange={(event) => {
-                      onPickImage(event.currentTarget.files?.[0] ?? null)
+                      onPickImages(Array.from(event.currentTarget.files ?? []))
                       event.currentTarget.value = ''
                     }}
                   />
                 </Button>
-                {image ? (
-                  <Button variant="subtle" color="red" onClick={clearImage} disabled={streaming}>
-                    清除图片
+                {images.length > 0 ? (
+                  <Button variant="subtle" color="red" onClick={clearImages} disabled={streaming}>
+                    清除全部
                   </Button>
                 ) : null}
                 <Button
@@ -465,13 +472,29 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
                   {recording ? '停止录音' : '麦克风'}
                 </Button>
               </Group>
-              {imagePreview ? (
-                <img
-                  data-testid="image-preview"
-                  src={imagePreview}
-                  alt="待发送图片预览"
-                  style={{ maxHeight: 120, maxWidth: '100%', objectFit: 'contain' }}
-                />
+              {imagePreviews.length > 0 ? (
+                <Group gap="sm" data-testid="image-preview-list">
+                  {imagePreviews.map((src, index) => (
+                    <Stack key={`${images[index]?.name ?? index}-${src}`} gap={4} align="flex-start">
+                      <img
+                        data-testid="image-preview"
+                        src={src}
+                        alt={`待发送图片预览 ${index + 1}`}
+                        style={{ maxHeight: 120, maxWidth: 160, objectFit: 'contain' }}
+                      />
+                      <Button
+                        size="xs"
+                        variant="subtle"
+                        color="red"
+                        data-testid={`image-remove-${index}`}
+                        onClick={() => removeImage(index)}
+                        disabled={streaming}
+                      >
+                        清除
+                      </Button>
+                    </Stack>
+                  ))}
+                </Group>
               ) : null}
             </>
           ) : null}

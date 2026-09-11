@@ -241,3 +241,11 @@ Hybrid RAG、golden 评测、Redis 持久会话、逐步 tool SSE、流式 token
 - industrial.html：选图 / 麦克风转写 / 终答朗读；Agent 模式不选图
 - 默认 Playwright 只打探针；真 VL/ASR/TTS 本机选跑
 - 见 [docs/industrial-media.md](docs/industrial-media.md)
+
+## [Unreleased] — 工业级第十阶段（一轮多图）
+
+- `POST /api/v1/chat/stream` 同名重复 `image`：默认最多 3 张，超过 422 `media_too_many`，不调模型
+- SSE `meta.hasImage` 保留，新增 `meta.imageCount`；落库 `[图片]` / `[图片×N]` 占位，不写 blob
+- industrial.html 多选预览、可单张清除；Agent 模式仍不选图
+- 默认 Playwright：无 JWT POST stream 401；alice 4 张 jpeg 422（不打 VL）
+- 见 [docs/industrial-multi-image.md](docs/industrial-multi-image.md)

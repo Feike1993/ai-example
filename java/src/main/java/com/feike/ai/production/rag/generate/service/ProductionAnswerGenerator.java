@@ -1,5 +1,6 @@
 package com.feike.ai.production.rag.generate.service;
 
+import com.feike.ai.production.chat.model.ChatImage;
 import com.feike.ai.production.secret.manager.ProductionModelFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.Message;
@@ -42,7 +43,7 @@ public class ProductionAnswerGenerator {
 
     /** 有图且检索可能为空：允许描述图片，但仍不得编造企业知识库里没有的事实。 */
     private static final String SYSTEM_WITH_IMAGE = """
-        你是企业知识库助手。用户可能附带一张图片。
+        你是企业知识库助手。用户可能附带一张或多张图片。
         有「检索上下文」时：企业事实仍只根据检索上下文；图片用于理解用户在问哪一段或哪张图。
         检索上下文为空时：可以根据图片本身用简体中文描述或回答，不要编造知识库条目。
         凡是依据检索上下文的陈述，必须用 [C1]、[C2] 形式引用对应编号来源；不要编造编号。
@@ -68,9 +69,9 @@ public class ProductionAnswerGenerator {
      * @return 答案正文
      */
     public String generate(String question, String provider, List<Document> hits, List<Message> history) {
-        String answer = client(provider, null)
+        String answer = client(provider, List.of())
             .prompt()
-            .messages(buildMessages(question, hits, history, null, null))
+            .messages(buildMessages(question, hits, history, List.of()))
             .call()
             .content();
         return answer == null ? "" : answer;
@@ -95,7 +96,7 @@ public class ProductionAnswerGenerator {
         List<Message> history,
         Consumer<String> onChunk
     ) {
-        stream(question, provider, hits, history, null, null, onChunk);
+        stream(question, provider, hits, history, List.of(), onChunk);
     }
 
     /**
@@ -118,9 +119,31 @@ public class ProductionAnswerGenerator {
         String imageMime,
         Consumer<String> onChunk
     ) {
-        client(provider, imageBytes)
+        stream(question, provider, hits, history, ChatImage.ofNullable(imageBytes, imageMime), onChunk);
+    }
+
+    /**
+     * 流式生成，可附带多张图。
+     *
+     * @param question 用户问题
+     * @param provider Chat Provider id
+     * @param hits     检索命中
+     * @param history  已裁剪的多轮历史，可为空
+     * @param images   附件；空则纯文本
+     * @param onChunk  增量回调
+     */
+    public void stream(
+        String question,
+        String provider,
+        List<Document> hits,
+        List<Message> history,
+        List<ChatImage> images,
+        Consumer<String> onChunk
+    ) {
+        List<ChatImage> frozen = images == null ? List.of() : images;
+        client(provider, frozen)
             .prompt()
-            .messages(buildMessages(question, hits, history, imageBytes, imageMime))
+            .messages(buildMessages(question, hits, history, frozen))
             .stream()
             .content()
             .toStream()
@@ -131,8 +154,8 @@ public class ProductionAnswerGenerator {
             });
     }
 
-    private ChatClient client(String provider, byte[] imageBytes) {
-        if (hasImage(imageBytes)) {
+    private ChatClient client(String provider, List<ChatImage> images) {
+        if (images != null && !images.isEmpty()) {
             return models.visionClient(provider);
         }
         return models.plainClient(provider);
@@ -151,52 +174,51 @@ public class ProductionAnswerGenerator {
      * @return 送入模型的消息序列
      */
     static List<Message> buildMessages(String question, List<Document> hits, List<Message> history) {
-        return buildMessages(question, hits, history, null, null);
+        return buildMessages(question, hits, history, List.of());
     }
 
     /**
      * 组装完整消息序列：system → 历史 → 本轮（含检索上下文，可选图片）。
      *
-     * @param question   用户问题
-     * @param hits       检索命中
-     * @param history    已裁剪的多轮历史，可为空
-     * @param imageBytes 图片；可空
-     * @param imageMime  mime；可空
+     * @param question 用户问题
+     * @param hits     检索命中
+     * @param history  已裁剪的多轮历史，可为空
+     * @param images   附件；可空
      * @return 送入模型的消息序列
      */
     static List<Message> buildMessages(
         String question,
         List<Document> hits,
         List<Message> history,
-        byte[] imageBytes,
-        String imageMime
+        List<ChatImage> images
     ) {
+        List<ChatImage> frozen = images == null ? List.of() : images;
         List<Message> messages = new ArrayList<>();
-        messages.add(new SystemMessage(hasImage(imageBytes) ? SYSTEM_WITH_IMAGE : SYSTEM_GROUNDED));
+        messages.add(new SystemMessage(frozen.isEmpty() ? SYSTEM_GROUNDED : SYSTEM_WITH_IMAGE));
         if (history != null) {
             messages.addAll(history);
         }
-        messages.add(userMessage(question, hits, imageBytes, imageMime));
+        messages.add(userMessage(question, hits, frozen));
         return messages;
     }
 
     private static UserMessage userMessage(
         String question,
         List<Document> hits,
-        byte[] imageBytes,
-        String imageMime
+        List<ChatImage> images
     ) {
         String text = buildUserMessage(question, hits);
-        if (!hasImage(imageBytes)) {
+        if (images == null || images.isEmpty()) {
             return new UserMessage(text);
         }
-        MimeType mime = MimeType.valueOf(imageMime == null || imageMime.isBlank() ? "image/jpeg" : imageMime);
-        Media media = new Media(mime, new ByteArrayResource(imageBytes));
+        Media[] media = new Media[images.size()];
+        for (int i = 0; i < images.size(); i++) {
+            ChatImage image = images.get(i);
+            String raw = image.mime();
+            MimeType mime = MimeType.valueOf(raw == null || raw.isBlank() ? "image/jpeg" : raw);
+            media[i] = new Media(mime, new ByteArrayResource(image.bytes()));
+        }
         return UserMessage.builder().text(text).media(media).build();
-    }
-
-    private static boolean hasImage(byte[] imageBytes) {
-        return imageBytes != null && imageBytes.length > 0;
     }
 
     /**

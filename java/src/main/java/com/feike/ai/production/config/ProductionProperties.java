@@ -98,7 +98,7 @@ public record ProductionProperties(
             queryExpansion = new QueryExpansion(null, null);
         }
         if (media == null) {
-            media = new Media(null, null, null, null, null, null, null, null, null);
+            media = new Media(null, null, null, null, null, null, null, null, null, null);
         }
     }
 
@@ -308,7 +308,7 @@ public record ProductionProperties(
      * 为什么单独一块而不是打开 Spring AI 的 OpenAI Audio 自动配置：那会和教学
      * {@code ChatModel} 抢同一套客户端；ASR/TTS 用手写 HTTP 调 compatible-mode，
      * 识图则覆盖现有 {@code OpenAiChatModel} 的模型名为视觉模型。文件不落盘、
-     * 不进 pgvector，刷新后历史只剩 {@code [图片]} 占位。
+     * 不进 pgvector，刷新后历史只剩 {@code [图片]} / {@code [图片×N]} 占位。
      *
      * @param maxBytes        单文件上限；默认 2MiB
      * @param imageMimes      识图允许的 mime
@@ -319,6 +319,7 @@ public record ProductionProperties(
      * @param ttsModel        TTS 模型
      * @param ttsVoice        演示音色，写死一个配置项
      * @param maxSpeakChars   TTS 输入字符上限
+     * @param maxImages       一轮问答最多几张图；默认 3
      */
     public record Media(
         Long maxBytes,
@@ -329,7 +330,8 @@ public record ProductionProperties(
         String asrModel,
         String ttsModel,
         String ttsVoice,
-        Integer maxSpeakChars
+        Integer maxSpeakChars,
+        Integer maxImages
     ) {
         /** 默认 2MiB，与探针 / 带图流式同一把尺子。 */
         public static final long DEFAULT_MAX_BYTES = 2L * 1024 * 1024;
@@ -365,6 +367,9 @@ public record ProductionProperties(
             }
             if (maxSpeakChars == null || maxSpeakChars < 1) {
                 maxSpeakChars = 200;
+            }
+            if (maxImages == null || maxImages < 1) {
+                maxImages = 3;
             }
         }
 

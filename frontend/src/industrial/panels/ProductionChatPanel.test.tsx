@@ -300,4 +300,22 @@ describe('ProductionChatPanel', () => {
     expect(streamCall?.[1]?.method).toBe('POST')
     expect(streamCall?.[1]?.body).toBeInstanceOf(FormData)
   })
+
+  it('两张图 POST 的 FormData 有两个 image', async () => {
+    const a = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], 'a.jpg', { type: 'image/jpeg' })
+    const b = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], 'b.jpg', { type: 'image/jpeg' })
+    const inner = fakeFetch([META, SOURCES, DELTA, USAGE, DONE])
+    const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) => inner(input, init))
+    vi.stubGlobal('fetch', fetchImpl as unknown as typeof fetch)
+    renderPanel(<ProductionChatPanel provider="deepseek" />)
+
+    await userEvent.upload(screen.getByTestId('image-pick'), [a, b])
+    await userEvent.click(screen.getByRole('button', { name: '流式提问' }))
+    await waitFor(() => expect(screen.getByText('已完成')).toBeInTheDocument())
+
+    const streamCall = fetchImpl.mock.calls.find((call) => String(call[0]).includes('/chat/stream'))
+    expect(streamCall?.[1]?.body).toBeInstanceOf(FormData)
+    const form = streamCall?.[1]?.body as FormData
+    expect(form.getAll('image')).toHaveLength(2)
+  })
 })

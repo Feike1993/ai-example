@@ -1,5 +1,6 @@
 package com.feike.ai.production.chat.service.impl;
 
+import com.feike.ai.production.chat.model.ChatImage;
 import com.feike.ai.production.chat.service.ProductionChatService;
 import com.feike.ai.production.chat.service.SessionBusyException;
 import com.feike.ai.production.chat.service.SessionDisabledException;
@@ -38,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -123,14 +125,36 @@ class ProductionChatServiceImplTest {
 
         verify(generator).stream(anyString(), any(), any(), any(), any(), any(), any());
         assertTrue(sink.dataOf(StreamEventTypeEnum.META).contains("\"hasImage\":true"));
+        assertTrue(sink.dataOf(StreamEventTypeEnum.META).contains("\"imageCount\":1"));
         assertTrue(sink.dataOf(StreamEventTypeEnum.DELTA).contains("猫"));
     }
 
     @Test
+    void twoImagesShouldCallListStreamAndMarkImageCount() {
+        when(retrieval.retrieve(any(ProductionRetrieveQuery.class))).thenReturn(empty());
+        doAnswer(invocation -> {
+            Consumer<String> onChunk = invocation.getArgument(5);
+            onChunk.accept("两张图。");
+            return null;
+        }).when(generator).stream(anyString(), any(), any(), any(), anyList(), any());
+
+        byte[] jpeg = new byte[] {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 0x00};
+        CollectingSink sink = new CollectingSink();
+        service.streamAnswer(writer(sink), ALICE, null, "对比", null, null, null,
+            List.of(new ChatImage(jpeg, "image/jpeg"), new ChatImage(jpeg, "image/jpeg")));
+
+        verify(generator).stream(anyString(), any(), any(), any(), anyList(), any());
+        assertTrue(sink.dataOf(StreamEventTypeEnum.META).contains("\"imageCount\":2"));
+        assertTrue(sink.dataOf(StreamEventTypeEnum.DELTA).contains("两张"));
+    }
+
+    @Test
     void persistQuestionShouldPrefixImagePlaceholder() {
-        assertEquals("你好", ProductionChatServiceImpl.persistQuestion("你好", false));
-        assertEquals("[图片] 你好", ProductionChatServiceImpl.persistQuestion("你好", true));
-        assertEquals("[图片] 已有", ProductionChatServiceImpl.persistQuestion("[图片] 已有", true));
+        assertEquals("你好", ProductionChatServiceImpl.persistQuestion("你好", 0));
+        assertEquals("[图片] 你好", ProductionChatServiceImpl.persistQuestion("你好", 1));
+        assertEquals("[图片×2] 你好", ProductionChatServiceImpl.persistQuestion("你好", 2));
+        assertEquals("[图片] 已有", ProductionChatServiceImpl.persistQuestion("[图片] 已有", 1));
+        assertEquals("[图片×3] 已有", ProductionChatServiceImpl.persistQuestion("[图片×3] 已有", 3));
     }
 
     @Test
