@@ -25,6 +25,9 @@ public class IdempotencyManager {
 
     private static final Logger log = LoggerFactory.getLogger(IdempotencyManager.class);
 
+    /** SET NX 与随后 GET 之间的竞态最多重试这么多次，避免递归把栈打满。 */
+    private static final int MAX_BEGIN_ATTEMPTS = 8;
+
     private final StringRedisTemplate redis;
     private final Duration ttl;
     private final JsonMapper jsonMapper;
@@ -54,35 +57,40 @@ public class IdempotencyManager {
         }
         String redisKey = redisKey(tenantId, key);
         try {
-            String existing = redis.opsForValue().get(redisKey);
-            if (existing == null) {
-                String pending = "pending:" + bodyHash;
-                Boolean stored = redis.opsForValue().setIfAbsent(redisKey, pending, ttl);
-                if (!Boolean.TRUE.equals(stored)) {
-                    return begin(tenantId, key, bodyHash);
+            for (int attempt = 0; attempt < MAX_BEGIN_ATTEMPTS; attempt++) {
+                String existing = redis.opsForValue().get(redisKey);
+                if (existing == null) {
+                    String pending = "pending:" + bodyHash;
+                    Boolean stored = redis.opsForValue().setIfAbsent(redisKey, pending, ttl);
+                    if (Boolean.TRUE.equals(stored)) {
+                        return Optional.empty();
+                    }
+                    // 抢占失败说明别人刚写入，再读一次而不是递归
+                    continue;
                 }
-                return Optional.empty();
+                if (existing.startsWith("pending:")) {
+                    String previousHash = existing.substring("pending:".length());
+                    if (!previousHash.equals(bodyHash)) {
+                        throw conflict();
+                    }
+                    throw new BusinessException(ErrorCodeEnum.IDEMPOTENCY_CONFLICT, "相同幂等键的请求仍在处理");
+                }
+                if (existing.startsWith("done:")) {
+                    int split = existing.indexOf(':', 5);
+                    if (split < 0) {
+                        throw conflict();
+                    }
+                    String previousHash = existing.substring(5, split);
+                    String payload = existing.substring(split + 1);
+                    if (!previousHash.equals(bodyHash)) {
+                        throw conflict();
+                    }
+                    return Optional.of(payload);
+                }
+                throw conflict();
             }
-            if (existing.startsWith("pending:")) {
-                String previousHash = existing.substring("pending:".length());
-                if (!previousHash.equals(bodyHash)) {
-                    throw conflict();
-                }
-                throw new BusinessException(ErrorCodeEnum.IDEMPOTENCY_CONFLICT, "相同幂等键的请求仍在处理");
-            }
-            if (existing.startsWith("done:")) {
-                int split = existing.indexOf(':', 5);
-                if (split < 0) {
-                    throw conflict();
-                }
-                String previousHash = existing.substring(5, split);
-                String payload = existing.substring(split + 1);
-                if (!previousHash.equals(bodyHash)) {
-                    throw conflict();
-                }
-                return Optional.of(payload);
-            }
-            throw conflict();
+            log.warn("幂等键争用未收敛，放行: key={}", redisKey);
+            return Optional.empty();
         } catch (BusinessException ex) {
             throw ex;
         } catch (RuntimeException ex) {

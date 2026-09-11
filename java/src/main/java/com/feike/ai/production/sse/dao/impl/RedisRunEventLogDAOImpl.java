@@ -5,7 +5,6 @@ import com.feike.ai.production.sse.model.RunSnapshot;
 import com.feike.ai.production.sse.model.RunStateEnum;
 import com.feike.ai.production.sse.model.StreamEvent;
 import com.feike.ai.production.sse.model.StreamEventTypeEnum;
-import com.feike.ai.production.sse.service.SseStreamWriter;
 
 import com.feike.ai.production.config.ProductionProperties;
 import com.feike.ai.production.web.BusinessException;
@@ -14,13 +13,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Range;
 import org.springframework.data.redis.connection.stream.MapRecord;
-import org.springframework.data.redis.connection.stream.RecordId;
-import org.springframework.data.redis.connection.stream.StreamRecords;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.core.script.RedisScript;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -37,6 +35,9 @@ import java.util.Optional;
  * <p>
  * 失败语义：Redis 不可用时抛 503 而不是让调用方静默降级。断线续传是本模块对外承诺的能力，
  * 悄悄退化成「不可恢复」比直接报错更难排查。
+ * <p>
+ * begin / append / finish 走 Lua：XADD 与 lastSeq、TTL 同一次脚本完成，
+ * 避免 Redis 抖动时事件已写入但状态 Hash 没跟上，续传出现缺口。
  */
 public class RedisRunEventLogDAOImpl implements RunEventLogDAO {
 
@@ -48,6 +49,55 @@ public class RedisRunEventLogDAOImpl implements RunEventLogDAO {
     private static final String FIELD_STATE = "state";
     private static final String FIELD_LAST_SEQ = "lastSeq";
     private static final String FIELD_TENANT = "tenantId";
+
+    /**
+     * 登记 run：状态 Hash + TTL 一次完成，避免只写出字段却没过期。
+     * KEYS[1]=state；ARGV=state,lastSeq,tenant,ttlMs。
+     */
+    private static final RedisScript<Long> BEGIN_SCRIPT = new DefaultRedisScript<>(
+        """
+            redis.call('hset', KEYS[1], 'state', ARGV[1], 'lastSeq', ARGV[2])
+            if ARGV[3] ~= '' then
+              redis.call('hset', KEYS[1], 'tenantId', ARGV[3])
+            end
+            redis.call('pexpire', KEYS[1], tonumber(ARGV[4]))
+            return 1
+            """,
+        Long.class
+    );
+
+    /**
+     * 追加事件：XADD、刷新 lastSeq、非终态才标 STREAMING、两条 key 续期，全部在脚本内。
+     * KEYS=events,state；ARGV=recordId,seq,type,data,ttlMs。
+     */
+    private static final RedisScript<Long> APPEND_SCRIPT = new DefaultRedisScript<>(
+        """
+            redis.call('xadd', KEYS[1], ARGV[1], 'seq', ARGV[2], 'type', ARGV[3], 'data', ARGV[4])
+            redis.call('pexpire', KEYS[1], tonumber(ARGV[5]))
+            local current = redis.call('hget', KEYS[2], 'state')
+            if current ~= 'DONE' and current ~= 'ERROR' and current ~= 'CANCELLED' then
+              redis.call('hset', KEYS[2], 'state', 'STREAMING')
+            end
+            redis.call('hset', KEYS[2], 'lastSeq', ARGV[2])
+            redis.call('pexpire', KEYS[2], tonumber(ARGV[5]))
+            return 1
+            """,
+        Long.class
+    );
+
+    /**
+     * 终态：写 state 并为事件流续期。
+     * KEYS=state,events；ARGV=terminal,ttlMs。
+     */
+    private static final RedisScript<Long> FINISH_SCRIPT = new DefaultRedisScript<>(
+        """
+            redis.call('hset', KEYS[1], 'state', ARGV[1])
+            redis.call('pexpire', KEYS[1], tonumber(ARGV[2]))
+            redis.call('pexpire', KEYS[2], tonumber(ARGV[2]))
+            return 1
+            """,
+        Long.class
+    );
 
     private final StringRedisTemplate redis;
     private final Duration ttl;
@@ -64,14 +114,15 @@ public class RedisRunEventLogDAOImpl implements RunEventLogDAO {
     @Override
     public void begin(String runId, String tenantId) {
         guard(() -> {
-            Map<String, String> state = new LinkedHashMap<>();
-            state.put(FIELD_STATE, RunStateEnum.PENDING.name());
-            state.put(FIELD_LAST_SEQ, "-1");
-            if (tenantId != null && !tenantId.isBlank()) {
-                state.put(FIELD_TENANT, tenantId.trim());
-            }
-            redis.opsForHash().putAll(stateKey(runId), state);
-            redis.expire(stateKey(runId), ttl);
+            String tenant = tenantId == null || tenantId.isBlank() ? "" : tenantId.trim();
+            redis.execute(
+                BEGIN_SCRIPT,
+                List.of(stateKey(runId)),
+                RunStateEnum.PENDING.name(),
+                "-1",
+                tenant,
+                String.valueOf(ttl.toMillis())
+            );
             return null;
         });
     }
@@ -79,24 +130,15 @@ public class RedisRunEventLogDAOImpl implements RunEventLogDAO {
     @Override
     public void append(String runId, StreamEvent event) {
         guard(() -> {
-            Map<String, String> body = new LinkedHashMap<>();
-            body.put(FIELD_SEQ, Long.toString(event.seq()));
-            body.put(FIELD_TYPE, event.type().getCode());
-            body.put(FIELD_DATA, event.data() == null ? "" : event.data());
-            redis.opsForStream().add(StreamRecords.mapBacked(body)
-                .withStreamKey(eventsKey(runId))
-                .withId(RecordId.of(recordId(event.seq()))));
-            redis.expire(eventsKey(runId), ttl);
-
-            Map<String, String> state = new LinkedHashMap<>();
-            // 已是终态就不要被后到的 append 打回 STREAMING；SseStreamWriter 保证终态后不再写，
-            // 这里只是多一层防御，避免并发下状态回退。
-            if (!currentState(runId).terminal()) {
-                state.put(FIELD_STATE, RunStateEnum.STREAMING.name());
-            }
-            state.put(FIELD_LAST_SEQ, Long.toString(event.seq()));
-            redis.opsForHash().putAll(stateKey(runId), state);
-            redis.expire(stateKey(runId), ttl);
+            redis.execute(
+                APPEND_SCRIPT,
+                List.of(eventsKey(runId), stateKey(runId)),
+                recordId(event.seq()),
+                Long.toString(event.seq()),
+                event.type().getCode(),
+                event.data() == null ? "" : event.data(),
+                String.valueOf(ttl.toMillis())
+            );
             return null;
         });
     }
@@ -107,9 +149,12 @@ public class RedisRunEventLogDAOImpl implements RunEventLogDAO {
             return;
         }
         guard(() -> {
-            redis.opsForHash().put(stateKey(runId), FIELD_STATE, terminal.name());
-            redis.expire(stateKey(runId), ttl);
-            redis.expire(eventsKey(runId), ttl);
+            redis.execute(
+                FINISH_SCRIPT,
+                List.of(stateKey(runId), eventsKey(runId)),
+                terminal.name(),
+                String.valueOf(ttl.toMillis())
+            );
             return null;
         });
     }
@@ -148,11 +193,6 @@ public class RedisRunEventLogDAOImpl implements RunEventLogDAO {
             }
             return List.copyOf(events);
         });
-    }
-
-    private RunStateEnum currentState(String runId) {
-        Object raw = redis.opsForHash().get(stateKey(runId), FIELD_STATE);
-        return raw == null ? RunStateEnum.PENDING : parseState(raw);
     }
 
     private static StreamEvent toEvent(MapRecord<String, Object, Object> record) {

@@ -7,6 +7,7 @@ import com.feike.ai.production.secret.dao.SecretResolver;
 import com.feike.ai.production.secret.service.SecretUnavailableException;
 import com.feike.ai.production.web.BusinessException;
 import com.feike.ai.production.web.ErrorCodeEnum;
+import com.feike.ai.production.web.ErrorVO;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -28,6 +30,8 @@ import java.security.MessageDigest;
  * 避免 SSE 虚拟线程丢掉 SecurityContext。
  */
 public class JwtAuthFilter extends OncePerRequestFilter {
+
+    private static final JsonMapper JSON = JsonMapper.builder().build();
 
     private final JwtService jwtService;
     private final SecretResolver secrets;
@@ -190,33 +194,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         String text = message == null || message.isBlank() ? errorCode.getDefaultMessage() : message;
-        response.getWriter().write("{\"code\":\"" + escapeJson(errorCode.getCode())
-            + "\",\"message\":\"" + escapeJson(text) + "\"}");
-    }
-
-    private static String escapeJson(String value) {
-        if (value == null) {
-            return "";
-        }
-        StringBuilder escaped = new StringBuilder(value.length() + 8);
-        for (int i = 0; i < value.length(); i++) {
-            char ch = value.charAt(i);
-            switch (ch) {
-                case '\\' -> escaped.append("\\\\");
-                case '"' -> escaped.append("\\\"");
-                case '\n' -> escaped.append("\\n");
-                case '\r' -> escaped.append("\\r");
-                case '\t' -> escaped.append("\\t");
-                default -> {
-                    if (ch < 0x20) {
-                        escaped.append(String.format("\\u%04x", (int) ch));
-                    } else {
-                        escaped.append(ch);
-                    }
-                }
-            }
-        }
-        return escaped.toString();
+        response.getWriter().write(JSON.writeValueAsString(new ErrorVO(errorCode.getCode(), text)));
     }
 
     /**

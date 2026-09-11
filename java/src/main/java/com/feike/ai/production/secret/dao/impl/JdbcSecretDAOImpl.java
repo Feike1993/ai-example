@@ -9,8 +9,10 @@ import com.feike.ai.production.config.ProductionProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.crypto.SecretKey;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -29,17 +31,30 @@ public class JdbcSecretDAOImpl implements SecretResolver {
 
     private final JdbcTemplate jdbc;
     private final ProductionProperties properties;
+    private final TransactionTemplate tx;
     private volatile SecretKey kek;
     private volatile SecretKey previousKek;
     private volatile String kekError;
 
     /**
+     * 单测用：无事务，重加密仍先全部解密再写，但中途写失败无法回滚。
+     *
      * @param jdbc       数据源
      * @param properties 读取 KEK 与 kekId
      */
     public JdbcSecretDAOImpl(JdbcTemplate jdbc, ProductionProperties properties) {
+        this(jdbc, properties, null);
+    }
+
+    /**
+     * @param jdbc       数据源
+     * @param properties 读取 KEK 与 kekId
+     * @param tx         重加密事务；可空
+     */
+    public JdbcSecretDAOImpl(JdbcTemplate jdbc, ProductionProperties properties, TransactionTemplate tx) {
         this.jdbc = jdbc;
         this.properties = properties;
+        this.tx = tx;
         try {
             this.kek = EnvelopeCrypto.parseKek(properties.security().kek());
         } catch (SecretUnavailableException ex) {
@@ -83,26 +98,11 @@ public class JdbcSecretDAOImpl implements SecretResolver {
     @Override
     public void put(String name, String plaintext) {
         ensureKek();
-        EnvelopeCrypto.EncryptedBlob blob = EnvelopeCrypto.encryptString(
+        writeEncrypted(name, EnvelopeCrypto.encryptString(
             kek,
             properties.security().kekId(),
             plaintext
-        );
-        jdbc.update(
-            """
-                INSERT INTO prod_secret (name, ciphertext, nonce, kek_id, updated_at)
-                VALUES (?, ?, ?, ?, NOW())
-                ON CONFLICT (name) DO UPDATE
-                   SET ciphertext = EXCLUDED.ciphertext,
-                       nonce = EXCLUDED.nonce,
-                       kek_id = EXCLUDED.kek_id,
-                       updated_at = NOW()
-                """,
-            name,
-            blob.ciphertext(),
-            blob.nonce(),
-            blob.kekId()
-        );
+        ));
     }
 
     @Override
@@ -118,16 +118,28 @@ public class JdbcSecretDAOImpl implements SecretResolver {
 
     /**
      * 用当前 KEK 重加密所有行，kek_id 写成配置中的新版本。
+     * <p>
+     * 先全部解密成功，再在同一事务里写回：解密失败时一行都不改；
+     * 写入中途失败则整批回滚，避免新旧 kek_id 混存。
      *
      * @return 重写行数
      */
     @Override
     public int reencryptAll() {
         ensureKek();
+        List<RewrittenSecret> prepared = decryptAll();
+        if (tx == null) {
+            return writeAll(prepared);
+        }
+        Integer rewritten = tx.execute(status -> writeAll(prepared));
+        return rewritten == null ? 0 : rewritten;
+    }
+
+    private List<RewrittenSecret> decryptAll() {
         List<Map<String, Object>> rows = jdbc.queryForList(
             "SELECT name, ciphertext, nonce, kek_id FROM prod_secret"
         );
-        int rewritten = 0;
+        List<RewrittenSecret> prepared = new ArrayList<>();
         for (Map<String, Object> row : rows) {
             EnvelopeCrypto.EncryptedBlob blob = new EnvelopeCrypto.EncryptedBlob(
                 (byte[]) row.get("ciphertext"),
@@ -135,11 +147,38 @@ public class JdbcSecretDAOImpl implements SecretResolver {
                 String.valueOf(row.get("kek_id"))
             );
             String plaintext = decryptWithFallback(blob);
-            put(String.valueOf(row.get("name")), plaintext);
-            rewritten++;
+            prepared.add(new RewrittenSecret(
+                String.valueOf(row.get("name")),
+                EnvelopeCrypto.encryptString(kek, properties.security().kekId(), plaintext)
+            ));
         }
-        log.info("KEK 重加密完成: rows={}, kekId={}", rewritten, properties.security().kekId());
-        return rewritten;
+        return prepared;
+    }
+
+    private int writeAll(List<RewrittenSecret> prepared) {
+        for (RewrittenSecret secret : prepared) {
+            writeEncrypted(secret.name(), secret.blob());
+        }
+        log.info("KEK 重加密完成: rows={}, kekId={}", prepared.size(), properties.security().kekId());
+        return prepared.size();
+    }
+
+    private void writeEncrypted(String name, EnvelopeCrypto.EncryptedBlob blob) {
+        jdbc.update(
+            """
+                INSERT INTO prod_secret (name, ciphertext, nonce, kek_id, updated_at)
+                VALUES (?, ?, ?, ?, NOW())
+                ON CONFLICT (name) DO UPDATE
+                   SET ciphertext = EXCLUDED.ciphertext,
+                       nonce = EXCLUDED.nonce,
+                       kek_id = EXCLUDED.kek_id,
+                       updated_at = NOW()
+                """,
+            name,
+            blob.ciphertext(),
+            blob.nonce(),
+            blob.kekId()
+        );
     }
 
     private String decryptWithFallback(EnvelopeCrypto.EncryptedBlob blob) {
@@ -159,4 +198,7 @@ public class JdbcSecretDAOImpl implements SecretResolver {
                 kekError == null ? "PRODUCTION_KEK 未配置" : kekError);
         }
     }
+
+    /** 已用当前 KEK 重新封好的一行，事务内批量写回。 */
+    private record RewrittenSecret(String name, EnvelopeCrypto.EncryptedBlob blob) {}
 }

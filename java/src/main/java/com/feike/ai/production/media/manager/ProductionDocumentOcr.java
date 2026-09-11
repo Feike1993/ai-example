@@ -17,6 +17,8 @@ import org.springframework.core.io.ByteArrayResource;
 import org.springframework.util.MimeTypeUtils;
 
 import javax.imageio.ImageIO;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -27,6 +29,7 @@ import java.util.List;
  * 扫描 PDF：数字抽取字太少时渲染页，用现有 VL 只转写。
  * <p>
  * 渲染位图用完即弃，不塞进本轮识图 Media。无 Key 时 503，转写失败 422。
+ * 单页超过约 2MP 会缩小后再送 VL，避免大页 PDF 打满堆。
  */
 public class ProductionDocumentOcr {
 
@@ -34,6 +37,9 @@ public class ProductionDocumentOcr {
         你只做文字转写。只输出图中可见的文字，不要描述画面，不要翻译，不要补全。
         若没有文字则输出空。
         """;
+
+    /** 单页渲染上限，约 2MP；超过则缩小后再送 VL，避免大页打满堆。 */
+    private static final int MAX_OCR_PIXELS = 2_000_000;
 
     private final ProductionProperties.Media media;
     private final ProductionModelFactory models;
@@ -119,13 +125,29 @@ public class ProductionDocumentOcr {
             int limit = Math.min(doc.getNumberOfPages(), media.ocrMaxPages());
             List<Media> pages = new ArrayList<>();
             for (int i = 0; i < limit; i++) {
-                BufferedImage image = renderer.renderImageWithDPI(i, 120, ImageType.RGB);
+                BufferedImage image = capPixels(renderer.renderImageWithDPI(i, 120, ImageType.RGB));
                 ByteArrayOutputStream buffer = new ByteArrayOutputStream();
                 ImageIO.write(image, "png", buffer);
                 pages.add(new Media(MimeTypeUtils.IMAGE_PNG, new ByteArrayResource(buffer.toByteArray())));
             }
             return pages;
         }
+    }
+
+    private static BufferedImage capPixels(BufferedImage src) {
+        long pixels = (long) src.getWidth() * src.getHeight();
+        if (pixels <= MAX_OCR_PIXELS) {
+            return src;
+        }
+        double scale = Math.sqrt(MAX_OCR_PIXELS / (double) pixels);
+        int width = Math.max(1, (int) (src.getWidth() * scale));
+        int height = Math.max(1, (int) (src.getHeight() * scale));
+        BufferedImage out = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        Graphics2D graphics = out.createGraphics();
+        graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        graphics.drawImage(src, 0, 0, width, height, null);
+        graphics.dispose();
+        return out;
     }
 
     /**

@@ -326,15 +326,20 @@ public class ProductionConfiguration {
     }
 
     /**
-     * @param jdbc JDBC
-     * @param properties KEK
+     * @param jdbc               JDBC
+     * @param properties         KEK
+     * @param transactionManager 重加密事务
      * @return 信封存储
      */
     @Bean
     @ConditionalOnProperty(
         prefix = "app.production.security", name = "secret-store", havingValue = "postgres", matchIfMissing = true)
-    public SecretResolver jdbcSecretStore(JdbcTemplate jdbc, ProductionProperties properties) {
-        return new JdbcSecretDAOImpl(jdbc, properties);
+    public SecretResolver jdbcSecretStore(
+        JdbcTemplate jdbc,
+        ProductionProperties properties,
+        PlatformTransactionManager transactionManager
+    ) {
+        return new JdbcSecretDAOImpl(jdbc, properties, new TransactionTemplate(transactionManager));
     }
 
     /**

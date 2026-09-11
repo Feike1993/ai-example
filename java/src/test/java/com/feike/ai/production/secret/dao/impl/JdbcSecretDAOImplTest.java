@@ -15,9 +15,12 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @DisplayName("JdbcSecretDAOImpl")
@@ -54,5 +57,35 @@ class JdbcSecretDAOImplTest {
         );
         JdbcSecretDAOImpl store = new JdbcSecretDAOImpl(jdbc, properties);
         assertEquals("sk-secret", store.get(SecretResolver.JWT_HMAC).orElseThrow());
+    }
+
+    @Test
+    void reencryptShouldNotWriteIfAnyRowFailsToDecrypt() {
+        String kek = EnvelopeCrypto.randomKeyBase64();
+        EnvelopeCrypto.EncryptedBlob good = EnvelopeCrypto.encryptString(
+            EnvelopeCrypto.parseKek(kek), "v1", "sk-secret");
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.queryForList(anyString())).thenReturn(List.of(
+            Map.of(
+                "name", "jwt.hmac",
+                "ciphertext", good.ciphertext(),
+                "nonce", good.nonce(),
+                "kek_id", "v1"
+            ),
+            Map.of(
+                "name", "llm.deepseek",
+                "ciphertext", new byte[] {1, 2, 3},
+                "nonce", new byte[12],
+                "kek_id", "v1"
+            )
+        ));
+        ProductionProperties properties = new ProductionProperties(
+            true, "c", 4, 400, 1, true, 60, 4, null, null,
+            new ProductionProperties.Security(kek, "postgres", "v2", null, null, null),
+            null, null, null, null, null
+        );
+        JdbcSecretDAOImpl store = new JdbcSecretDAOImpl(jdbc, properties);
+        assertThrows(SecretUnavailableException.class, store::reencryptAll);
+        verify(jdbc, never()).update(anyString(), any(), any(), any(), any());
     }
 }

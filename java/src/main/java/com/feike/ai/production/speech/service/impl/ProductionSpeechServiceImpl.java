@@ -2,15 +2,12 @@ package com.feike.ai.production.speech.service.impl;
 
 import com.feike.ai.production.config.ProductionProperties;
 import com.feike.ai.production.media.manager.ProductionMediaInspector;
-import com.feike.ai.production.media.model.MediaProbeVO;
 import com.feike.ai.production.speech.manager.DashScopeSpeechClient;
 import com.feike.ai.production.speech.model.TranscribeVO;
 import com.feike.ai.production.speech.service.ProductionSpeechService;
 import com.feike.ai.production.web.BusinessException;
 import com.feike.ai.production.web.ErrorCodeEnum;
 import org.springframework.web.multipart.MultipartFile;
-
-import java.io.IOException;
 
 /**
  * 转写先走媒体校验再调网关；合成立即校验长度，护栏由控制器先做。
@@ -41,15 +38,9 @@ public class ProductionSpeechServiceImpl implements ProductionSpeechService {
      */
     @Override
     public TranscribeVO transcribe(MultipartFile audio) {
-        MediaProbeVO probe = inspector.inspectAudio(audio);
-        byte[] body;
-        try {
-            body = audio.getBytes();
-        } catch (IOException ex) {
-            throw new BusinessException(ErrorCodeEnum.BAD_REQUEST, "无法读取音频");
-        }
+        ProductionMediaInspector.InspectedMedia inspected = inspector.inspectAudioBody(audio);
         String filename = audio.getOriginalFilename();
-        String text = client.transcribe(body, probe.mime(), filename);
+        String text = client.transcribe(inspected.body(), inspected.probe().mime(), filename);
         return new TranscribeVO(text == null ? "" : text.trim());
     }
 

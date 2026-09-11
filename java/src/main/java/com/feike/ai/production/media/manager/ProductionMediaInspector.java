@@ -95,12 +95,8 @@ public class ProductionMediaInspector {
         }
         List<ChatImage> images = new ArrayList<>();
         for (MultipartFile file : present) {
-            MediaProbeVO probe = inspectImage(file);
-            try {
-                images.add(new ChatImage(file.getBytes(), probe.mime()));
-            } catch (IOException ex) {
-                throw new BusinessException(ErrorCodeEnum.BAD_REQUEST, "无法读取图片");
-            }
+            InspectedMedia inspected = inspectBody(file, MediaKindEnum.IMAGE);
+            images.add(new ChatImage(inspected.body(), inspected.probe().mime()));
         }
         return List.copyOf(images);
     }
@@ -128,17 +124,23 @@ public class ProductionMediaInspector {
         }
         List<ChatDocument> documents = new ArrayList<>();
         for (MultipartFile file : present) {
-            MediaProbeVO probe = inspect(file, MediaKindEnum.DOCUMENT);
-            try {
-                documents.add(extractor.extract(
-                    file.getBytes(),
-                    probe.mime(),
-                    file.getOriginalFilename()));
-            } catch (IOException ex) {
-                throw new BusinessException(ErrorCodeEnum.BAD_REQUEST, "无法读取文档");
-            }
+            InspectedMedia inspected = inspectBody(file, MediaKindEnum.DOCUMENT);
+            documents.add(extractor.extract(
+                inspected.body(),
+                inspected.probe().mime(),
+                file.getOriginalFilename()));
         }
         return List.copyOf(documents);
+    }
+
+    /**
+     * 转写音频：一次读字节并校验，调用方复用同一份内容，避免 Multipart 再读一遍。
+     *
+     * @param file 上传
+     * @return 探针与文件体
+     */
+    public InspectedMedia inspectAudioBody(MultipartFile file) {
+        return inspectBody(file, MediaKindEnum.AUDIO);
     }
 
     /**
@@ -182,6 +184,10 @@ public class ProductionMediaInspector {
     }
 
     private MediaProbeVO inspect(MultipartFile file, MediaKindEnum kind) {
+        return inspectBody(file, kind).probe();
+    }
+
+    private InspectedMedia inspectBody(MultipartFile file, MediaKindEnum kind) {
         if (file == null || file.isEmpty()) {
             reject(ErrorCodeEnum.BAD_REQUEST, "未上传文件");
         }
@@ -197,7 +203,7 @@ public class ProductionMediaInspector {
                 ? ""
                 : mimeFromName(file.getOriginalFilename());
         }
-        return inspectBytes(body, declared, kind);
+        return new InspectedMedia(inspectBytes(body, declared, kind), body);
     }
 
     private boolean allowed(String mime, MediaKindEnum kind) {
@@ -338,4 +344,12 @@ public class ProductionMediaInspector {
         }
         throw new BusinessException(code, message);
     }
+
+    /**
+     * 已校验的上传内容：探针给 HTTP 展示，body 给后续 ASR / 抽取复用。
+     *
+     * @param probe mime / 大小 / 摘要
+     * @param body  文件字节
+     */
+    public record InspectedMedia(MediaProbeVO probe, byte[] body) {}
 }
