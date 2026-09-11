@@ -277,4 +277,27 @@ describe('ProductionChatPanel', () => {
     await waitFor(() => expect(screen.getByText('已拒绝')).toBeInTheDocument())
     expect(screen.getByText('已按策略拒绝该工具。')).toBeInTheDocument()
   })
+
+  it('问答模式展示选图，Agent 模式不展示', async () => {
+    renderPanel(<ProductionChatPanel provider="deepseek" />)
+    expect(screen.getByTestId('image-pick')).toBeInTheDocument()
+    await userEvent.click(screen.getByText('Agent'))
+    expect(screen.queryByTestId('image-pick')).toBeNull()
+  })
+
+  it('选图后流式提问走 POST multipart', async () => {
+    const jpeg = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], 'tiny.jpg', { type: 'image/jpeg' })
+    const inner = fakeFetch([META, SOURCES, DELTA, USAGE, DONE])
+    const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) => inner(input, init))
+    vi.stubGlobal('fetch', fetchImpl as unknown as typeof fetch)
+    renderPanel(<ProductionChatPanel provider="deepseek" />)
+
+    await userEvent.upload(screen.getByTestId('image-pick'), jpeg)
+    await userEvent.click(screen.getByRole('button', { name: '流式提问' }))
+    await waitFor(() => expect(screen.getByText('已完成')).toBeInTheDocument())
+
+    const streamCall = fetchImpl.mock.calls.find((call) => String(call[0]).includes('/chat/stream'))
+    expect(streamCall?.[1]?.method).toBe('POST')
+    expect(streamCall?.[1]?.body).toBeInstanceOf(FormData)
+  })
 })

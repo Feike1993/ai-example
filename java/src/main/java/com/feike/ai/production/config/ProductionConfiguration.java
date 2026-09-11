@@ -19,6 +19,9 @@ import com.feike.ai.production.guardrail.service.ProductionGuardrail;
 import com.feike.ai.production.lock.manager.InMemorySessionLock;
 import com.feike.ai.production.lock.manager.RedisSessionLock;
 import com.feike.ai.production.lock.manager.SessionLock;
+import com.feike.ai.production.media.manager.ProductionMediaInspector;
+import com.feike.ai.production.media.service.ProductionMediaService;
+import com.feike.ai.production.media.service.impl.ProductionMediaServiceImpl;
 import com.feike.ai.production.observability.service.ProductionMetrics;
 import com.feike.ai.production.rag.generate.service.ProductionAnswerGenerator;
 import com.feike.ai.production.rag.ingest.service.ProductionIngestJobService;
@@ -31,6 +34,9 @@ import com.feike.ai.production.secret.dao.impl.JdbcSecretDAOImpl;
 import com.feike.ai.production.secret.manager.ProductionModelFactory;
 import com.feike.ai.production.secret.manager.SecretBootstrap;
 import com.feike.ai.production.secret.dao.SecretResolver;
+import com.feike.ai.production.speech.manager.DashScopeSpeechClient;
+import com.feike.ai.production.speech.service.ProductionSpeechService;
+import com.feike.ai.production.speech.service.impl.ProductionSpeechServiceImpl;
 import com.feike.ai.production.session.dao.impl.JdbcProductionChatSessionDAOImpl;
 import com.feike.ai.production.session.dao.ProductionChatSessionDAO;
 import com.feike.ai.production.sse.dao.impl.InMemoryRunEventLogDAOImpl;
@@ -353,8 +359,66 @@ public class ProductionConfiguration {
      * @return 生产模型工厂
      */
     @Bean
-    public ProductionModelFactory productionModelFactory(AiProperties ai, SecretResolver secrets) {
-        return new ProductionModelFactory(ai, secrets);
+    public ProductionModelFactory productionModelFactory(
+        AiProperties ai,
+        SecretResolver secrets,
+        ProductionProperties properties
+    ) {
+        return new ProductionModelFactory(ai, secrets, properties);
+    }
+
+    /**
+     * @param properties 允许列表
+     * @param metrics    拒绝 / 通过计数
+     * @return 媒体校验
+     */
+    @Bean
+    public ProductionMediaInspector productionMediaInspector(
+        ProductionProperties properties,
+        ProductionMetrics metrics
+    ) {
+        return new ProductionMediaInspector(properties, metrics);
+    }
+
+    /**
+     * @param inspector 校验
+     * @return 探针
+     */
+    @Bean
+    public ProductionMediaService productionMediaService(ProductionMediaInspector inspector) {
+        return new ProductionMediaServiceImpl(inspector);
+    }
+
+    /**
+     * @param ai         baseUrl
+     * @param secrets    Key
+     * @param properties 模型
+     * @param jsonMapper 错误体
+     * @return DashScope 语音 HTTP
+     */
+    @Bean
+    public DashScopeSpeechClient dashScopeSpeechClient(
+        AiProperties ai,
+        SecretResolver secrets,
+        ProductionProperties properties,
+        JsonMapper jsonMapper
+    ) {
+        return new DashScopeSpeechClient(ai, secrets, properties, jsonMapper);
+    }
+
+    /**
+     * @param inspector  校验
+     * @param client     HTTP
+     * @param properties 长度上限
+     * @return 语音服务
+     */
+    @Bean
+    public ProductionSpeechService productionSpeechService(
+        ProductionMediaInspector inspector,
+        DashScopeSpeechClient client,
+        ProductionProperties properties
+    ) {
+        return new ProductionSpeechServiceImpl(inspector, client, properties);
     }
 
     /**

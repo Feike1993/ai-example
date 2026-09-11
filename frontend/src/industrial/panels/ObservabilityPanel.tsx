@@ -57,6 +57,8 @@ export function ObservabilityPanel() {
         ['鉴权失败', snapshot.authFail],
         ['入库投递', snapshot.ingestSubmitted ?? 0],
         ['入库成功', snapshot.ingestSucceeded ?? 0],
+        ['媒体通过', snapshot.mediaAccepted ?? 0],
+        ['媒体拒绝', snapshot.mediaRejected ?? 0],
         ['最近入库', snapshot.ingestStatus ?? '无'],
         ['Micrometer meters', snapshot.meters],
       ]

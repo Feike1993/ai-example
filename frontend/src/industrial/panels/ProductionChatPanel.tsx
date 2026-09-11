@@ -6,7 +6,7 @@ import { ResultBody } from '../../components/ResultBody'
 import { Workbench } from '../../components/Workbench'
 import { authHeaders, notifyUnauthorized, rememberRunId, rememberTraceId } from '../lib/auth'
 import { mergeAgentSteps } from '../lib/agentSteps'
-import { agentStreamUrl, chatStreamUrl, clearSession, getIngestJob, getSession, postIngest, resumeUrl } from '../lib/productionApi'
+import { agentStreamUrl, chatStreamForm, chatStreamPostUrl, chatStreamUrl, clearSession, getIngestJob, getSession, postIngest, postSpeak, postTranscribe, resumeUrl } from '../lib/productionApi'
 import { toTurns, type Turn } from '../lib/sessionTurns'
 import {
   StreamAbortedError,
@@ -56,9 +56,22 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
   const [errorCode, setErrorCode] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [ingesting, setIngesting] = useState(false)
+  const [image, setImage] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [recording, setRecording] = useState(false)
+  const [speaking, setSpeaking] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
+  const recorderRef = useRef<MediaRecorder | null>(null)
+  const chunksRef = useRef<Blob[]>([])
+  const previewUrlRef = useRef<string | null>(null)
 
-  useEffect(() => () => abortRef.current?.abort(), [])
+  useEffect(() => () => {
+    abortRef.current?.abort()
+    recorderRef.current?.stream.getTracks().forEach((track) => track.stop())
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current)
+    }
+  }, [])
 
   // 刷新页面后把上次会话的历史拉回来，否则界面看着像新会话、后端却还带着上下文。
   // 这里直接读 localStorage 而不依赖 sessionId 状态：只该在挂载时拉一次，
@@ -102,7 +115,8 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
     setStatus('streaming')
 
     const asked = question
-    let current: Turn = { question: asked, answer: '', sources: [], usage: null, steps: [] }
+    const displayQuestion = image && mode === 'chat' ? `[图片] ${asked}` : asked
+    let current: Turn = { question: displayQuestion, answer: '', sources: [], usage: null, steps: [] }
     setPending(current)
     const update = (patch: Partial<Turn>) => {
       current = { ...current, ...patch }
@@ -111,21 +125,35 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
 
     let persisted = true
     try {
+      const withImage = mode === 'chat' && image != null
       const url = mode === 'agent'
         ? agentStreamUrl({ question: asked, sessionId, provider })
-        : chatStreamUrl({
-            question: asked,
-            sessionId,
-            provider,
-            topK: Number(topK) || undefined,
-            queryExpansion,
-          })
+        : withImage
+          ? chatStreamPostUrl()
+          : chatStreamUrl({
+              question: asked,
+              sessionId,
+              provider,
+              topK: Number(topK) || undefined,
+              queryExpansion,
+            })
       const result = await streamRun(
         url,
         {
           signal: controller.signal,
           resumeUrl,
           maxResumes: 2,
+          method: withImage ? 'POST' : 'GET',
+          body: withImage
+            ? chatStreamForm({
+                question: asked,
+                sessionId,
+                provider,
+                topK: Number(topK) || undefined,
+                queryExpansion,
+                image,
+              })
+            : undefined,
           headers: authHeaders(),
           handlers: {
             onMeta: (payload) => {
@@ -241,6 +269,90 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
     }
   }
 
+  const clearImage = () => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current)
+      previewUrlRef.current = null
+    }
+    setImage(null)
+    setImagePreview(null)
+  }
+
+  const onPickImage = (file: File | null) => {
+    if (!file) {
+      clearImage()
+      return
+    }
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current)
+    }
+    const url = URL.createObjectURL(file)
+    previewUrlRef.current = url
+    setImage(file)
+    setImagePreview(url)
+  }
+
+  const onToggleRecord = async () => {
+    if (recording) {
+      recorderRef.current?.stop()
+      return
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const recorder = new MediaRecorder(stream)
+      chunksRef.current = []
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunksRef.current.push(event.data)
+        }
+      }
+      recorder.onstop = () => {
+        stream.getTracks().forEach((track) => track.stop())
+        setRecording(false)
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' })
+        void postTranscribe(blob)
+          .then((result) => {
+            if (result.text) {
+              setQuestion(result.text)
+            }
+          })
+          .catch((err: unknown) => {
+            setError(err instanceof ApiError ? err.message : describeError(err))
+            setErrorCode(err instanceof ApiError ? err.code ?? null : null)
+          })
+      }
+      recorderRef.current = recorder
+      recorder.start()
+      setRecording(true)
+    } catch {
+      setError('无法访问麦克风，请检查浏览器权限')
+      setErrorCode(null)
+    }
+  }
+
+  const lastAnswer = (pending?.answer || turns[turns.length - 1]?.answer || '').trim()
+
+  const onSpeak = async () => {
+    if (!lastAnswer || speaking) {
+      return
+    }
+    setSpeaking(true)
+    setError(null)
+    setErrorCode(null)
+    try {
+      const blob = await postSpeak(lastAnswer)
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      audio.onended = () => URL.revokeObjectURL(url)
+      await audio.play()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : describeError(err))
+      setErrorCode(err instanceof ApiError ? err.code ?? null : null)
+    } finally {
+      setSpeaking(false)
+    }
+  }
+
   const onIngest = async () => {
     setIngesting(true)
     setError(null)
@@ -286,14 +398,20 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
       hint={
         mode === 'agent'
           ? 'Agent 模式会多发 step 事件。被角色策略拒绝的工具带 denied:true，不会静默吞掉。'
-          : '严格 SSE 契约：meta → sources → delta → usage → done。查询扩展默认关闭，打开 rewrite / HyDE 会多打一趟 Chat。'
+          : '严格 SSE 契约：meta → sources → delta → usage → done。可附一张图识图（不入库）；麦克风先转写再提问，朗读走 TTS。查询扩展默认关闭。'
       }
       streaming={streaming}
       form={
         <Stack gap="sm">
           <SegmentedControl
             value={mode}
-            onChange={(value) => setMode(value as 'chat' | 'agent')}
+            onChange={(value) => {
+              const next = value as 'chat' | 'agent'
+              setMode(next)
+              if (next === 'agent') {
+                clearImage()
+              }
+            }}
             data={[
               { value: 'chat', label: '问答' },
               { value: 'agent', label: 'Agent' },
@@ -319,6 +437,42 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
                   { value: 'hyde', label: 'HyDE' },
                 ]}
               />
+              <Group gap="sm" align="flex-end">
+                <Button component="label" variant="default" disabled={streaming}>
+                  选图
+                  <input
+                    data-testid="image-pick"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    hidden
+                    onChange={(event) => {
+                      onPickImage(event.currentTarget.files?.[0] ?? null)
+                      event.currentTarget.value = ''
+                    }}
+                  />
+                </Button>
+                {image ? (
+                  <Button variant="subtle" color="red" onClick={clearImage} disabled={streaming}>
+                    清除图片
+                  </Button>
+                ) : null}
+                <Button
+                  variant="default"
+                  data-testid="record-audio"
+                  onClick={() => void onToggleRecord()}
+                  disabled={streaming}
+                >
+                  {recording ? '停止录音' : '麦克风'}
+                </Button>
+              </Group>
+              {imagePreview ? (
+                <img
+                  data-testid="image-preview"
+                  src={imagePreview}
+                  alt="待发送图片预览"
+                  style={{ maxHeight: 120, maxWidth: '100%', objectFit: 'contain' }}
+                />
+              ) : null}
             </>
           ) : null}
           <Group gap="sm">
@@ -336,6 +490,15 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
             </Button>
             <Button variant="subtle" data-testid="ingest" onClick={onIngest} loading={ingesting}>
               重建语料
+            </Button>
+            <Button
+              variant="subtle"
+              data-testid="speak-answer"
+              onClick={() => void onSpeak()}
+              loading={speaking}
+              disabled={streaming || !lastAnswer}
+            >
+              朗读
             </Button>
           </Group>
           <Text size="xs" c="dimmed" data-testid="session-meta">

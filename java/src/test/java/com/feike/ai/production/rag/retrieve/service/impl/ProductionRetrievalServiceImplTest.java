@@ -105,7 +105,7 @@ class ProductionRetrievalServiceImplTest {
             vectorStore,
             null,
             expander,
-            new ProductionProperties(true, "prod-corpus", 4, 400, 1, false, 60, 4, null, null, null, null, null, null, null)
+            new ProductionProperties(true, "prod-corpus", 4, 400, 1, false, 60, 4, null, null, null, null, null, null, null, null)
         );
     }
 

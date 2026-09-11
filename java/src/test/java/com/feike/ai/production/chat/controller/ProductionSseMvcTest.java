@@ -73,7 +73,7 @@ class ProductionSseMvcTest {
             true, "prod-corpus", 4, 400, 1, true, 60, 4,
             new ProductionProperties.Stream("memory", Duration.ofMinutes(1), Duration.ofSeconds(30), Duration.ofSeconds(10)),
             new ProductionProperties.Session(true, "memory", 20, 2000, Duration.ofMinutes(1), 3),
-            null, null, null, null, null
+            null, null, null, null, null, null
         );
         runExecutor = new SseRunExecutor(eventLog, JsonMapper.builder().build(), properties);
         ProductionChatService chatService = new ProductionChatServiceImpl(

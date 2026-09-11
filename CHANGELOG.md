@@ -232,3 +232,12 @@ Hybrid RAG、golden 评测、Redis 持久会话、逐步 tool SSE、流式 token
 - `GET /api/v1/ops/runs/{runId}` 从 SSE 事件日志重建步骤；跨租户 404
 - Grafana 看板补 Agent 次数 / 工具拒绝
 - 人工验证见 [docs/industrial-agent.md](docs/industrial-agent.md)
+
+## [Unreleased] — 工业级第九阶段（图文与语音）
+
+- `POST /api/v1/media/probe`：JWT / mime / 体积，不调模型；422 `media_unsupported` / `media_too_large`
+- `POST /api/v1/chat/stream` multipart 识图：Spring AI `UserMessage` + `Media`；会话只存 `[图片]` 占位
+- `POST /api/v1/speech/transcribe`、`POST /api/v1/speech/speak`：信封 Key + compatible-mode，不打开 OpenAI Audio 自动配置
+- industrial.html：选图 / 麦克风转写 / 终答朗读；Agent 模式不选图
+- 默认 Playwright 只打探针；真 VL/ASR/TTS 本机选跑
+- 见 [docs/industrial-media.md](docs/industrial-media.md)

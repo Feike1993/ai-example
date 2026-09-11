@@ -28,7 +28,7 @@ class JdbcSecretDAOImplTest {
         ProductionProperties properties = new ProductionProperties(
             true, "c", 4, 400, 1, true, 60, 4, null, null,
             new ProductionProperties.Security("", "postgres", "v1", null, null, null),
-            null, null, null, null
+            null, null, null, null, null
         );
         JdbcSecretDAOImpl store = new JdbcSecretDAOImpl(mock(JdbcTemplate.class), properties);
         assertFalse(store.available());
@@ -50,7 +50,7 @@ class JdbcSecretDAOImplTest {
         ProductionProperties properties = new ProductionProperties(
             true, "c", 4, 400, 1, true, 60, 4, null, null,
             new ProductionProperties.Security(newKek, "postgres", "v2", null, null, oldKek),
-            null, null, null, null
+            null, null, null, null, null
         );
         JdbcSecretDAOImpl store = new JdbcSecretDAOImpl(jdbc, properties);
         assertEquals("sk-secret", store.get(SecretResolver.JWT_HMAC).orElseThrow());

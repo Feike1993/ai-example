@@ -109,6 +109,31 @@ class ProductionChatServiceImplTest {
     }
 
     @Test
+    void imageWithEmptyRetrievalShouldStillCallVisionAndMarkHasImage() {
+        when(retrieval.retrieve(any(ProductionRetrieveQuery.class))).thenReturn(empty());
+        doAnswer(invocation -> {
+            Consumer<String> onChunk = invocation.getArgument(6);
+            onChunk.accept("图中是一只猫。");
+            return null;
+        }).when(generator).stream(anyString(), any(), any(), any(), any(), any(), any());
+
+        byte[] jpeg = new byte[] {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 0x00};
+        CollectingSink sink = new CollectingSink();
+        service.streamAnswer(writer(sink), ALICE, null, "描述图片", null, null, null, jpeg, "image/jpeg");
+
+        verify(generator).stream(anyString(), any(), any(), any(), any(), any(), any());
+        assertTrue(sink.dataOf(StreamEventTypeEnum.META).contains("\"hasImage\":true"));
+        assertTrue(sink.dataOf(StreamEventTypeEnum.DELTA).contains("猫"));
+    }
+
+    @Test
+    void persistQuestionShouldPrefixImagePlaceholder() {
+        assertEquals("你好", ProductionChatServiceImpl.persistQuestion("你好", false));
+        assertEquals("[图片] 你好", ProductionChatServiceImpl.persistQuestion("你好", true));
+        assertEquals("[图片] 已有", ProductionChatServiceImpl.persistQuestion("[图片] 已有", true));
+    }
+
+    @Test
     void streamShouldForwardQueryExpansionAndEchoItOnSources() {
         when(retrieval.retrieve(any(ProductionRetrieveQuery.class))).thenReturn(
             new ProductionRetrievalService.RetrievalResult(
@@ -375,7 +400,7 @@ class ProductionChatServiceImplTest {
             true, "prod-corpus", 4, 400, 1, true, 60, 4,
             null,
             new ProductionProperties.Session(sessionEnabled, "memory", 20, 2000, Duration.ofMinutes(1), 3),
-            null, null, null, null, null
+            null, null, null, null, null, null
         );
     }
 

@@ -6,6 +6,7 @@ import com.feike.ai.production.secret.service.SecretUnavailableException;
 
 import com.feike.ai.core.config.AiProperties;
 import com.feike.ai.core.ApiPathResolver;
+import com.feike.ai.production.config.ProductionProperties;
 import com.feike.ai.production.web.BusinessException;
 import com.feike.ai.production.web.ErrorCodeEnum;
 import com.openai.client.OpenAIClient;
@@ -31,6 +32,7 @@ public class ProductionModelFactory {
 
     private final AiProperties aiProperties;
     private final SecretResolver secrets;
+    private final ProductionProperties production;
     private final Map<String, OpenAiChatModel> cache = new ConcurrentHashMap<>();
 
     /**
@@ -38,8 +40,22 @@ public class ProductionModelFactory {
      * @param secrets      信封解密后的 key
      */
     public ProductionModelFactory(AiProperties aiProperties, SecretResolver secrets) {
+        this(aiProperties, secrets, null);
+    }
+
+    /**
+     * @param aiProperties 取 baseUrl / model，不取明文 key
+     * @param secrets      信封解密后的 key
+     * @param production   视觉模型名；可空则只用 Provider 默认文本模型
+     */
+    public ProductionModelFactory(
+        AiProperties aiProperties,
+        SecretResolver secrets,
+        ProductionProperties production
+    ) {
         this.aiProperties = aiProperties;
         this.secrets = secrets;
+        this.production = production;
     }
 
     /**
@@ -56,7 +72,29 @@ public class ProductionModelFactory {
      */
     public ChatModel chatModel(String providerId) {
         String id = resolveId(providerId);
-        return cache.computeIfAbsent(id, this::build);
+        return cache.computeIfAbsent(id, key -> build(key, null));
+    }
+
+    /**
+     * 识图用的 ChatClient：同一把信封 Key，模型名换成视觉模型。
+     * <p>
+     * 与文本模型分缓存，避免把 {@code qwen-vl-plus} 写进文本 Client 影响后续纯文本问答。
+     *
+     * @param providerId Provider id；空则用 {@code media.vision-provider}
+     * @return 视觉 ChatClient
+     */
+    public ChatClient visionClient(String providerId) {
+        return ChatClient.builder(visionChatModel(providerId)).build();
+    }
+
+    /**
+     * @param providerId Provider id；空则用视觉默认 Provider
+     * @return 视觉 ChatModel
+     */
+    public ChatModel visionChatModel(String providerId) {
+        String visionModel = production == null ? "qwen-vl-plus" : production.media().visionModel();
+        String id = resolveVisionId(providerId);
+        return cache.computeIfAbsent(id + ":vision:" + visionModel, key -> build(id, visionModel));
     }
 
     private String resolveId(String providerId) {
@@ -66,7 +104,17 @@ public class ProductionModelFactory {
         return providerId.trim();
     }
 
-    private OpenAiChatModel build(String providerId) {
+    private String resolveVisionId(String providerId) {
+        if (providerId != null && !providerId.isBlank()) {
+            return providerId.trim();
+        }
+        if (production != null) {
+            return production.media().visionProvider();
+        }
+        return "dashscope";
+    }
+
+    private OpenAiChatModel build(String providerId, String modelOverride) {
         if (!secrets.available()) {
             throw new SecretUnavailableException("工业级密钥不可用，无法创建 ChatModel");
         }
@@ -85,8 +133,9 @@ public class ProductionModelFactory {
             bypassProxy
         );
         Double temperature = cfg.temperature() != null ? cfg.temperature() : aiProperties.temperature();
+        String model = modelOverride == null || modelOverride.isBlank() ? cfg.model() : modelOverride;
         var optionsBuilder = OpenAiChatOptions.builder()
-            .model(cfg.model())
+            .model(model)
             .temperature(temperature);
         if (cfg.enableThinking() != null) {
             optionsBuilder.extraBody(Map.of(
@@ -94,7 +143,7 @@ public class ProductionModelFactory {
                 Map.of("enable_thinking", cfg.enableThinking())
             ));
         }
-        log.info("生产 ChatModel provider={} model={}", providerId, cfg.model());
+        log.info("生产 ChatModel provider={} model={}", providerId, model);
         return OpenAiChatModel.builder()
             .openAiClient(openAiClient)
             .openAiClientAsync(openAiClient.async())

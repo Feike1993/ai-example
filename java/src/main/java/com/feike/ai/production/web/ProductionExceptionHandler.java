@@ -23,6 +23,8 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.stream.Collectors;
@@ -199,6 +201,30 @@ public class ProductionExceptionHandler {
     public ResponseEntity<ErrorVO> handleMissingParam(Exception ex) {
         log.warn("请求参数错误: {}", ex.getMessage());
         return respond(ErrorCodeEnum.BAD_REQUEST, ErrorCodeEnum.BAD_REQUEST.getDefaultMessage());
+    }
+
+    /**
+     * 缺 multipart 部件（探针没带 file）。
+     *
+     * @param ex MVC 异常
+     * @return 400
+     */
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ErrorVO> handleMissingPart(MissingServletRequestPartException ex) {
+        log.warn("缺少上传字段: {}", ex.getRequestPartName());
+        return respond(ErrorCodeEnum.BAD_REQUEST, "未上传文件");
+    }
+
+    /**
+     * 容器先拦住的超大文件，映射成业务 422，与探针上限同一错误码。
+     *
+     * @param ex 超限
+     * @return 422
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorVO> handleTooLarge(MaxUploadSizeExceededException ex) {
+        log.warn("上传超过容器上限: {}", ex.getMessage());
+        return respond(ErrorCodeEnum.MEDIA_TOO_LARGE, ErrorCodeEnum.MEDIA_TOO_LARGE.getDefaultMessage());
     }
 
     /**

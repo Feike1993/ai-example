@@ -69,6 +69,8 @@ export type OpsSnapshot = {
   ingestSubmitted?: number
   ingestSucceeded?: number
   ingestFailed?: number
+  mediaAccepted?: number
+  mediaRejected?: number
   chatDurationCount: number
   meters: number
   traceId: string | null
@@ -331,6 +333,109 @@ export function chatStreamUrl(params: {
     query.set('queryExpansion', params.queryExpansion)
   }
   return `${PRODUCTION_BASE}/chat/stream?${query.toString()}`
+}
+
+/**
+ * 带图流式问答地址（POST multipart）。
+ */
+export function chatStreamPostUrl(): string {
+  return `${PRODUCTION_BASE}/chat/stream`
+}
+
+/**
+ * 组装图文流式 FormData。
+ *
+ * @param params 问句与可选图片
+ */
+export function chatStreamForm(params: {
+  question: string
+  sessionId?: string | null
+  provider?: string
+  topK?: number
+  queryExpansion?: string
+  image: File
+}): FormData {
+  const form = new FormData()
+  form.set('question', params.question)
+  if (params.sessionId) {
+    form.set('sessionId', params.sessionId)
+  }
+  if (params.provider) {
+    form.set('provider', params.provider)
+  }
+  if (params.topK) {
+    form.set('topK', String(params.topK))
+  }
+  if (params.queryExpansion && params.queryExpansion !== 'none') {
+    form.set('queryExpansion', params.queryExpansion)
+  }
+  form.set('image', params.image)
+  return form
+}
+
+/**
+ * 媒体探针，不调模型。
+ *
+ * @param file      图片或音频
+ * @param fetchImpl fetch
+ */
+export async function postMediaProbe(
+  file: File,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ mime: string; bytes: number; sha256: string }> {
+  const form = new FormData()
+  form.set('file', file)
+  return requestJson(`${PRODUCTION_BASE}/media/probe`, { method: 'POST', body: form }, fetchImpl)
+}
+
+/**
+ * 语音转写。
+ *
+ * @param audio     音频
+ * @param fetchImpl fetch
+ */
+export async function postTranscribe(
+  audio: Blob,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ text: string }> {
+  const form = new FormData()
+  const file = audio instanceof File ? audio : new File([audio], 'audio.webm', { type: audio.type || 'audio/webm' })
+  form.set('audio', file)
+  return requestJson(`${PRODUCTION_BASE}/speech/transcribe`, { method: 'POST', body: form }, fetchImpl)
+}
+
+/**
+ * 语音合成，返回可播放的 Blob。
+ *
+ * @param text      终答文本
+ * @param fetchImpl fetch
+ */
+export async function postSpeak(text: string, fetchImpl: typeof fetch = fetch): Promise<Blob> {
+  const headers = new Headers({ 'Content-Type': 'application/json' })
+  const auth = authHeaders()
+  for (const [key, value] of Object.entries(auth)) {
+    headers.set(key, value)
+  }
+  let response: Response
+  try {
+    response = await fetchImpl(`${PRODUCTION_BASE}/speech/speak`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ text }),
+    })
+  } catch {
+    throw new ApiError(0, '后端服务不可用，请检查部署状态或稍后重试')
+  }
+  rememberRateRemaining(response.headers.get('X-RateLimit-Remaining'))
+  if (response.status === 401) {
+    notifyUnauthorized()
+  }
+  if (!response.ok) {
+    const raw = await response.text()
+    const parsed = parseProductionError(response.status, raw)
+    throw new ApiError(response.status, raw, parsed.message, parsed.code)
+  }
+  return response.blob()
 }
 
 /**

@@ -106,6 +106,9 @@ export type StreamRunOptions = {
   signal?: AbortSignal
   handlers?: RunHandlers
   headers?: Record<string, string>
+  /** 默认 GET；带图时用 POST multipart。续传始终 GET。 */
+  method?: string
+  body?: BodyInit | null
   /**
    * 根据 runId 计算续传 URL。返回 null 表示不续传。
    * 不配置时，任何非 done 结束都直接失败——这是默认且最安全的行为。
@@ -226,9 +229,21 @@ export async function streamRun(url: string, options: StreamRunOptions = {}): Pr
   let target = url
   let resumeHeader: string | null = null
   let resumesLeft = options.resumeUrl ? maxResumes : 0
+  let method = options.method ?? 'GET'
+  let body = options.body ?? null
 
   while (true) {
-    const outcome = await consume(target, resumeHeader, doFetch, handlers, options.headers, options.signal, state)
+    const outcome = await consume(
+      target,
+      resumeHeader,
+      doFetch,
+      handlers,
+      options.headers,
+      options.signal,
+      state,
+      method,
+      body,
+    )
 
     if (outcome === 'done' || outcome === 'cancelled') {
       return { outcome, runId: state.runId, lastSeq: state.lastSeq, malformedCount: state.malformedCount }
@@ -242,6 +257,8 @@ export async function streamRun(url: string, options: StreamRunOptions = {}): Pr
     resumesLeft -= 1
     target = next
     resumeHeader = String(state.lastSeq)
+    method = 'GET'
+    body = null
   }
 }
 
@@ -255,6 +272,8 @@ async function consume(
   extraHeaders: Record<string, string> | undefined,
   signal: AbortSignal | undefined,
   state: { runId: string | null; lastSeq: number; malformedCount: number },
+  method = 'GET',
+  body: BodyInit | null = null,
 ): Promise<ConsumeOutcome> {
   const headers: Record<string, string> = { Accept: 'text/event-stream', ...extraHeaders }
   if (lastEventId !== null) {
@@ -263,7 +282,7 @@ async function consume(
 
   let response: Response
   try {
-    response = await doFetch(url, { headers, signal })
+    response = await doFetch(url, { method, body: body ?? undefined, headers, signal })
   } catch (err) {
     if (isAbort(err, signal)) {
       return 'cancelled'

@@ -23,6 +23,8 @@ public class ProductionMetrics {
     private final Counter ingestSubmitted;
     private final Counter ingestSucceeded;
     private final Counter ingestFailed;
+    private final Counter mediaAccepted;
+    private final Counter mediaRejected;
     private final Timer chatTimer;
     private final MeterRegistry registry;
 
@@ -41,6 +43,8 @@ public class ProductionMetrics {
         this.ingestSubmitted = Counter.builder("prod.ingest.submitted").description("入库任务投递").register(registry);
         this.ingestSucceeded = Counter.builder("prod.ingest.succeeded").description("入库任务成功").register(registry);
         this.ingestFailed = Counter.builder("prod.ingest.failed").description("入库任务失败").register(registry);
+        this.mediaAccepted = Counter.builder("prod.media.accepted").description("媒体校验通过").register(registry);
+        this.mediaRejected = Counter.builder("prod.media.rejected").description("媒体校验拒绝").register(registry);
         this.chatTimer = Timer.builder("prod.chat.duration").description("问答耗时").register(registry);
     }
 
@@ -94,6 +98,16 @@ public class ProductionMetrics {
         ingestFailed.increment();
     }
 
+    /** 媒体校验通过。 */
+    public void mediaAccepted() {
+        mediaAccepted.increment();
+    }
+
+    /** 媒体校验拒绝。 */
+    public void mediaRejected() {
+        mediaRejected.increment();
+    }
+
     /**
      * @param nanos 耗时
      */
@@ -116,6 +130,8 @@ public class ProductionMetrics {
         map.put("ingestSubmitted", ingestSubmitted.count());
         map.put("ingestSucceeded", ingestSucceeded.count());
         map.put("ingestFailed", ingestFailed.count());
+        map.put("mediaAccepted", mediaAccepted.count());
+        map.put("mediaRejected", mediaRejected.count());
         map.put("chatDurationCount", chatTimer.count());
         map.put("meters", registry.getMeters().size());
         return map;

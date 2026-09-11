@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api'
 import { getAccessToken, setSession, UNAUTHORIZED_EVENT } from './auth'
-import { getAudit, getMe, postChat, postIngest, postToolProbe, chatStreamUrl } from './productionApi'
+import { getAudit, getMe, postChat, postIngest, postMediaProbe, postToolProbe, chatStreamForm, chatStreamUrl } from './productionApi'
 
 describe('productionApi 鉴权头', () => {
   beforeEach(() => {
@@ -96,5 +96,27 @@ describe('productionApi 鉴权头', () => {
   it('流式地址默认不带 queryExpansion，HyDE 才写入', () => {
     expect(chatStreamUrl({ question: 'hi', topK: 4 })).not.toContain('queryExpansion')
     expect(chatStreamUrl({ question: 'hi', queryExpansion: 'hyde' })).toContain('queryExpansion=hyde')
+  })
+
+  it('图文 FormData 含 question 与 image', () => {
+    const file = new File([new Uint8Array([1, 2])], 'a.jpg', { type: 'image/jpeg' })
+    const form = chatStreamForm({ question: '这是什么', image: file, provider: 'dashscope' })
+    expect(form.get('question')).toBe('这是什么')
+    expect(form.get('provider')).toBe('dashscope')
+    expect(form.get('image')).toBe(file)
+  })
+
+  it('媒体探针 POST multipart 且带 Authorization', async () => {
+    setSession('tok-1', { username: 'alice', tenant: 'tenant-a', roles: ['USER'] })
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      mime: 'image/jpeg', bytes: 12, sha256: 'abc',
+    }), { status: 200 }))
+    const file = new File([new Uint8Array([0xff, 0xd8, 0xff])], 'tiny.jpg', { type: 'image/jpeg' })
+    const result = await postMediaProbe(file, fetchImpl as unknown as typeof fetch)
+    expect(result.mime).toBe('image/jpeg')
+    const [, init] = fetchImpl.mock.calls[0] as unknown as [RequestInfo, RequestInit?]
+    const headers = new Headers(init?.headers)
+    expect(headers.get('Authorization')).toBe('Bearer tok-1')
+    expect(init?.body).toBeInstanceOf(FormData)
   })
 })

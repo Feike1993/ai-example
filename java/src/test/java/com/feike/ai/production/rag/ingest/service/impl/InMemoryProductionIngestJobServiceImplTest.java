@@ -65,7 +65,7 @@ class InMemoryProductionIngestJobServiceImplTest {
     private static InMemoryProductionIngestJobServiceImpl service(ProductionIngestService ingest) {
         return new InMemoryProductionIngestJobServiceImpl(
             ingest,
-            new ProductionProperties(true, "prod-corpus", 4, 400, 1, true, 60, 4, null, null, null, null, null, null, null),
+            new ProductionProperties(true, "prod-corpus", 4, 400, 1, true, 60, 4, null, null, null, null, null, null, null, null),
             new ProductionInstanceIdentity("test"),
             new ProductionMetrics(new SimpleMeterRegistry())
         );

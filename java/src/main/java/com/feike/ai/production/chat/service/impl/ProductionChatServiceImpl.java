@@ -216,6 +216,24 @@ public class ProductionChatServiceImpl implements ProductionChatService {
         Integer topK,
         String queryExpansion
     ) {
+        streamAnswer(writer, principal, sessionId, question, provider, topK, queryExpansion, null, null);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void streamAnswer(
+        SseStreamWriter writer,
+        ProductionPrincipal principal,
+        String sessionId,
+        String question,
+        String provider,
+        Integer topK,
+        String queryExpansion,
+        byte[] imageBytes,
+        String imageMime
+    ) {
         try {
             checkInput(question);
         } catch (GuardrailBlockedException ex) {
@@ -223,7 +241,7 @@ public class ProductionChatServiceImpl implements ProductionChatService {
             return;
         }
         if (!sessionEnabled()) {
-            streamWithin(writer, principal, null, question, provider, topK, queryExpansion);
+            streamWithin(writer, principal, null, question, provider, topK, queryExpansion, imageBytes, imageMime);
             return;
         }
         String id = sessionStore.resolveSessionId(sessionId);
@@ -235,7 +253,7 @@ public class ProductionChatServiceImpl implements ProductionChatService {
             return;
         }
         try (SessionLock.Handle ignored = handle.get()) {
-            streamWithin(writer, principal, id, question, provider, topK, queryExpansion);
+            streamWithin(writer, principal, id, question, provider, topK, queryExpansion, imageBytes, imageMime);
         }
     }
 
@@ -246,19 +264,27 @@ public class ProductionChatServiceImpl implements ProductionChatService {
         String question,
         String provider,
         Integer topK,
-        String queryExpansion
+        String queryExpansion,
+        byte[] imageBytes,
+        String imageMime
     ) {
+        boolean hasImage = imageBytes != null && imageBytes.length > 0;
+        String effectiveProvider = provider;
+        if (hasImage && (effectiveProvider == null || effectiveProvider.isBlank())) {
+            effectiveProvider = properties.media().visionProvider();
+        }
         try {
             History history = loadHistory(principal, sessionId);
             org.slf4j.MDC.put("runId", writer.runId());
 
             Map<String, Object> meta = new LinkedHashMap<>();
-            meta.put("provider", provider);
+            meta.put("provider", effectiveProvider);
             meta.put("corpus", properties.corpus());
             meta.put("sessionId", sessionId);
             meta.put("tenant", principal.tenantId());
             meta.put("historyMessages", history.messages().size());
             meta.put("historyDropped", history.dropped());
+            meta.put("hasImage", hasImage);
             String traceId = org.slf4j.MDC.get("traceId");
             if (traceId != null) {
                 meta.put("traceId", traceId);
@@ -266,7 +292,7 @@ public class ProductionChatServiceImpl implements ProductionChatService {
             writer.meta(meta);
 
             ProductionRetrievalService.RetrievalResult hits = retrieval.retrieve(
-                new ProductionRetrieveQuery(question, topK, principal.tenantId(), queryExpansion, provider));
+                new ProductionRetrieveQuery(question, topK, principal.tenantId(), queryExpansion, effectiveProvider));
             Map<String, Object> sourcesPayload = new LinkedHashMap<>();
             sourcesPayload.put("sources", hits.sources());
             sourcesPayload.put("retrievalEmpty", hits.empty());
@@ -277,7 +303,8 @@ public class ProductionChatServiceImpl implements ProductionChatService {
             }
             writer.emit(StreamEventTypeEnum.SOURCES, sourcesPayload);
 
-            if (hits.empty()) {
+            // 无图时空检索仍短路拒答。有图时图片本身就是上下文，否则本机选跑「描述这张图」永远打不到 VL。
+            if (hits.empty() && !hasImage) {
                 writer.delta(ProductionAnswerGenerator.EMPTY_REFUSAL);
                 writer.emit(StreamEventTypeEnum.USAGE, usage(0, 0));
                 // 拒答也是一轮完整对话，同样入库：否则用户追问「为什么答不了」时，
@@ -289,17 +316,29 @@ public class ProductionChatServiceImpl implements ProductionChatService {
             }
 
             StringBuilder answer = new StringBuilder();
-            generator.stream(question, provider, hits.hits(), history.messages(), chunk -> {
-                if (Thread.currentThread().isInterrupted()) {
-                    throw new CancellationException("客户端已断开");
-                }
-                answer.append(chunk);
-                writer.delta(chunk);
-            });
+            if (hasImage) {
+                generator.stream(question, effectiveProvider, hits.hits(), history.messages(),
+                    imageBytes, imageMime, chunk -> {
+                        if (Thread.currentThread().isInterrupted()) {
+                            throw new CancellationException("客户端已断开");
+                        }
+                        answer.append(chunk);
+                        writer.delta(chunk);
+                    });
+            } else {
+                generator.stream(question, effectiveProvider, hits.hits(), history.messages(), chunk -> {
+                    if (Thread.currentThread().isInterrupted()) {
+                        throw new CancellationException("客户端已断开");
+                    }
+                    answer.append(chunk);
+                    writer.delta(chunk);
+                });
+            }
             checkGenerated(answer.toString(), hits.sources());
 
             writer.emit(StreamEventTypeEnum.USAGE, usage(answer.length(), hits.sources().size()));
-            boolean persisted = persist(principal, sessionId, writer.runId(), question, answer.toString());
+            boolean persisted = persist(principal, sessionId, writer.runId(), persistQuestion(question, hasImage),
+                answer.toString());
             writer.done(doneBody(false, sessionId, persisted));
         } catch (CancellationException ex) {
             // 半截回答不入库：留下没有 assistant 的 turn 会污染后续所有轮次
@@ -343,6 +382,24 @@ public class ProductionChatServiceImpl implements ProductionChatService {
             persisted,
             hits.queryExpansion()
         );
+    }
+
+    /**
+     * 落库问句：有图只写占位前缀，不写二进制。刷新后跟问不再带原图。
+     *
+     * @param question 用户原句
+     * @param hasImage 本轮是否带图
+     * @return 写入会话的文本
+     */
+    static String persistQuestion(String question, boolean hasImage) {
+        String text = question == null ? "" : question;
+        if (!hasImage) {
+            return text;
+        }
+        if (text.startsWith("[图片]")) {
+            return text;
+        }
+        return "[图片] " + text;
     }
 
     /** 读历史并按预算裁剪；会话关闭时返回空。 */

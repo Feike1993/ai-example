@@ -109,6 +109,31 @@ public interface ProductionChatService {
     );
 
     /**
+     * 流式问答，可附带一张图。有图时落库问句加 {@code [图片]} 前缀，不写二进制。
+     *
+     * @param writer         事件出口
+     * @param principal      当前用户
+     * @param sessionId      会话
+     * @param question       问题
+     * @param provider       模型；有图且为空时用视觉默认 Provider
+     * @param topK           topK
+     * @param queryExpansion none / rewrite / hyde
+     * @param imageBytes     图片；可空
+     * @param imageMime      图片 mime
+     */
+    void streamAnswer(
+        SseStreamWriter writer,
+        ProductionPrincipal principal,
+        String sessionId,
+        String question,
+        String provider,
+        Integer topK,
+        String queryExpansion,
+        byte[] imageBytes,
+        String imageMime
+    );
+
+    /**
      * 占用会话锁一段时间后释放。给多实例演示用，不调 LLM。
      *
      * @param principal 当前用户

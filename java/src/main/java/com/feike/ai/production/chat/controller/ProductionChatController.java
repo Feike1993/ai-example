@@ -15,6 +15,8 @@ import com.feike.ai.production.audit.service.AuditService;
 import com.feike.ai.production.auth.controller.JwtAuthFilter;
 import com.feike.ai.production.auth.model.ProductionPrincipal;
 import com.feike.ai.production.config.ProductionInstanceIdentity;
+import com.feike.ai.production.media.manager.ProductionMediaInspector;
+import com.feike.ai.production.media.model.MediaProbeVO;
 import com.feike.ai.production.observability.service.ProductionMetrics;
 import com.feike.ai.production.rag.ingest.model.IngestJobVO;
 import com.feike.ai.production.rag.ingest.service.ProductionIngestJobService;
@@ -48,6 +50,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -83,6 +86,7 @@ public class ProductionChatController {
     private final JsonMapper jsonMapper;
     private final Tracer tracer;
     private final ProductionInstanceIdentity instanceIdentity;
+    private final ProductionMediaInspector mediaInspector;
 
     /**
      * 单测用的窄构造：不接限流 / 审计 / Agent。
@@ -97,7 +101,7 @@ public class ProductionChatController {
         SseRunExecutor runExecutor
     ) {
         this(chatService, ingestService, null, runExecutor, null, null, null, null, null, null, null,
-            new ProductionInstanceIdentity("test"));
+            new ProductionInstanceIdentity("test"), null);
     }
 
     /**
@@ -113,6 +117,7 @@ public class ProductionChatController {
      * @param jsonMapper        幂等哈希
      * @param tracer            可选 Trace
      * @param instanceIdentity  本进程短名
+     * @param mediaInspector    带图校验；测试可空
      */
     @Autowired
     public ProductionChatController(
@@ -127,7 +132,8 @@ public class ProductionChatController {
         ProductionMetrics metrics,
         JsonMapper jsonMapper,
         ObjectProvider<Tracer> tracer,
-        ProductionInstanceIdentity instanceIdentity
+        ProductionInstanceIdentity instanceIdentity,
+        ProductionMediaInspector mediaInspector
     ) {
         this.chatService = chatService;
         this.ingestService = ingestService;
@@ -143,6 +149,7 @@ public class ProductionChatController {
         this.instanceIdentity = instanceIdentity == null
             ? new ProductionInstanceIdentity("test")
             : instanceIdentity;
+        this.mediaInspector = mediaInspector;
     }
 
     /**
@@ -267,6 +274,64 @@ public class ProductionChatController {
         ProductionPrincipal frozen = principal;
         return runExecutor.start(writer ->
             chatService.streamAnswer(writer, frozen, sessionId, question, provider, topK, queryExpansion));
+    }
+
+    /**
+     * 图文流式问答。SSE 契约与 GET 相同；{@code meta.hasImage} 标明本轮是否带图。
+     * <p>
+     * 有图时先做 mime / 大小校验再进生成，避免无 Key 时把坏文件打到网关。
+     *
+     * @param question       问题
+     * @param sessionId      会话
+     * @param provider       模型
+     * @param topK           topK
+     * @param queryExpansion 查询扩展
+     * @param image          可选单图
+     * @param http           身份
+     * @param response       限流头
+     * @return SSE
+     */
+    @PostMapping(
+        value = "/chat/stream",
+        consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+        produces = MediaType.TEXT_EVENT_STREAM_VALUE
+    )
+    public SseEmitter chatStreamPost(
+        @RequestParam @NotBlank(message = "问题不能为空") String question,
+        @RequestParam(required = false) String sessionId,
+        @RequestParam(required = false) String provider,
+        @RequestParam(required = false) Integer topK,
+        @RequestParam(required = false) String queryExpansion,
+        @RequestParam(required = false) MultipartFile image,
+        HttpServletRequest http,
+        HttpServletResponse response
+    ) {
+        ProductionPrincipal principal = rateLimit(http, response);
+        byte[] imageBytes = null;
+        String imageMime = null;
+        if (image != null && !image.isEmpty()) {
+            if (mediaInspector == null) {
+                throw new BusinessException(ErrorCodeEnum.MEDIA_UNSUPPORTED, "不支持的媒体类型");
+            }
+            MediaProbeVO probe = mediaInspector.inspectImage(image);
+            try {
+                imageBytes = image.getBytes();
+            } catch (java.io.IOException ex) {
+                throw new BusinessException(ErrorCodeEnum.BAD_REQUEST, "无法读取图片");
+            }
+            imageMime = probe.mime();
+        }
+        if (metrics != null) {
+            metrics.chatRun();
+        }
+        attachTrace(response);
+        audit(principal, "chat.stream", http, 200, null, question);
+        ProductionPrincipal frozen = principal;
+        byte[] frozenImage = imageBytes;
+        String frozenMime = imageMime;
+        return runExecutor.start(writer ->
+            chatService.streamAnswer(
+                writer, frozen, sessionId, question, provider, topK, queryExpansion, frozenImage, frozenMime));
     }
 
     /**

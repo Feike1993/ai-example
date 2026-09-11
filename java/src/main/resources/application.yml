@@ -49,6 +49,10 @@ spring:
       charset: UTF-8
       enabled: true
       force: true
+    multipart:
+      # 略大于 app.production.media.max-bytes（默认 2MiB），让超限走到业务 422 而不是容器先拒
+      max-file-size: 3MB
+      max-request-size: 4MB
   application:
     name: ai-example
   threads:
@@ -288,6 +292,23 @@ app:
     agent:
       max-steps: ${PRODUCTION_AGENT_MAX_STEPS:6}
       public-tenant-id: public
+    # 本机图文 / 语音演示。不落盘、不进向量库；默认 E2E 只打探针，不打 VL/ASR/TTS
+    media:
+      max-bytes: ${PRODUCTION_MEDIA_MAX_BYTES:2097152}
+      image-mimes:
+        - image/jpeg
+        - image/png
+        - image/webp
+      audio-mimes:
+        - audio/webm
+        - audio/wav
+        - audio/mpeg
+      vision-model: ${PRODUCTION_VISION_MODEL:qwen-vl-plus}
+      vision-provider: ${PRODUCTION_VISION_PROVIDER:dashscope}
+      asr-model: ${PRODUCTION_ASR_MODEL:qwen3-asr-flash}
+      tts-model: ${PRODUCTION_TTS_MODEL:qwen3-tts-flash}
+      tts-voice: ${PRODUCTION_TTS_VOICE:Cherry}
+      max-speak-chars: ${PRODUCTION_TTS_MAX_CHARS:200}
     users:
       - username: alice
         password: demo

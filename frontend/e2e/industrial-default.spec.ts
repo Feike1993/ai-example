@@ -82,6 +82,70 @@ test.describe('工业级默认 E2E', () => {
     expect(body.denied).toBeFalsy()
   })
 
+  test('无 JWT 时媒体探针 401', async ({ request }) => {
+    const probe = await request.post('/ai-example/api/v1/media/probe', {
+      multipart: {
+        file: {
+          name: 'tiny.jpg',
+          mimeType: 'image/jpeg',
+          buffer: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]),
+        },
+      },
+    })
+    expect(probe.status()).toBe(401)
+    const body = (await probe.json()) as { code: string }
+    expect(body.code).toBe('auth_missing_token')
+  })
+
+  test('alice 探针拒绝 txt 与超限，小 jpeg 返回摘要', async ({ request }) => {
+    const token = await fetchToken(request, 'alice')
+    const txt = await request.post('/ai-example/api/v1/media/probe', {
+      headers: { Authorization: `Bearer ${token}` },
+      multipart: {
+        file: {
+          name: 'a.txt',
+          mimeType: 'text/plain',
+          buffer: Buffer.from('hello'),
+        },
+      },
+    })
+    expect(txt.status()).toBe(422)
+    expect(((await txt.json()) as { code: string }).code).toBe('media_unsupported')
+
+    const huge = Buffer.alloc(2 * 1024 * 1024 + 1, 0)
+    huge[0] = 0xff
+    huge[1] = 0xd8
+    huge[2] = 0xff
+    const over = await request.post('/ai-example/api/v1/media/probe', {
+      headers: { Authorization: `Bearer ${token}` },
+      multipart: {
+        file: {
+          name: 'big.jpg',
+          mimeType: 'image/jpeg',
+          buffer: huge,
+        },
+      },
+    })
+    expect(over.status()).toBe(422)
+    expect(((await over.json()) as { code: string }).code).toBe('media_too_large')
+
+    const ok = await request.post('/ai-example/api/v1/media/probe', {
+      headers: { Authorization: `Bearer ${token}` },
+      multipart: {
+        file: {
+          name: 'tiny.jpg',
+          mimeType: 'image/jpeg',
+          buffer: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]),
+        },
+      },
+    })
+    expect(ok.ok()).toBeTruthy()
+    const body = (await ok.json()) as { mime: string; bytes: number; sha256: string }
+    expect(body.mime).toBe('image/jpeg')
+    expect(body.bytes).toBeGreaterThan(0)
+    expect(body.sha256).toHaveLength(64)
+  })
+
   test('alice 重建语料返回 403', async ({ page }) => {
     await login(page, 'alice')
     await page.getByRole('button', { name: '重建语料' }).click()

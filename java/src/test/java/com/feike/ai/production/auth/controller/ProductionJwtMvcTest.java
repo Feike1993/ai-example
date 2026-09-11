@@ -10,6 +10,7 @@ import com.feike.ai.production.audit.service.AuditService;
 import com.feike.ai.production.chat.controller.ProductionChatController;
 import com.feike.ai.production.chat.service.ProductionChatService;
 import com.feike.ai.production.lock.manager.InMemorySessionLock;
+import com.feike.ai.production.media.manager.ProductionMediaInspector;
 import com.feike.ai.production.observability.controller.ProductionOpsController;
 import com.feike.ai.production.observability.service.ProductionMetrics;
 import com.feike.ai.production.rag.model.ProductionSource;
@@ -93,7 +94,8 @@ class ProductionJwtMvcTest {
         ProductionChatController chat = new ProductionChatController(
             chatService, ingestService, null, runExecutor,
             null, bucket, null, audit, metrics, jsonMapper, null,
-            new ProductionInstanceIdentity("test")
+            new ProductionInstanceIdentity("test"),
+            new ProductionMediaInspector(properties, metrics)
         );
         @SuppressWarnings("unchecked")
         ObjectProvider<RunEventLogDAO> logs = mock(ObjectProvider.class);
@@ -296,7 +298,7 @@ class ProductionJwtMvcTest {
             true, "prod-corpus", 4, 400, 1, true, 60, 4,
             new ProductionProperties.Stream("memory", Duration.ofMinutes(1), Duration.ofSeconds(30), Duration.ofSeconds(10)),
             new ProductionProperties.Session(true, "memory", 20, 2000, Duration.ofMinutes(1), 3),
-            null, null, null, null, null
+            null, null, null, null, null, null
         );
     }
 }

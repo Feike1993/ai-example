@@ -31,6 +31,7 @@ import java.util.List;
  * @param agent          Agent 步数
  * @param users          演示账号
  * @param queryExpansion 查询扩展；默认 none，避免检索层额外打 LLM
+ * @param media          本机图文 / 语音演示；不落盘、不进向量库
  */
 @ConfigurationProperties(prefix = "app.production")
 public record ProductionProperties(
@@ -48,7 +49,8 @@ public record ProductionProperties(
     RateLimit rateLimit,
     Agent agent,
     List<DemoUser> users,
-    QueryExpansion queryExpansion
+    QueryExpansion queryExpansion,
+    Media media
 ) {
 
     public ProductionProperties {
@@ -94,6 +96,9 @@ public record ProductionProperties(
         }
         if (queryExpansion == null) {
             queryExpansion = new QueryExpansion(null, null);
+        }
+        if (media == null) {
+            media = new Media(null, null, null, null, null, null, null, null, null);
         }
     }
 
@@ -294,6 +299,100 @@ public record ProductionProperties(
             if (publicTenantId == null || publicTenantId.isBlank()) {
                 publicTenantId = "public";
             }
+        }
+    }
+
+    /**
+     * 本机图文识图与语音演示。
+     * <p>
+     * 为什么单独一块而不是打开 Spring AI 的 OpenAI Audio 自动配置：那会和教学
+     * {@code ChatModel} 抢同一套客户端；ASR/TTS 用手写 HTTP 调 compatible-mode，
+     * 识图则覆盖现有 {@code OpenAiChatModel} 的模型名为视觉模型。文件不落盘、
+     * 不进 pgvector，刷新后历史只剩 {@code [图片]} 占位。
+     *
+     * @param maxBytes        单文件上限；默认 2MiB
+     * @param imageMimes      识图允许的 mime
+     * @param audioMimes      转写允许的 mime
+     * @param visionModel     视觉模型名，默认 {@code qwen-vl-plus}
+     * @param visionProvider  有图时默认 Provider，默认 dashscope
+     * @param asrModel        ASR 模型
+     * @param ttsModel        TTS 模型
+     * @param ttsVoice        演示音色，写死一个配置项
+     * @param maxSpeakChars   TTS 输入字符上限
+     */
+    public record Media(
+        Long maxBytes,
+        List<String> imageMimes,
+        List<String> audioMimes,
+        String visionModel,
+        String visionProvider,
+        String asrModel,
+        String ttsModel,
+        String ttsVoice,
+        Integer maxSpeakChars
+    ) {
+        /** 默认 2MiB，与探针 / 带图流式同一把尺子。 */
+        public static final long DEFAULT_MAX_BYTES = 2L * 1024 * 1024;
+
+        public Media {
+            if (maxBytes == null || maxBytes < 1) {
+                maxBytes = DEFAULT_MAX_BYTES;
+            }
+            if (imageMimes == null || imageMimes.isEmpty()) {
+                imageMimes = List.of("image/jpeg", "image/png", "image/webp");
+            } else {
+                imageMimes = imageMimes.stream().map(Media::normalizeMime).filter(s -> !s.isBlank()).toList();
+            }
+            if (audioMimes == null || audioMimes.isEmpty()) {
+                audioMimes = List.of("audio/webm", "audio/wav", "audio/mpeg");
+            } else {
+                audioMimes = audioMimes.stream().map(Media::normalizeMime).filter(s -> !s.isBlank()).toList();
+            }
+            if (visionModel == null || visionModel.isBlank()) {
+                visionModel = "qwen-vl-plus";
+            }
+            if (visionProvider == null || visionProvider.isBlank()) {
+                visionProvider = "dashscope";
+            }
+            if (asrModel == null || asrModel.isBlank()) {
+                asrModel = "qwen3-asr-flash";
+            }
+            if (ttsModel == null || ttsModel.isBlank()) {
+                ttsModel = "qwen3-tts-flash";
+            }
+            if (ttsVoice == null || ttsVoice.isBlank()) {
+                ttsVoice = "Cherry";
+            }
+            if (maxSpeakChars == null || maxSpeakChars < 1) {
+                maxSpeakChars = 200;
+            }
+        }
+
+        /**
+         * 去掉 charset 等参数，便于和允许列表比对。
+         *
+         * @param raw Content-Type
+         * @return 小写主类型；空则空串
+         */
+        public static String normalizeMime(String raw) {
+            if (raw == null || raw.isBlank()) {
+                return "";
+            }
+            String trimmed = raw.trim().toLowerCase();
+            int semicolon = trimmed.indexOf(';');
+            if (semicolon >= 0) {
+                trimmed = trimmed.substring(0, semicolon).trim();
+            }
+            if ("image/jpg".equals(trimmed)) {
+                return "image/jpeg";
+            }
+            if ("audio/wave".equals(trimmed) || "audio/x-wav".equals(trimmed)) {
+                return "audio/wav";
+            }
+            if ("audio/mp3".equals(trimmed)) {
+                return "audio/mpeg";
+            }
+            return trimmed;
         }
     }
 
