@@ -10,6 +10,7 @@ import com.feike.ai.production.audit.service.AuditService;
 import com.feike.ai.production.chat.controller.ProductionChatController;
 import com.feike.ai.production.chat.service.ProductionChatService;
 import com.feike.ai.production.lock.manager.InMemorySessionLock;
+import com.feike.ai.production.observability.controller.ProductionOpsController;
 import com.feike.ai.production.observability.service.ProductionMetrics;
 import com.feike.ai.production.rag.model.ProductionSource;
 import com.feike.ai.production.rag.generate.service.ProductionAnswerGenerator;
@@ -20,6 +21,7 @@ import com.feike.ai.production.secret.manager.EnvSecretResolver;
 import com.feike.ai.production.secret.manager.EnvelopeCrypto;
 import com.feike.ai.production.secret.dao.SecretResolver;
 import com.feike.ai.production.session.dao.impl.FakeProductionChatSessionDAOImpl;
+import com.feike.ai.production.sse.dao.RunEventLogDAO;
 import com.feike.ai.production.sse.dao.impl.InMemoryRunEventLogDAOImpl;
 import com.feike.ai.production.sse.service.SseRunExecutor;
 import com.feike.ai.production.web.ProductionExceptionHandler;
@@ -29,6 +31,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -67,6 +70,7 @@ class ProductionJwtMvcTest {
     private SseRunExecutor runExecutor;
     private MockMvc mockMvc;
     private FakeProductionChatSessionDAOImpl sessionStore;
+    private InMemoryRunEventLogDAOImpl eventLog;
 
     @BeforeEach
     void setUp() {
@@ -75,7 +79,9 @@ class ProductionJwtMvcTest {
         secrets.put(SecretResolver.JWT_HMAC, EnvelopeCrypto.randomKeyBase64());
         jwtService = new JwtService(secrets, Duration.ofHours(1));
         sessionStore = new FakeProductionChatSessionDAOImpl();
-        runExecutor = new SseRunExecutor(new InMemoryRunEventLogDAOImpl(), JsonMapper.builder().build(), properties);
+        eventLog = new InMemoryRunEventLogDAOImpl();
+        JsonMapper jsonMapper = JsonMapper.builder().build();
+        runExecutor = new SseRunExecutor(eventLog, jsonMapper, properties);
         ProductionChatService chatService = new ProductionChatServiceImpl(
             retrieval, generator, properties, sessionStore, new InMemorySessionLock(), null);
         RedisTokenBucket bucket = new RedisTokenBucket(mock(StringRedisTemplate.class), properties);
@@ -86,11 +92,19 @@ class ProductionJwtMvcTest {
             users, jwtService, bucket, properties, audit, metrics);
         ProductionChatController chat = new ProductionChatController(
             chatService, ingestService, null, runExecutor,
-            null, bucket, null, audit, metrics, JsonMapper.builder().build(), null,
+            null, bucket, null, audit, metrics, jsonMapper, null,
             new ProductionInstanceIdentity("test")
         );
+        @SuppressWarnings("unchecked")
+        ObjectProvider<RunEventLogDAO> logs = mock(ObjectProvider.class);
+        when(logs.getIfAvailable()).thenReturn(eventLog);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<io.micrometer.tracing.Tracer> tracer = mock(ObjectProvider.class);
+        when(tracer.getIfAvailable()).thenReturn(null);
+        ProductionOpsController ops = new ProductionOpsController(
+            audit, metrics, tracer, null, jsonMapper, "", logs);
         JwtAuthFilter filter = new JwtAuthFilter(jwtService, secrets, metrics);
-    mockMvc = MockMvcBuilders.standaloneSetup(auth, chat)
+    mockMvc = MockMvcBuilders.standaloneSetup(auth, chat, ops)
         .setControllerAdvice(new ProductionExceptionHandler())
         .addFilters(filter)
         .build();
@@ -158,6 +172,57 @@ class ProductionJwtMvcTest {
             .andExpect(jsonPath("$.sessionId").value("s-probe"))
             .andExpect(jsonPath("$.instanceId").value("test"))
             .andExpect(jsonPath("$.heldMs").value(1));
+    }
+
+    @Test
+    void aliceShouldNotSeeRebuildIndexTool() throws Exception {
+        String token = login("alice");
+        mockMvc.perform(get("/api/v1/agent/tools").header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.tools").isArray())
+            .andExpect(jsonPath("$.tools").value(org.hamcrest.Matchers.not(
+                org.hamcrest.Matchers.hasItem("rebuild_index"))));
+    }
+
+    @Test
+    void adminShouldSeeRebuildIndexTool() throws Exception {
+        String token = login("admin");
+        mockMvc.perform(get("/api/v1/agent/tools").header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.tools").value(org.hamcrest.Matchers.hasItem("rebuild_index")));
+    }
+
+    @Test
+    void aliceToolProbeShouldDenyRebuildIndex() throws Exception {
+        String token = login("alice");
+        mockMvc.perform(post("/api/v1/agent/tool-probe")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"tool\":\"rebuild_index\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.tool").value("rebuild_index"))
+            .andExpect(jsonPath("$.allowed").value(false))
+            .andExpect(jsonPath("$.denied").value(true));
+    }
+
+    @Test
+    void adminToolProbeShouldAllowRebuildIndexWithoutIngest() throws Exception {
+        String token = login("admin");
+        mockMvc.perform(post("/api/v1/agent/tool-probe")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"tool\":\"rebuild_index\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.allowed").value(true))
+            .andExpect(jsonPath("$.denied").value(false));
+    }
+
+    @Test
+    void missingRunTimelineShouldLookAbsent() throws Exception {
+        String token = login("alice");
+        mockMvc.perform(get("/api/v1/ops/runs/missing-run").header("Authorization", "Bearer " + token))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.code").value("run_not_found"));
     }
 
     @Test

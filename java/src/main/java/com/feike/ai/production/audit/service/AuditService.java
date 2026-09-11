@@ -50,13 +50,45 @@ public class AuditService {
         Integer durationMs,
         String ip
     ) {
+        record(tenantId, principal, action, path, status, runId, questionSha256, durationMs, ip, null, null);
+    }
+
+    /**
+     * 写入一条审计，可带工具名。失败不影响调用方。
+     *
+     * @param tenantId       租户
+     * @param principal      用户
+     * @param action         动作
+     * @param path           路径
+     * @param status         状态码
+     * @param runId          run
+     * @param questionSha256 问题或参数摘要
+     * @param durationMs     耗时
+     * @param ip             IP
+     * @param toolName       工具名
+     * @param denied         是否被拒绝
+     */
+    public void record(
+        String tenantId,
+        String principal,
+        String action,
+        String path,
+        int status,
+        String runId,
+        String questionSha256,
+        Integer durationMs,
+        String ip,
+        String toolName,
+        Boolean denied
+    ) {
         Thread.ofVirtual().name("prod-audit").start(() -> {
         try {
             jdbc.update(
                 """
                     INSERT INTO prod_audit_log
-                      (tenant_id, principal, action, path, status, run_id, question_sha256, duration_ms, ip)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                      (tenant_id, principal, action, path, status, run_id, question_sha256, duration_ms, ip,
+                       tool_name, denied)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                 tenantId,
                 principal,
@@ -66,7 +98,9 @@ public class AuditService {
                 runId,
                 questionSha256,
                 durationMs,
-                ip
+                ip,
+                toolName,
+                denied
             );
         } catch (RuntimeException ex) {
             log.warn("审计写入失败: {}", ex.toString());
@@ -86,7 +120,7 @@ public class AuditService {
         return jdbc.query(
             """
                 SELECT id, tenant_id, principal, action, path, status, run_id, question_sha256,
-                       duration_ms, ip, created_at
+                       duration_ms, ip, created_at, tool_name, denied
                   FROM prod_audit_log
                  WHERE tenant_id = ?
                  ORDER BY created_at DESC, id DESC
@@ -94,6 +128,7 @@ public class AuditService {
                 """,
             (rs, rowNum) -> {
                 Timestamp created = rs.getTimestamp("created_at");
+                Boolean denied = (Boolean) rs.getObject("denied");
                 return new AuditEntryDO(
                     rs.getLong("id"),
                     rs.getString("tenant_id"),
@@ -105,7 +140,9 @@ public class AuditService {
                     rs.getString("question_sha256"),
                     (Integer) rs.getObject("duration_ms"),
                     rs.getString("ip"),
-                    created == null ? Instant.EPOCH : created.toInstant()
+                    created == null ? Instant.EPOCH : created.toInstant(),
+                    rs.getString("tool_name"),
+                    denied
                 );
             },
             tenantId,

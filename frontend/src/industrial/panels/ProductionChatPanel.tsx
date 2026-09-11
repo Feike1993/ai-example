@@ -4,7 +4,7 @@ import { ApiError, describeError } from '../../api'
 import { MarkdownBody } from '../../components/MarkdownBody'
 import { ResultBody } from '../../components/ResultBody'
 import { Workbench } from '../../components/Workbench'
-import { authHeaders, notifyUnauthorized, rememberTraceId } from '../lib/auth'
+import { authHeaders, notifyUnauthorized, rememberRunId, rememberTraceId } from '../lib/auth'
 import { mergeAgentSteps } from '../lib/agentSteps'
 import { agentStreamUrl, chatStreamUrl, clearSession, getIngestJob, getSession, postIngest, resumeUrl } from '../lib/productionApi'
 import { toTurns, type Turn } from '../lib/sessionTurns'
@@ -130,6 +130,7 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
           handlers: {
             onMeta: (payload) => {
               setMeta({ runId: payload.runId })
+              rememberRunId(payload.runId)
               if (typeof payload.traceId === 'string') {
                 rememberTraceId(payload.traceId)
               }
@@ -407,8 +408,10 @@ function TurnView({ turn, streaming }: { turn: Turn; streaming: boolean }) {
       {turn.steps && turn.steps.length > 0 ? <StepList steps={turn.steps} /> : null}
       {turn.sources.length > 0 ? <SourceList sources={turn.sources} /> : null}
       {turn.usage ? (
-        <Text size="xs" c="dimmed">
+        <Text size="xs" c="dimmed" data-testid="usage-line">
           answerChars {turn.usage.answerChars} · sourceCount {turn.usage.sourceCount}
+          {turn.usage.steps != null ? ` · steps ${turn.usage.steps}` : ''}
+          {turn.usage.toolDenied != null ? ` · toolDenied ${turn.usage.toolDenied}` : ''}
         </Text>
       ) : null}
     </Stack>

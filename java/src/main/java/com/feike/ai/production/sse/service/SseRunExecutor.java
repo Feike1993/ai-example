@@ -79,7 +79,21 @@ public class SseRunExecutor {
      * @return 立即返回给客户端的 emitter
      */
     public SseEmitter start(Consumer<SseStreamWriter> pipeline) {
+        return start(pipeline, runId -> { });
+    }
+
+    /**
+     * 启动一次新的 run，并在工作线程启动前把 runId 回传给调用方（便于审计）。
+     *
+     * @param pipeline 业务管线
+     * @param onBegin  拿到 runId；可空
+     * @return emitter
+     */
+    public SseEmitter start(Consumer<SseStreamWriter> pipeline, Consumer<String> onBegin) {
         String runId = UUID.randomUUID().toString();
+        if (onBegin != null) {
+            onBegin.accept(runId);
+        }
         long timeoutMs = properties.stream().timeout().toMillis();
         SseEmitter emitter = new SseEmitter(timeoutMs + EMITTER_GRACE_MS);
         SseStreamWriter writer = new SseStreamWriter(runId, new SseEmitterSink(emitter), eventLog, jsonMapper);

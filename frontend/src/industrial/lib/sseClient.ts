@@ -61,6 +61,8 @@ export type SourcesPayload = {
 export type UsagePayload = {
   answerChars: number
   sourceCount: number
+  steps?: number
+  toolDenied?: number
 }
 
 /**

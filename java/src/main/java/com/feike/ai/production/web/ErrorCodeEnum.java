@@ -28,6 +28,7 @@ public enum ErrorCodeEnum {
     BAD_REQUEST("bad_request", HttpStatus.BAD_REQUEST, "请求参数不合法"),
     UNKNOWN_PROVIDER("unknown_provider", HttpStatus.BAD_REQUEST, "未知 LLM Provider"),
     RUN_GONE("run_gone", HttpStatus.GONE, "run 不存在或已超出事件保留窗口，请重新发起请求"),
+    RUN_NOT_FOUND("run_not_found", HttpStatus.NOT_FOUND, "运行记录不存在"),
     AGENT_NOT_ASSEMBLED("agent_not_assembled", HttpStatus.NOT_IMPLEMENTED, "Agent 未装配"),
     INGEST_FAILED("ingest_failed", HttpStatus.INTERNAL_SERVER_ERROR, "读取语料失败"),
     INGEST_JOB_NOT_FOUND("ingest_job_not_found", HttpStatus.NOT_FOUND, "入库任务不存在或已过期"),

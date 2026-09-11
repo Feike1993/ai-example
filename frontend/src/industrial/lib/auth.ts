@@ -3,6 +3,7 @@ const TOKEN_KEY = 'ai-example.production.token'
 const USER_KEY = 'ai-example.production.user'
 const RATE_KEY = 'ai-example.production.rateRemaining'
 const TRACE_KEY = 'ai-example.production.lastTraceId'
+const RUN_KEY = 'ai-example.production.lastRunId'
 
 /** 401 时广播，外壳清 token 回登录。 */
 export const UNAUTHORIZED_EVENT = 'production:unauthorized'
@@ -109,4 +110,23 @@ export function rememberTraceId(traceId: string | null | undefined): void {
  */
 export function getLastTraceId(): string | null {
   return sessionStorage.getItem(TRACE_KEY)
+}
+
+/**
+ * 记住最近一次 runId，供可观测面板拉步骤时间线。
+ *
+ * @param runId meta 事件里的 id
+ */
+export function rememberRunId(runId: string | null | undefined): void {
+  if (!runId) {
+    return
+  }
+  sessionStorage.setItem(RUN_KEY, runId)
+}
+
+/**
+ * @returns 最近一次 runId
+ */
+export function getLastRunId(): string | null {
+  return sessionStorage.getItem(RUN_KEY)
 }

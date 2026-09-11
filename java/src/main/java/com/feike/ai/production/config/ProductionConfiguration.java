@@ -428,6 +428,7 @@ public class ProductionConfiguration {
      * @param sessionLock  锁
      * @param guardrail    护栏
      * @param metrics      指标
+     * @param audit        逐步审计
      * @return Agent 编排
      */
     @Bean
@@ -439,7 +440,8 @@ public class ProductionConfiguration {
         ObjectProvider<ProductionChatSessionDAO> sessionStore,
         ObjectProvider<SessionLock> sessionLock,
         ProductionGuardrail guardrail,
-        ProductionMetrics metrics
+        ProductionMetrics metrics,
+        AuditService audit
     ) {
         return new ProductionAgentServiceImpl(
             models,
@@ -449,7 +451,8 @@ public class ProductionConfiguration {
             sessionStore.getIfAvailable(),
             sessionLock.getIfAvailable(),
             guardrail,
-            metrics
+            metrics,
+            audit
         );
     }
 }

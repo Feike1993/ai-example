@@ -54,6 +54,8 @@ export type AuditRow = {
   durationMs: number | null
   ip: string | null
   createdAt: string
+  toolName?: string | null
+  denied?: boolean | null
 }
 
 export type OpsSnapshot = {
@@ -147,6 +149,53 @@ export async function getLoadtestSummary(
   fetchImpl: typeof fetch = fetch,
 ): Promise<Record<string, unknown>> {
   return requestJson<Record<string, unknown>>(`${PRODUCTION_BASE}/ops/loadtest`, { method: 'GET' }, fetchImpl)
+}
+
+/**
+ * 当前身份允许的 Agent 工具。
+ *
+ * @param fetchImpl 便于测试注入
+ */
+export async function getAgentTools(fetchImpl: typeof fetch = fetch): Promise<{ tools: string[] }> {
+  return requestJson<{ tools: string[] }>(`${PRODUCTION_BASE}/agent/tools`, { method: 'GET' }, fetchImpl)
+}
+
+/**
+ * 无 LLM 的工具策略探针。
+ *
+ * @param tool      工具名
+ * @param fetchImpl 便于测试注入
+ */
+export async function postToolProbe(
+  tool: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ tool: string; allowed: boolean; denied: boolean }> {
+  return requestJson<{ tool: string; allowed: boolean; denied: boolean }>(
+    `${PRODUCTION_BASE}/agent/tool-probe`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tool }) },
+    fetchImpl,
+  )
+}
+
+/**
+ * 从 SSE 事件日志重建 run 步骤。
+ *
+ * @param runId     run
+ * @param fetchImpl 便于测试注入
+ */
+export async function getRunTimeline(
+  runId: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{
+  runId: string
+  state: string
+  tenant: string
+  mode: string | null
+  steps: Array<Record<string, unknown>>
+  done: Record<string, unknown> | null
+  error: Record<string, unknown> | null
+}> {
+  return requestJson(`${PRODUCTION_BASE}/ops/runs/${encodeURIComponent(runId)}`, { method: 'GET' }, fetchImpl)
 }
 
 /**

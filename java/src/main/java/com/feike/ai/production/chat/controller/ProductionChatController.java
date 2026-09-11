@@ -6,6 +6,10 @@ import com.feike.ai.production.chat.model.LockProbeVO;
 import com.feike.ai.production.chat.model.SessionVO;
 import com.feike.ai.production.chat.service.ProductionChatService;
 
+import com.feike.ai.production.agent.manager.ToolPolicy;
+import com.feike.ai.production.agent.model.AgentToolsVO;
+import com.feike.ai.production.agent.model.ToolProbeQuery;
+import com.feike.ai.production.agent.model.ToolProbeVO;
 import com.feike.ai.production.agent.service.ProductionAgentService;
 import com.feike.ai.production.audit.service.AuditService;
 import com.feike.ai.production.auth.controller.JwtAuthFilter;
@@ -47,9 +51,13 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 工业级链路 HTTP 入口，统一挂在 {@code /api/v1/**}。
@@ -287,10 +295,14 @@ public class ProductionChatController {
         if (cached.isPresent()) {
             return jsonMapper.readValue(cached.get(), ProductionAgentService.AgentAnswer.class);
         }
+        long startNanos = System.nanoTime();
         ProductionAgentService.AgentAnswer answer = agentService.run(
             principal, request.sessionId(), request.question(), request.provider());
         completeIdempotency(principal, idempotencyKey, bodyHash, answer);
-        audit(principal, "agent", http, 200, null, request.question());
+        long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+        audit(principal, "agent", http, 200, answer.runId(), request.question());
+        audit(principal, "agent.done", http, 200, answer.runId(), request.question(),
+            (int) durationMs, null, null);
         return answer;
     }
 
@@ -318,10 +330,49 @@ public class ProductionChatController {
             metrics.agentRun();
         }
         attachTrace(response);
-        audit(principal, "agent.stream", http, 200, null, question);
         ProductionPrincipal frozen = principal;
-        return runExecutor.start(writer ->
-            agentService.stream(writer, frozen, sessionId, question, provider));
+        long startNanos = System.nanoTime();
+        return runExecutor.start(writer -> {
+            try {
+                agentService.stream(writer, frozen, sessionId, question, provider);
+            } finally {
+                int durationMs = (int) TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+                audit(frozen, "agent.done", http, 200, writer.runId(), question, durationMs, null, null);
+            }
+        }, runId -> audit(frozen, "agent.stream", http, 200, runId, question));
+    }
+
+    /**
+     * 当前身份允许的工具。不调模型。
+     *
+     * @param http 身份
+     * @return 工具名
+     */
+    @GetMapping("/agent/tools")
+    public AgentToolsVO agentTools(HttpServletRequest http) {
+        ProductionPrincipal principal = principal(http);
+        List<String> tools = new ArrayList<>(ToolPolicy.allowed(principal));
+        tools.sort(String::compareTo);
+        return new AgentToolsVO(List.copyOf(tools));
+    }
+
+    /**
+     * 只走 {@link ToolPolicy}，不调模型、不执行工具。
+     *
+     * @param query 工具名
+     * @param http  身份
+     * @return 是否允许
+     */
+    @PostMapping("/agent/tool-probe")
+    public ToolProbeVO toolProbe(@Valid @RequestBody ToolProbeQuery query, HttpServletRequest http) {
+        ProductionPrincipal principal = principal(http);
+        String tool = query.tool().trim().toLowerCase(Locale.ROOT);
+        boolean allowed = ToolPolicy.allows(principal, tool);
+        if (!allowed && metrics != null) {
+            metrics.toolDenied();
+        }
+        audit(principal, "agent.tool", http, 200, null, tool, null, tool, !allowed);
+        return new ToolProbeVO(tool, allowed, !allowed);
     }
 
     /**
@@ -398,12 +449,13 @@ public class ProductionChatController {
      */
     @GetMapping(value = "/sse-probe", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter sseProbe(HttpServletRequest http) {
-        principal(http);
+        ProductionPrincipal principal = principal(http);
         String instance = instanceIdentity.id();
         return runExecutor.start(writer -> {
             Map<String, Object> meta = new LinkedHashMap<>();
             meta.put("instanceId", instance);
             meta.put("probe", true);
+            meta.put("tenant", principal.tenantId());
             writer.meta(meta);
             writer.delta("ha-probe");
             Map<String, Object> done = new LinkedHashMap<>();
@@ -491,6 +543,20 @@ public class ProductionChatController {
         String runId,
         String question
     ) {
+        audit(principal, action, http, status, runId, question, null, null, null);
+    }
+
+    private void audit(
+        ProductionPrincipal principal,
+        String action,
+        HttpServletRequest http,
+        int status,
+        String runId,
+        String question,
+        Integer durationMs,
+        String toolName,
+        Boolean denied
+    ) {
         if (audit == null) {
             return;
         }
@@ -499,7 +565,7 @@ public class ProductionChatController {
         audit.record(
             principal.tenantId(), principal.subject(), action,
             http == null ? "" : http.getServletPath(),
-            status, runId, sha, null, ip
+            status, runId, sha, durationMs, ip, toolName, denied
         );
     }
 

@@ -21,23 +21,31 @@ describe('SecurityPanel', () => {
   })
 
   it('展示本租户审计列表', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify([
-      {
-        id: 9,
-        tenantId: 'tenant-a',
-        principal: 'alice',
-        action: 'auth.login',
-        path: '/api/v1/auth/token',
-        status: 200,
-        runId: null,
-        questionSha256: null,
-        durationMs: null,
-        ip: '127.0.0.1',
-        createdAt: '2026-09-09T01:00:00Z',
-      },
-    ]), { status: 200 })))
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo) => {
+      const url = String(input)
+      if (url.includes('/agent/tools')) {
+        return new Response(JSON.stringify({ tools: ['add', 'get_weather', 'search_kb'] }), { status: 200 })
+      }
+      return new Response(JSON.stringify([
+        {
+          id: 9,
+          tenantId: 'tenant-a',
+          principal: 'alice',
+          action: 'auth.login',
+          path: '/api/v1/auth/token',
+          status: 200,
+          runId: null,
+          questionSha256: null,
+          durationMs: null,
+          ip: '127.0.0.1',
+          createdAt: '2026-09-09T01:00:00Z',
+        },
+      ]), { status: 200 })
+    }))
     renderPanel(<SecurityPanel onLogout={() => undefined} />)
     await waitFor(() => expect(screen.getByText('auth.login')).toBeInTheDocument())
     expect(screen.getByText('alice · tenant-a · USER')).toBeInTheDocument()
+    expect(screen.getByTestId('allowed-tools')).toHaveTextContent('search_kb')
+    expect(screen.getByTestId('allowed-tools')).not.toHaveTextContent('rebuild_index')
   })
 })

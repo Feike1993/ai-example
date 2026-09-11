@@ -1,10 +1,10 @@
-import { Anchor, Button, Stack, Table, Text } from '@mantine/core'
+import { Anchor, Button, Stack, Table, Text, TextInput } from '@mantine/core'
 import { useEffect, useState } from 'react'
 import { ApiError, describeError } from '../../api'
 import { ResultBody } from '../../components/ResultBody'
 import { Workbench } from '../../components/Workbench'
-import { getLastTraceId, rememberTraceId } from '../lib/auth'
-import { getLoadtestSummary, getOpsSnapshot, type OpsSnapshot } from '../lib/productionApi'
+import { getLastRunId, getLastTraceId, rememberTraceId } from '../lib/auth'
+import { getLoadtestSummary, getOpsSnapshot, getRunTimeline, type OpsSnapshot } from '../lib/productionApi'
 
 const JAEGER_UI = 'http://localhost:16686'
 const GRAFANA_UI = 'http://localhost:3000'
@@ -15,6 +15,8 @@ const GRAFANA_UI = 'http://localhost:3000'
 export function ObservabilityPanel() {
   const [snapshot, setSnapshot] = useState<OpsSnapshot | null>(null)
   const [loadtest, setLoadtest] = useState<string | null>(null)
+  const [runId, setRunId] = useState(getLastRunId() ?? '')
+  const [timeline, setTimeline] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const lastTrace = getLastTraceId()
 
@@ -24,6 +26,10 @@ export function ObservabilityPanel() {
       const data = await getOpsSnapshot()
       setSnapshot(data)
       rememberTraceId(data.traceId)
+      const lastRun = getLastRunId()
+      if (lastRun) {
+        setRunId(lastRun)
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : describeError(err))
     }
@@ -79,6 +85,38 @@ export function ObservabilityPanel() {
           </Anchor>
           <Text size="sm" data-testid="loadtest-summary">
             最近压测：{loadtest ?? '尚未跑 ./loadtest/run.sh smoke'}
+          </Text>
+          <TextInput
+            label="runId"
+            data-testid="run-id-input"
+            value={runId}
+            onChange={(event) => setRunId(event.currentTarget.value)}
+            placeholder="流式 meta 里的 runId"
+          />
+          <Button
+            variant="light"
+            data-testid="load-run-timeline"
+            onClick={async () => {
+              setError(null)
+              setTimeline(null)
+              const id = runId.trim()
+              if (!id) {
+                setTimeline('请填写 runId')
+                return
+              }
+              try {
+                const data = await getRunTimeline(id)
+                const denied = data.steps.filter((step) => step.denied === true).length
+                setTimeline(`${data.state} · ${data.mode ?? '—'} · ${data.steps.length} 步 · 拒绝 ${denied}`)
+              } catch (err) {
+                setError(err instanceof ApiError ? err.message : describeError(err))
+              }
+            }}
+          >
+            加载步骤时间线
+          </Button>
+          <Text size="sm" data-testid="run-timeline">
+            {timeline ?? '粘贴最近一次 runId 后加载'}
           </Text>
           <Button variant="default" data-testid="refresh-snapshot" onClick={() => void load()}>
             刷新快照

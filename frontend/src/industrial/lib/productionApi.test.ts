@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api'
 import { getAccessToken, setSession, UNAUTHORIZED_EVENT } from './auth'
-import { getAudit, getMe, postChat, postIngest, chatStreamUrl } from './productionApi'
+import { getAudit, getMe, postChat, postIngest, postToolProbe, chatStreamUrl } from './productionApi'
 
 describe('productionApi 鉴权头', () => {
   beforeEach(() => {
@@ -79,6 +79,18 @@ describe('productionApi 鉴权头', () => {
     const rows = await getAudit(10, fetchImpl as unknown as typeof fetch)
     expect(rows).toHaveLength(1)
     expect(rows[0].action).toBe('chat')
+  })
+
+  it('工具探针 POST JSON', async () => {
+    setSession('tok-1', { username: 'alice', tenant: 'tenant-a', roles: ['USER'] })
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      tool: 'rebuild_index', allowed: false, denied: true,
+    }), { status: 200 }))
+    const result = await postToolProbe('rebuild_index', fetchImpl as unknown as typeof fetch)
+    expect(result.denied).toBe(true)
+    const call = fetchImpl.mock.calls[0] as unknown as [RequestInfo, RequestInit?]
+    expect(String(call[0])).toContain('/agent/tool-probe')
+    expect(call[1]?.method).toBe('POST')
   })
 
   it('流式地址默认不带 queryExpansion，HyDE 才写入', () => {

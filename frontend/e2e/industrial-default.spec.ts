@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { login } from './helpers'
+import { fetchToken, login } from './helpers'
 
 test.describe('工业级默认 E2E', () => {
   test('错误密码仍停在登录门', async ({ page }) => {
@@ -45,6 +45,41 @@ test.describe('工业级默认 E2E', () => {
     })
     await page.getByTestId('refresh-audit').click()
     await expect(page.getByTestId('login-title')).toBeVisible()
+  })
+
+  test('alice 工具探针拒绝 rebuild_index 且列表不含该工具', async ({ page, request }) => {
+    const token = await fetchToken(request, 'alice')
+    const toolsRes = await request.get('/ai-example/api/v1/agent/tools', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    expect(toolsRes.ok()).toBeTruthy()
+    const toolsBody = (await toolsRes.json()) as { tools: string[] }
+    expect(toolsBody.tools).not.toContain('rebuild_index')
+
+    await login(page, 'alice')
+    await page.getByTestId('nav-security').click()
+    await expect(page.getByTestId('allowed-tools')).not.toContainText('rebuild_index')
+    await page.getByTestId('tool-probe').click()
+    await expect(page.getByTestId('tool-probe-hint')).toContainText('已拒绝')
+  })
+
+  test('admin 工具列表含 rebuild_index 且探针允许', async ({ request }) => {
+    const token = await fetchToken(request, 'admin')
+    const toolsRes = await request.get('/ai-example/api/v1/agent/tools', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    expect(toolsRes.ok()).toBeTruthy()
+    const toolsBody = (await toolsRes.json()) as { tools: string[] }
+    expect(toolsBody.tools).toContain('rebuild_index')
+
+    const probe = await request.post('/ai-example/api/v1/agent/tool-probe', {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: { tool: 'rebuild_index' },
+    })
+    expect(probe.ok()).toBeTruthy()
+    const body = (await probe.json()) as { allowed: boolean; denied: boolean }
+    expect(body.allowed).toBeTruthy()
+    expect(body.denied).toBeFalsy()
   })
 
   test('alice 重建语料返回 403', async ({ page }) => {

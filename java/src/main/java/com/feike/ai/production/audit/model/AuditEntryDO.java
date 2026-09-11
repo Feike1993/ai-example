@@ -16,6 +16,8 @@ import java.time.Instant;
  * @param durationMs     耗时
  * @param ip             客户端 IP
  * @param createdAt      时间
+ * @param toolName       工具名，可空
+ * @param denied         是否被策略拒绝，可空
  */
 public record AuditEntryDO(
     long id,
@@ -28,5 +30,7 @@ public record AuditEntryDO(
     String questionSha256,
     Integer durationMs,
     String ip,
-    Instant createdAt
+    Instant createdAt,
+    String toolName,
+    Boolean denied
 ) {}

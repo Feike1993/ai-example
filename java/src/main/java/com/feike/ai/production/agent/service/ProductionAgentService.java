@@ -18,13 +18,15 @@ public interface ProductionAgentService {
      * @param steps           工具步骤
      * @param reachedMaxSteps 是否触达上限
      * @param persisted       是否入库
+     * @param runId           本次 run；同步路径也会生成，便于审计对齐
      */
     record AgentAnswer(
         String sessionId,
         String answer,
         List<ProductionAgentLoop.Step> steps,
         boolean reachedMaxSteps,
-        boolean persisted
+        boolean persisted,
+        String runId
     ) {}
 
     /**

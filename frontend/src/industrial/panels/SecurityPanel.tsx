@@ -4,7 +4,7 @@ import { ApiError, describeError } from '../../api'
 import { ResultBody } from '../../components/ResultBody'
 import { Workbench } from '../../components/Workbench'
 import { DEMO_ACCOUNTS, getProductionUser, getRateRemaining, setSession } from '../lib/auth'
-import { getAudit, postToken, postSecretRotate, type AuditRow } from '../lib/productionApi'
+import { getAgentTools, getAudit, postToken, postSecretRotate, postToolProbe, type AuditRow } from '../lib/productionApi'
 
 type SecurityPanelProps = {
   onLogout: () => void
@@ -16,6 +16,8 @@ type SecurityPanelProps = {
 export function SecurityPanel({ onLogout }: SecurityPanelProps) {
   const user = getProductionUser()
   const [rows, setRows] = useState<AuditRow[]>([])
+  const [tools, setTools] = useState<string[]>([])
+  const [probeHint, setProbeHint] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [rotateHint, setRotateHint] = useState<string | null>(null)
   const remaining = getRateRemaining()
@@ -24,7 +26,9 @@ export function SecurityPanel({ onLogout }: SecurityPanelProps) {
   const load = async () => {
     setError(null)
     try {
-      setRows(await getAudit(30))
+      const [auditRows, toolView] = await Promise.all([getAudit(30), getAgentTools()])
+      setRows(auditRows)
+      setTools(toolView.tools)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : describeError(err))
     }
@@ -37,7 +41,7 @@ export function SecurityPanel({ onLogout }: SecurityPanelProps) {
   return (
     <Workbench
       title="安全"
-      hint="JWT 身份、租户隔离、限流与审计。问题原文不落库，只有 SHA-256。"
+      hint="JWT 身份、租户隔离、限流与审计。问题原文不落库，只有 SHA-256。工具探针不调模型。"
       form={
         <Stack gap="sm">
           <Text size="sm" fw={600}>
@@ -49,6 +53,48 @@ export function SecurityPanel({ onLogout }: SecurityPanelProps) {
           <Text size="sm">
             限流剩余：{remaining ?? '尚未发起需限流的请求'}
           </Text>
+          <Text size="sm" fw={600}>
+            允许的工具
+          </Text>
+          <Group gap="xs" data-testid="allowed-tools">
+            {tools.length === 0 ? (
+              <Text size="xs" c="dimmed">
+                登录后刷新
+              </Text>
+            ) : (
+              tools.map((name) => (
+                <Badge key={name} variant="light">
+                  {name}
+                </Badge>
+              ))
+            )}
+          </Group>
+          <Button
+            variant="light"
+            data-testid="tool-probe"
+            onClick={async () => {
+              setError(null)
+              setProbeHint(null)
+              try {
+                const result = await postToolProbe('rebuild_index')
+                setProbeHint(
+                  result.denied
+                    ? `rebuild_index 已拒绝（${result.tool}）`
+                    : `rebuild_index 允许（未执行）`,
+                )
+                await load()
+              } catch (err) {
+                setError(err instanceof ApiError ? err.message : describeError(err))
+              }
+            }}
+          >
+            探针 rebuild_index
+          </Button>
+          {probeHint ? (
+            <Text size="xs" c="teal" data-testid="tool-probe-hint">
+              {probeHint}
+            </Text>
+          ) : null}
           <Button variant="default" data-testid="refresh-audit" onClick={() => void load()}>
             刷新审计
           </Button>
@@ -97,6 +143,8 @@ export function SecurityPanel({ onLogout }: SecurityPanelProps) {
                   <Table.Th>时间</Table.Th>
                   <Table.Th>用户</Table.Th>
                   <Table.Th>动作</Table.Th>
+                  <Table.Th>工具</Table.Th>
+                  <Table.Th>拒绝</Table.Th>
                   <Table.Th>状态</Table.Th>
                 </Table.Tr>
               </Table.Thead>
@@ -112,6 +160,8 @@ export function SecurityPanel({ onLogout }: SecurityPanelProps) {
                         {row.action}
                       </Badge>
                     </Table.Td>
+                    <Table.Td>{row.toolName ?? '—'}</Table.Td>
+                    <Table.Td>{row.denied == null ? '—' : row.denied ? '是' : '否'}</Table.Td>
                     <Table.Td>{row.status}</Table.Td>
                   </Table.Tr>
                 ))}

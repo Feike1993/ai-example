@@ -5,6 +5,7 @@ import com.feike.ai.production.agent.service.ProductionAgentLoop;
 import com.feike.ai.production.agent.service.ProductionAgentService;
 
 import com.feike.ai.core.context.ContextBudget;
+import com.feike.ai.production.audit.service.AuditService;
 import com.feike.ai.production.config.ProductionProperties;
 import com.feike.ai.production.auth.model.ProductionPrincipal;
 import com.feike.ai.production.chat.service.SessionBusyException;
@@ -14,6 +15,7 @@ import com.feike.ai.production.lock.manager.SessionLock;
 import com.feike.ai.production.observability.service.ProductionMetrics;
 import com.feike.ai.production.rag.ingest.service.ProductionIngestService;
 import com.feike.ai.production.rag.retrieve.service.ProductionRetrievalService;
+import com.feike.ai.production.ratelimit.manager.IdempotencyManager;
 import com.feike.ai.production.secret.manager.ProductionModelFactory;
 import com.feike.ai.production.session.dao.ProductionChatSessionDAO;
 import com.feike.ai.production.sse.service.SseStreamWriter;
@@ -45,6 +47,7 @@ public class ProductionAgentServiceImpl implements ProductionAgentService {
     private final SessionLock sessionLock;
     private final ProductionGuardrail guardrail;
     private final ProductionMetrics metrics;
+    private final AuditService audit;
 
     /**
      * @param models       模型
@@ -55,6 +58,7 @@ public class ProductionAgentServiceImpl implements ProductionAgentService {
      * @param sessionLock  锁
      * @param guardrail    护栏
      * @param metrics      工具拒绝计数；可空
+     * @param audit        逐步审计；可空
      */
     public ProductionAgentServiceImpl(
         ProductionModelFactory models,
@@ -64,7 +68,8 @@ public class ProductionAgentServiceImpl implements ProductionAgentService {
         ProductionChatSessionDAO sessionStore,
         SessionLock sessionLock,
         ProductionGuardrail guardrail,
-        ProductionMetrics metrics
+        ProductionMetrics metrics,
+        AuditService audit
     ) {
         this.models = models;
         this.retrieval = retrieval;
@@ -74,6 +79,7 @@ public class ProductionAgentServiceImpl implements ProductionAgentService {
         this.sessionLock = sessionLock;
         this.guardrail = guardrail;
         this.metrics = metrics;
+        this.audit = audit;
     }
 
     /**
@@ -93,12 +99,13 @@ public class ProductionAgentServiceImpl implements ProductionAgentService {
     ) {
         guardrail.checkInput(question);
         String id = resolve(sessionId);
+        String runId = UUID.randomUUID().toString();
         if (id != null) {
             try (SessionLock.Handle ignored = acquire(id)) {
-                return runUnlocked(principal, id, question, provider, null);
+                return runUnlocked(principal, id, question, provider, runId);
             }
         }
-        return runUnlocked(principal, null, question, provider, null);
+        return runUnlocked(principal, null, question, provider, runId);
     }
 
     /**
@@ -178,6 +185,7 @@ public class ProductionAgentServiceImpl implements ProductionAgentService {
                             metrics.toolDenied();
                         }
                     }
+                    auditStep(principal, writer.runId(), step);
                     Map<String, Object> payload = new LinkedHashMap<>();
                     payload.put("index", step.index());
                     payload.put("toolName", step.toolName());
@@ -237,10 +245,11 @@ public class ProductionAgentServiceImpl implements ProductionAgentService {
             if (step.denied() && metrics != null) {
                 metrics.toolDenied();
             }
+            auditStep(principal, runId, step);
         }
         guardrail.checkOutput(answer);
         boolean persisted = persist(principal, sessionId, runId, question, answer);
-        return new AgentAnswer(sessionId, answer, trace.steps(), trace.reachedMaxSteps(), persisted);
+        return new AgentAnswer(sessionId, answer, trace.steps(), trace.reachedMaxSteps(), persisted, runId);
     }
 
     private String resolve(String sessionId) {
@@ -282,6 +291,26 @@ public class ProductionAgentServiceImpl implements ProductionAgentService {
             log.error("agent session={} 落库失败", sessionId, ex);
             return false;
         }
+    }
+
+    private void auditStep(ProductionPrincipal principal, String runId, ProductionAgentLoop.Step step) {
+        if (audit == null || step == null) {
+            return;
+        }
+        String argsHash = step.toolArgs() == null ? null : IdempotencyManager.sha256(step.toolArgs());
+        audit.record(
+            principal.tenantId(),
+            principal.subject(),
+            "agent.tool",
+            "/api/v1/agent",
+            200,
+            runId,
+            argsHash,
+            null,
+            null,
+            step.toolName(),
+            step.denied()
+        );
     }
 
 }

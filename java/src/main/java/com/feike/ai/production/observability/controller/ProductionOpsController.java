@@ -1,12 +1,15 @@
 package com.feike.ai.production.observability.controller;
 
+import com.feike.ai.production.observability.model.RunTimelineVO;
 import com.feike.ai.production.observability.service.ProductionMetrics;
+import com.feike.ai.production.observability.service.ProductionRunTimelineService;
 import com.feike.ai.production.rag.ingest.service.ProductionIngestJobService;
 
 import com.feike.ai.production.audit.model.AuditEntryDO;
 import com.feike.ai.production.audit.service.AuditService;
 import com.feike.ai.production.auth.controller.JwtAuthFilter;
 import com.feike.ai.production.auth.model.ProductionPrincipal;
+import com.feike.ai.production.sse.dao.RunEventLogDAO;
 import com.feike.ai.production.web.BusinessException;
 import com.feike.ai.production.web.ErrorCodeEnum;
 import io.micrometer.tracing.Span;
@@ -16,6 +19,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -43,6 +47,7 @@ public class ProductionOpsController {
     private final ProductionIngestJobService ingestJobs;
     private final JsonMapper jsonMapper;
     private final String loadtestSummaryPath;
+    private final ProductionRunTimelineService timelines;
 
     /**
      * @param audit                审计
@@ -51,6 +56,7 @@ public class ProductionOpsController {
      * @param ingestJobs           最近入库任务；可空
      * @param jsonMapper           读压测摘要
      * @param loadtestSummaryPath  摘要文件；空则按常见相对路径探测
+     * @param eventLog             run 事件日志；可空
      */
     public ProductionOpsController(
         AuditService audit,
@@ -58,7 +64,8 @@ public class ProductionOpsController {
         ObjectProvider<Tracer> tracer,
         ObjectProvider<ProductionIngestJobService> ingestJobs,
         JsonMapper jsonMapper,
-        @Value("${PRODUCTION_LOADTEST_SUMMARY:}") String loadtestSummaryPath
+        @Value("${PRODUCTION_LOADTEST_SUMMARY:}") String loadtestSummaryPath,
+        ObjectProvider<RunEventLogDAO> eventLog
     ) {
         this.audit = audit;
         this.metrics = metrics;
@@ -66,6 +73,8 @@ public class ProductionOpsController {
         this.ingestJobs = ingestJobs == null ? null : ingestJobs.getIfAvailable();
         this.jsonMapper = jsonMapper;
         this.loadtestSummaryPath = loadtestSummaryPath;
+        RunEventLogDAO log = eventLog == null ? null : eventLog.getIfAvailable();
+        this.timelines = log == null ? null : new ProductionRunTimelineService(log, jsonMapper);
     }
 
     /**
@@ -132,6 +141,22 @@ public class ProductionOpsController {
         } catch (IOException ex) {
             throw new BusinessException(ErrorCodeEnum.LOADTEST_SUMMARY_MISSING, "压测摘要无法读取");
         }
+    }
+
+    /**
+     * 从 SSE 事件日志重建步骤时间线。过期或跨租户返回 404。
+     *
+     * @param runId run
+     * @param http  身份
+     * @return 时间线
+     */
+    @GetMapping("/ops/runs/{runId}")
+    public RunTimelineVO runTimeline(@PathVariable String runId, HttpServletRequest http) {
+        ProductionPrincipal principal = JwtAuthFilter.require(http);
+        if (timelines == null) {
+            throw new BusinessException(ErrorCodeEnum.RUN_NOT_FOUND);
+        }
+        return timelines.get(runId, principal.tenantId());
     }
 
     private Path resolveLoadtestSummary() {

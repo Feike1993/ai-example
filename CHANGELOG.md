@@ -224,3 +224,11 @@ Hybrid RAG、golden 评测、Redis 持久会话、逐步 tool SSE、流式 token
 - Compose Prometheus `:9090` + Grafana `:3000`；刮取用 `PRODUCTION_METRICS_TOKEN`，不匿名放开 actuator
 - `./loadtest/run.sh` 写 `loadtest/results/latest-summary.json`；工业页可观测面板展示 p95
 - 人工验证步骤见 [docs/industrial-ops.md](docs/industrial-ops.md)
+
+## [Unreleased] — 工业级第八阶段（生产 Agent）
+
+- `GET /api/v1/agent/tools`、`POST /api/v1/agent/tool-probe`：无 LLM 点验角色工具策略
+- Flyway V4：`prod_audit_log.tool_name` / `denied`；逐步 `agent.tool`，请求带 `runId`，结束写 `agent.done`
+- `GET /api/v1/ops/runs/{runId}` 从 SSE 事件日志重建步骤；跨租户 404
+- Grafana 看板补 Agent 次数 / 工具拒绝
+- 人工验证见 [docs/industrial-agent.md](docs/industrial-agent.md)

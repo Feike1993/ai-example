@@ -101,6 +101,7 @@
 | Playwright E2E | 工业级第三阶段后 | 已覆盖（第四阶段） | 默认套件不打 Chat LLM；空检索仍要 Embedding，故 `@keys` 本机选跑 | 与教学第四期 Hybrid RAG 不是同一件事 |
 | 压测（k6 / JMeter） | 工业级 | 已覆盖（第五阶段 + 第七阶段摘要可见） | 本机 k6 打 `/api/v1`；默认不打 LLM；不进 CI | 见 [loadtest/README.md](../loadtest/README.md)；JMeter / 云压测仍不做 |
 | 多实例 Java（会话锁 / SSE 续传） | 工业级 | 已覆盖（第六阶段） | Redis 锁与事件回放本就为跨进程；Compose 现为双副本 | 见 [industrial-ha.md](industrial-ha.md)；`./scripts/industrial-ha.sh` |
+| 生产 Agent 工具策略 / 逐步审计 / 步骤时间线 | 工业级 | 已覆盖（第八阶段） | 真循环要 LLM，故探针 + 默认 E2E 不打 `/agent/stream` | 见 [industrial-agent.md](industrial-agent.md) |
 | 有副作用的真实外部工具 | 第一期 | 明确不做（本仓） | 演示工具保持幂等、可离线 | 业务项目 |
 | 仓库根目录 `package.json` / `pnpm start` | 前端引入后 | 已覆盖（仅脚本转发） | 根 `package.json` 无依赖、无 `start`，只转发 `test:e2e`，避免 pnpm 11 在 git 根误跑 install | 不要把 Vite 工程升到仓库根 |
 
