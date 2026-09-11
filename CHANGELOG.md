@@ -249,3 +249,12 @@ Hybrid RAG、golden 评测、Redis 持久会话、逐步 tool SSE、流式 token
 - industrial.html 多选预览、可单张清除；Agent 模式仍不选图
 - 默认 Playwright：无 JWT POST stream 401；alice 4 张 jpeg 422（不打 VL）
 - 见 [docs/industrial-multi-image.md](docs/industrial-multi-image.md)
+
+## [Unreleased] — 工业级第十一阶段（本轮文档附件）
+
+- `POST /api/v1/chat/stream` 同名重复 `document`：pdf / txt / md / docx / xlsx 抽文本进 `UserMessage`；默认最多 2 份，超过 422 `media_too_many`
+- 扫描 PDF 抽出字太少时渲染页，复用现有 VL 只转写；无 Key 503，转写失败 422；默认 E2E 不触发
+- SSE `meta.hasDocument` / `documentCount`；落库 `[文档]` / `[文档×N]` 占位，不写 blob / 抽出正文
+- industrial.html 文档多选（含 Office）、芯片可单件清除；Agent 模式仍不选文档
+- 默认 Playwright：alice 3 个 tiny txt 422；含违禁词的 txt 422 `input_deny`（不打 LLM / VL）
+- 见 [docs/industrial-doc-attach.md](docs/industrial-doc-attach.md)

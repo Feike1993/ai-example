@@ -35,9 +35,28 @@ class ProductionMediaInspectorTest {
     }
 
     @Test
-    void textFileShouldBeUnsupported() {
+    void textFileShouldBeAcceptedOnProbe() {
+        var result = inspector.inspectAny(new MockMultipartFile("file", "a.txt", "text/plain", "hello".getBytes()));
+        assertEquals("text/plain", result.mime());
+        assertEquals(5, result.bytes());
+        assertEquals(64, result.sha256().length());
+        assertEquals(1.0, metrics.snapshot().get("mediaAccepted").doubleValue());
+    }
+
+    @Test
+    void pdfShouldBeAcceptedOnProbe() {
+        byte[] pdf = ProductionDocumentFixtures.pdfWithText("hello pdf");
+        var result = inspector.inspectAny(new MockMultipartFile("file", "a.pdf", "application/pdf", pdf));
+        assertEquals("application/pdf", result.mime());
+        assertTrue(result.bytes() > 0);
+        assertEquals(64, result.sha256().length());
+    }
+
+    @Test
+    void exeShouldBeUnsupported() {
         BusinessException ex = assertThrows(BusinessException.class, () ->
-            inspector.inspectAny(new MockMultipartFile("file", "a.txt", "text/plain", "hello".getBytes())));
+            inspector.inspectAny(new MockMultipartFile(
+                "file", "a.exe", "application/octet-stream", new byte[] {'M', 'Z', 0x00})));
         assertEquals("media_unsupported", ex.getErrorCode().getCode());
         assertEquals(1.0, metrics.snapshot().get("mediaRejected").doubleValue());
     }

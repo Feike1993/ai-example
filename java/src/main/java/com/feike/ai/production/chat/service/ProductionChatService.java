@@ -1,6 +1,7 @@
 package com.feike.ai.production.chat.service;
 
 import com.feike.ai.production.auth.model.ProductionPrincipal;
+import com.feike.ai.production.chat.model.ChatDocument;
 import com.feike.ai.production.chat.model.ChatImage;
 import com.feike.ai.production.rag.model.ProductionSource;
 import com.feike.ai.production.session.model.SessionMessageDO;
@@ -155,6 +156,33 @@ public interface ProductionChatService {
         Integer topK,
         String queryExpansion,
         List<ChatImage> images
+    );
+
+    /**
+     * 流式问答，可附带多张图与本轮文档摘录。落库只写图片 / 文档占位。
+     *
+     * @param writer         事件出口
+     * @param principal      当前用户
+     * @param sessionId      会话
+     * @param question       问题
+     * @param provider       模型
+     * @param topK           topK
+     * @param queryExpansion none / rewrite / hyde
+     * @param images         已校验的识图附件；空则无图
+     * @param documents      已抽取（含可选 OCR）的文档；空则无文档
+     * @param ocrUsed        本轮是否调用过 VL 转写
+     */
+    void streamAnswer(
+        SseStreamWriter writer,
+        ProductionPrincipal principal,
+        String sessionId,
+        String question,
+        String provider,
+        Integer topK,
+        String queryExpansion,
+        List<ChatImage> images,
+        List<ChatDocument> documents,
+        boolean ocrUsed
     );
 
     /**

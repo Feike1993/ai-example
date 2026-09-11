@@ -98,7 +98,7 @@ public record ProductionProperties(
             queryExpansion = new QueryExpansion(null, null);
         }
         if (media == null) {
-            media = new Media(null, null, null, null, null, null, null, null, null, null);
+            media = new Media(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
         }
     }
 
@@ -308,18 +308,23 @@ public record ProductionProperties(
      * 为什么单独一块而不是打开 Spring AI 的 OpenAI Audio 自动配置：那会和教学
      * {@code ChatModel} 抢同一套客户端；ASR/TTS 用手写 HTTP 调 compatible-mode，
      * 识图则覆盖现有 {@code OpenAiChatModel} 的模型名为视觉模型。文件不落盘、
-     * 不进 pgvector，刷新后历史只剩 {@code [图片]} / {@code [图片×N]} 占位。
+     * 不进 pgvector，刷新后历史只剩 {@code [图片]} / {@code [文档]} 占位。
      *
-     * @param maxBytes        单文件上限；默认 2MiB
-     * @param imageMimes      识图允许的 mime
-     * @param audioMimes      转写允许的 mime
-     * @param visionModel     视觉模型名，默认 {@code qwen-vl-plus}
-     * @param visionProvider  有图时默认 Provider，默认 dashscope
-     * @param asrModel        ASR 模型
-     * @param ttsModel        TTS 模型
-     * @param ttsVoice        演示音色，写死一个配置项
-     * @param maxSpeakChars   TTS 输入字符上限
-     * @param maxImages       一轮问答最多几张图；默认 3
+     * @param maxBytes         单文件上限；默认 2MiB
+     * @param imageMimes       识图允许的 mime
+     * @param audioMimes       转写允许的 mime
+     * @param visionModel      视觉模型名，默认 {@code qwen-vl-plus}
+     * @param visionProvider   有图时默认 Provider，默认 dashscope
+     * @param asrModel         ASR 模型
+     * @param ttsModel         TTS 模型
+     * @param ttsVoice         演示音色，写死一个配置项
+     * @param maxSpeakChars    TTS 输入字符上限
+     * @param maxImages        一轮问答最多几张图；默认 3
+     * @param documentMimes    本轮文档允许的 mime
+     * @param maxDocuments     一轮最多几份文档；默认 2
+     * @param maxExtractChars  抽出正文合计上限
+     * @param ocrMaxPages      扫描 PDF 最多渲染几页去做 VL 转写
+     * @param ocrMinChars      低于此字数且有页则视为扫描候选
      */
     public record Media(
         Long maxBytes,
@@ -331,7 +336,12 @@ public record ProductionProperties(
         String ttsModel,
         String ttsVoice,
         Integer maxSpeakChars,
-        Integer maxImages
+        Integer maxImages,
+        List<String> documentMimes,
+        Integer maxDocuments,
+        Integer maxExtractChars,
+        Integer ocrMaxPages,
+        Integer ocrMinChars
     ) {
         /** 默认 2MiB，与探针 / 带图流式同一把尺子。 */
         public static final long DEFAULT_MAX_BYTES = 2L * 1024 * 1024;
@@ -371,6 +381,29 @@ public record ProductionProperties(
             if (maxImages == null || maxImages < 1) {
                 maxImages = 3;
             }
+            if (documentMimes == null || documentMimes.isEmpty()) {
+                documentMimes = List.of(
+                    "application/pdf",
+                    "text/plain",
+                    "text/markdown",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                );
+            } else {
+                documentMimes = documentMimes.stream().map(Media::normalizeMime).filter(s -> !s.isBlank()).toList();
+            }
+            if (maxDocuments == null || maxDocuments < 1) {
+                maxDocuments = 2;
+            }
+            if (maxExtractChars == null || maxExtractChars < 1) {
+                maxExtractChars = 8000;
+            }
+            if (ocrMaxPages == null || ocrMaxPages < 1) {
+                ocrMaxPages = 3;
+            }
+            if (ocrMinChars == null || ocrMinChars < 1) {
+                ocrMinChars = 20;
+            }
         }
 
         /**
@@ -396,6 +429,12 @@ public record ProductionProperties(
             }
             if ("audio/mp3".equals(trimmed)) {
                 return "audio/mpeg";
+            }
+            if ("text/x-markdown".equals(trimmed) || "text/x-md".equals(trimmed)) {
+                return "text/markdown";
+            }
+            if ("application/x-pdf".equals(trimmed)) {
+                return "application/pdf";
             }
             return trimmed;
         }

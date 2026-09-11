@@ -20,7 +20,7 @@
 
 与第九阶段相同：`.env` 已设 `PRODUCTION_KEK`；Compose 或本机 Java + Redis + Postgres。超张数 / 坏 mime 不需要 VL Key。
 
-单张上限仍 `PRODUCTION_MEDIA_MAX_BYTES`（默认 2MiB）。张数上限 `PRODUCTION_MEDIA_MAX_IMAGES`（默认 **3**）。Spring `multipart.max-request-size` 约 **8MB**，让超张/超体积走到业务 422，而不是容器先掐。
+单张上限仍 `PRODUCTION_MEDIA_MAX_BYTES`（默认 2MiB）。张数上限 `PRODUCTION_MEDIA_MAX_IMAGES`（默认 **3**）。Spring `multipart.max-request-size` 约 **12MB**（第十一阶段起），让超张/超体积走到业务 422，而不是容器先掐。
 
 ## 1. 超张数（不打模型）
 
@@ -79,7 +79,7 @@ pnpm test:e2e
 
 ## 刻意不做
 
-- PDF / Office / 视频、文档抽文本进本轮
+- PDF / Office / 视频、文档抽文本进本轮（第十一阶段已覆盖 pdf / txt / md / docx / xlsx 与扫描 VL OCR；pptx / 旧 OLE `.doc`/`.xls` 仍不做，见 [industrial-doc-attach.md](industrial-doc-attach.md)）
 - 音频直接进 VL、知识库上传后台、图片进 pgvector
 - 文生图、Agent 看图、教学多模态 Tab
 - 把 VL 打进 CI；无上限堆图

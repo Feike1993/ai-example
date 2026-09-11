@@ -6,12 +6,14 @@ import com.feike.ai.production.auth.controller.ProductionAuthController;
 import com.feike.ai.production.auth.manager.DemoUserService;
 import com.feike.ai.production.auth.manager.JwtService;
 import com.feike.ai.production.chat.controller.ProductionChatController;
+import com.feike.ai.production.chat.model.ChatAttachments;
 import com.feike.ai.production.chat.service.ProductionChatService;
 import com.feike.ai.production.chat.service.impl.ProductionChatServiceImpl;
 import com.feike.ai.production.config.ProductionInstanceIdentity;
 import com.feike.ai.production.config.ProductionProperties;
 import com.feike.ai.production.guardrail.service.ProductionGuardrail;
 import com.feike.ai.production.lock.manager.InMemorySessionLock;
+import com.feike.ai.production.media.manager.ProductionDocumentFixtures;
 import com.feike.ai.production.media.manager.ProductionMediaInspector;
 import com.feike.ai.production.media.service.impl.ProductionMediaServiceImpl;
 import com.feike.ai.production.observability.service.ProductionMetrics;
@@ -97,7 +99,8 @@ class ProductionMediaMvcTest {
         ProductionChatController chat = new ProductionChatController(
             chatService, mock(ProductionIngestService.class), null, runExecutor,
             null, bucket, null, audit, metrics, jsonMapper, null,
-            new ProductionInstanceIdentity("test"), inspector
+            new ProductionInstanceIdentity("test"), inspector,
+            null, new ProductionGuardrail(properties, metrics)
         );
         ProductionMediaController media = new ProductionMediaController(
             new ProductionMediaServiceImpl(inspector),
@@ -127,10 +130,35 @@ class ProductionMediaMvcTest {
     }
 
     @Test
-    void probeTextShouldBeUnsupported() throws Exception {
+    void probeTextShouldReturnDigest() throws Exception {
         String token = login();
         mockMvc.perform(multipart("/api/v1/media/probe")
                 .file(new MockMultipartFile("file", "a.txt", "text/plain", "hello".getBytes()))
+                .header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.mime").value("text/plain"))
+            .andExpect(jsonPath("$.bytes").value(5))
+            .andExpect(jsonPath("$.sha256").isString());
+    }
+
+    @Test
+    void probePdfShouldReturnDigest() throws Exception {
+        String token = login();
+        byte[] pdf = ProductionDocumentFixtures.pdfWithText("hello pdf");
+        mockMvc.perform(multipart("/api/v1/media/probe")
+                .file(new MockMultipartFile("file", "a.pdf", "application/pdf", pdf))
+                .header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.mime").value("application/pdf"))
+            .andExpect(jsonPath("$.sha256").isString());
+        verify(speechClient, never()).transcribe(any(), any(), any());
+    }
+
+    @Test
+    void probeExeShouldBeUnsupported() throws Exception {
+        String token = login();
+        mockMvc.perform(multipart("/api/v1/media/probe")
+                .file(new MockMultipartFile("file", "a.exe", "application/octet-stream", new byte[] {'M', 'Z', 0x00}))
                 .header("Authorization", "Bearer " + token))
             .andExpect(status().isUnprocessableEntity())
             .andExpect(jsonPath("$.code").value("media_unsupported"));
@@ -272,6 +300,63 @@ class ProductionMediaMvcTest {
         String body = awaitBody(result);
         assertTrue(body.contains("\"hasImage\":true"), body);
         assertTrue(body.contains("\"imageCount\":1"), body);
+        assertTrue(body.contains("event:done"), body);
+    }
+
+    @Test
+    void postStreamWithTooManyTxtShouldRejectBeforeModel() throws Exception {
+        String token = login();
+        var request = multipart("/api/v1/chat/stream")
+            .param("question", "总结这些文件")
+            .header("Authorization", "Bearer " + token);
+        for (int i = 0; i < 3; i++) {
+            request.file(new MockMultipartFile(
+                "document", "a" + i + ".txt", "text/plain", "hello".getBytes()));
+        }
+        mockMvc.perform(request)
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.code").value("media_too_many"));
+        verify(generator, never()).stream(anyString(), any(), any(), any(), any());
+        verify(generator, never()).stream(anyString(), any(), any(), any(), any(), any(), any());
+        verify(generator, never()).stream(anyString(), any(), any(), any(), anyList(), any());
+        verify(generator, never()).stream(anyString(), any(), any(), any(), any(ChatAttachments.class), any());
+    }
+
+    @Test
+    void postStreamWithDenyWordTxtShouldRejectBeforeModel() throws Exception {
+        String token = login();
+        mockMvc.perform(multipart("/api/v1/chat/stream")
+                .file(new MockMultipartFile(
+                    "document", "bad.txt", "text/plain", "含有违禁演示词".getBytes()))
+                .param("question", "总结这份文件")
+                .header("Authorization", "Bearer " + token))
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.code").value("input_deny"));
+        verify(generator, never()).stream(anyString(), any(), any(), any(), any());
+        verify(generator, never()).stream(anyString(), any(), any(), any(), any(), any(), any());
+        verify(generator, never()).stream(anyString(), any(), any(), any(), anyList(), any());
+        verify(generator, never()).stream(anyString(), any(), any(), any(), any(ChatAttachments.class), any());
+    }
+
+    @Test
+    void postStreamWithTxtShouldSetDocumentCount() throws Exception {
+        when(retrieval.retrieve(any())).thenReturn(
+            new ProductionRetrievalService.RetrievalResult(List.of(), List.of(), true, "hybrid"));
+        doAnswer(invocation -> {
+            Consumer<String> onChunk = invocation.getArgument(5);
+            onChunk.accept("文档摘要。");
+            return null;
+        }).when(generator).stream(anyString(), any(), any(), any(), any(ChatAttachments.class), any());
+        String token = login();
+        MvcResult result = mockMvc.perform(multipart("/api/v1/chat/stream")
+                .file(new MockMultipartFile("document", "note.txt", "text/plain", "hello doc".getBytes()))
+                .param("question", "总结这份文件")
+                .header("Authorization", "Bearer " + token))
+            .andExpect(request().asyncStarted())
+            .andReturn();
+        String body = awaitBody(result);
+        assertTrue(body.contains("\"hasDocument\":true"), body);
+        assertTrue(body.contains("\"documentCount\":1"), body);
         assertTrue(body.contains("event:done"), body);
     }
 

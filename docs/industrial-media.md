@@ -2,7 +2,7 @@
 
 对照本机演示：**探针不打模型、图文 SSE、ASR/TTS 本机选跑**。默认 Playwright 只验鉴权 / mime / 体积。
 
-这是工业级第九阶段，不是教学新样例。教学 `/chat` 与生产 Agent 本阶段仍只走文本。第六 / 七 / 八阶段仍见 [industrial-ha.md](industrial-ha.md)、[industrial-ops.md](industrial-ops.md)、[industrial-agent.md](industrial-agent.md)。第十阶段一轮多图见 [industrial-multi-image.md](industrial-multi-image.md)。
+这是工业级第九阶段，不是教学新样例。教学 `/chat` 与生产 Agent 本阶段仍只走文本。第六 / 七 / 八阶段仍见 [industrial-ha.md](industrial-ha.md)、[industrial-ops.md](industrial-ops.md)、[industrial-agent.md](industrial-agent.md)。第十阶段一轮多图见 [industrial-multi-image.md](industrial-multi-image.md)。第十一阶段本轮文档见 [industrial-doc-attach.md](industrial-doc-attach.md)。
 
 入口：`/ai-example/api/v1/**` + [industrial.html](../frontend/industrial.html)。
 
@@ -10,7 +10,7 @@
 
 | 切片 | 通过标准 |
 | --- | --- |
-| 9a 探针 | `POST /media/probe`：无 JWT **401**；`.txt` **422** `media_unsupported`；超 2MiB **422** `media_too_large`。alice 小 jpeg **200** `{ mime, bytes, sha256 }`，不调 LLM |
+| 9a 探针 | `POST /media/probe`：无 JWT **401**；当时 `.txt` **422** `media_unsupported`（第十一阶段起探针接受 pdf/txt/md/docx/xlsx，违禁类型改用 `.exe` 等）；超 2MiB **422** `media_too_large`。alice 小 jpeg **200** `{ mime, bytes, sha256 }`，不调 LLM |
 | 9b 图文 | 文本仍用 `GET /chat/stream`。`POST /chat/stream` multipart（`question` + 可选 `image`）SSE 契约不变；`meta.hasImage`。有图用 Spring AI `UserMessage` + `Media`，模型 `PRODUCTION_VISION_MODEL`（默认 `qwen-vl-plus`），Provider 默认 dashscope。检索仍按文本；落库 `[图片]` 占位，不写 blob。当时只允许一张；多图见 [industrial-multi-image.md](industrial-multi-image.md) |
 | 9c ASR | `POST /speech/transcribe` → `{ text }`。默认套件只打坏 mime |
 | 9d TTS | `POST /speech/speak` JSON；空文本 400；违禁词 422 `input_deny`。音色 `PRODUCTION_TTS_VOICE` |
@@ -37,7 +37,7 @@ curl -sS -D - -o /tmp/probe.json \
 
 期望：**200**，body 含 `mime` / `bytes` / `sha256`，没有文件体。审计 `media.probe` 只有 sha256。
 
-无令牌应为 **401** `auth_missing_token`。把 `.txt` 或超过 `PRODUCTION_MEDIA_MAX_BYTES`（默认 2MiB）的文件送上去应为 **422**。
+无令牌应为 **401** `auth_missing_token`。超过 `PRODUCTION_MEDIA_MAX_BYTES`（默认 2MiB）应为 **422**。第九阶段当时把 `.txt` 视为不支持；第十一阶段探针已接受文档 mime，见 [industrial-doc-attach.md](industrial-doc-attach.md)。
 
 可观测快照应能看到 `mediaAccepted` / `mediaRejected`。
 

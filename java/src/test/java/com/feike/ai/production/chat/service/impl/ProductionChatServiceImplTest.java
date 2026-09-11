@@ -1,5 +1,7 @@
 package com.feike.ai.production.chat.service.impl;
 
+import com.feike.ai.production.chat.model.ChatAttachments;
+import com.feike.ai.production.chat.model.ChatDocument;
 import com.feike.ai.production.chat.model.ChatImage;
 import com.feike.ai.production.chat.service.ProductionChatService;
 import com.feike.ai.production.chat.service.SessionBusyException;
@@ -155,6 +157,35 @@ class ProductionChatServiceImplTest {
         assertEquals("[图片×2] 你好", ProductionChatServiceImpl.persistQuestion("你好", 2));
         assertEquals("[图片] 已有", ProductionChatServiceImpl.persistQuestion("[图片] 已有", 1));
         assertEquals("[图片×3] 已有", ProductionChatServiceImpl.persistQuestion("[图片×3] 已有", 3));
+    }
+
+    @Test
+    void persistQuestionShouldPrefixDocumentPlaceholder() {
+        assertEquals("[文档] 你好", ProductionChatServiceImpl.persistQuestion("你好", 0, 1));
+        assertEquals("[文档×2] 你好", ProductionChatServiceImpl.persistQuestion("你好", 0, 2));
+        assertEquals("[图片] [文档] 你好", ProductionChatServiceImpl.persistQuestion("你好", 1, 1));
+        assertEquals("[图片×2] [文档×2] 你好", ProductionChatServiceImpl.persistQuestion("你好", 2, 2));
+        assertEquals("[文档] 已有", ProductionChatServiceImpl.persistQuestion("[文档] 已有", 0, 1));
+        assertEquals("[图片] [文档] 已有", ProductionChatServiceImpl.persistQuestion("[图片] [文档] 已有", 1, 1));
+    }
+
+    @Test
+    void documentWithEmptyRetrievalShouldStillCallGenerator() {
+        when(retrieval.retrieve(any(ProductionRetrieveQuery.class))).thenReturn(empty());
+        doAnswer(invocation -> {
+            Consumer<String> onChunk = invocation.getArgument(5);
+            onChunk.accept("文档里写了 hello。");
+            return null;
+        }).when(generator).stream(anyString(), any(), any(), any(), any(ChatAttachments.class), any());
+
+        CollectingSink sink = new CollectingSink();
+        service.streamAnswer(writer(sink), ALICE, null, "总结", null, null, null,
+            List.of(), List.of(new ChatDocument("a.txt", "text/plain", "hello", false, null)), false);
+
+        verify(generator).stream(anyString(), any(), any(), any(), any(ChatAttachments.class), any());
+        assertTrue(sink.dataOf(StreamEventTypeEnum.META).contains("\"hasDocument\":true"));
+        assertTrue(sink.dataOf(StreamEventTypeEnum.META).contains("\"documentCount\":1"));
+        assertTrue(sink.dataOf(StreamEventTypeEnum.DELTA).contains("hello"));
     }
 
     @Test

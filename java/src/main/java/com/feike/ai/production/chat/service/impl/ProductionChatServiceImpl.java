@@ -9,6 +9,8 @@ import com.feike.ai.production.chat.service.ProductionChatService;
 import com.feike.ai.core.context.ContextBudget;
 import com.feike.ai.production.config.ProductionProperties;
 import com.feike.ai.production.auth.model.ProductionPrincipal;
+import com.feike.ai.production.chat.model.ChatAttachments;
+import com.feike.ai.production.chat.model.ChatDocument;
 import com.feike.ai.production.chat.model.ChatImage;
 import com.feike.ai.production.guardrail.service.GuardrailBlockedException;
 import com.feike.ai.production.guardrail.service.ProductionGuardrail;
@@ -31,6 +33,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CancellationException;
+import java.util.function.Consumer;
 
 /**
  * 编排层：把 lock → history → retrieve → generate → persist 串成一次 run，并按统一 SSE 契约发事件。
@@ -254,6 +257,28 @@ public class ProductionChatServiceImpl implements ProductionChatService {
         List<ChatImage> images
     ) {
         List<ChatImage> frozenImages = images == null ? List.of() : List.copyOf(images);
+        streamAnswer(writer, principal, sessionId, question, provider, topK, queryExpansion,
+            frozenImages, List.of(), false);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void streamAnswer(
+        SseStreamWriter writer,
+        ProductionPrincipal principal,
+        String sessionId,
+        String question,
+        String provider,
+        Integer topK,
+        String queryExpansion,
+        List<ChatImage> images,
+        List<ChatDocument> documents,
+        boolean ocrUsed
+    ) {
+        List<ChatImage> frozenImages = images == null ? List.of() : List.copyOf(images);
+        List<ChatDocument> frozenDocs = documents == null ? List.of() : List.copyOf(documents);
         try {
             checkInput(question);
         } catch (GuardrailBlockedException ex) {
@@ -261,7 +286,8 @@ public class ProductionChatServiceImpl implements ProductionChatService {
             return;
         }
         if (!sessionEnabled()) {
-            streamWithin(writer, principal, null, question, provider, topK, queryExpansion, frozenImages);
+            streamWithin(writer, principal, null, question, provider, topK, queryExpansion,
+                frozenImages, frozenDocs, ocrUsed);
             return;
         }
         String id = sessionStore.resolveSessionId(sessionId);
@@ -273,7 +299,8 @@ public class ProductionChatServiceImpl implements ProductionChatService {
             return;
         }
         try (SessionLock.Handle ignored = handle.get()) {
-            streamWithin(writer, principal, id, question, provider, topK, queryExpansion, frozenImages);
+            streamWithin(writer, principal, id, question, provider, topK, queryExpansion,
+                frozenImages, frozenDocs, ocrUsed);
         }
     }
 
@@ -285,10 +312,14 @@ public class ProductionChatServiceImpl implements ProductionChatService {
         String provider,
         Integer topK,
         String queryExpansion,
-        List<ChatImage> images
+        List<ChatImage> images,
+        List<ChatDocument> documents,
+        boolean ocrUsed
     ) {
         int imageCount = images == null ? 0 : images.size();
+        int documentCount = documents == null ? 0 : documents.size();
         boolean hasImage = imageCount > 0;
+        boolean hasDocument = documentCount > 0;
         String effectiveProvider = provider;
         if (hasImage && (effectiveProvider == null || effectiveProvider.isBlank())) {
             effectiveProvider = properties.media().visionProvider();
@@ -306,6 +337,10 @@ public class ProductionChatServiceImpl implements ProductionChatService {
             meta.put("historyDropped", history.dropped());
             meta.put("hasImage", hasImage);
             meta.put("imageCount", imageCount);
+            meta.put("hasDocument", hasDocument);
+            meta.put("documentCount", documentCount);
+            meta.put("extractedChars", extractedChars(documents));
+            meta.put("ocrUsed", ocrUsed);
             String traceId = org.slf4j.MDC.get("traceId");
             if (traceId != null) {
                 meta.put("traceId", traceId);
@@ -324,8 +359,8 @@ public class ProductionChatServiceImpl implements ProductionChatService {
             }
             writer.emit(StreamEventTypeEnum.SOURCES, sourcesPayload);
 
-            // 无图时空检索仍短路拒答。有图时图片本身就是上下文，否则本机选跑「描述这张图」永远打不到 VL。
-            if (hits.empty() && !hasImage) {
+            // 无图且无文档时空检索仍短路拒答。有附件时附件本身就是上下文，否则本机选跑永远打不到模型。
+            if (hits.empty() && !hasImage && !hasDocument) {
                 writer.delta(ProductionAnswerGenerator.EMPTY_REFUSAL);
                 writer.emit(StreamEventTypeEnum.USAGE, usage(0, 0));
                 // 拒答也是一轮完整对话，同样入库：否则用户追问「为什么答不了」时，
@@ -337,38 +372,31 @@ public class ProductionChatServiceImpl implements ProductionChatService {
             }
 
             StringBuilder answer = new StringBuilder();
-            if (imageCount == 1) {
+            Consumer<String> onChunk = chunk -> {
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new CancellationException("客户端已断开");
+                }
+                answer.append(chunk);
+                writer.delta(chunk);
+            };
+            if (hasDocument) {
+                generator.stream(question, effectiveProvider, hits.hits(), history.messages(),
+                    ChatAttachments.of(images, documents), onChunk);
+            } else if (imageCount == 1) {
                 ChatImage one = images.get(0);
                 generator.stream(question, effectiveProvider, hits.hits(), history.messages(),
-                    one.bytes(), one.mime(), chunk -> {
-                        if (Thread.currentThread().isInterrupted()) {
-                            throw new CancellationException("客户端已断开");
-                        }
-                        answer.append(chunk);
-                        writer.delta(chunk);
-                    });
+                    one.bytes(), one.mime(), onChunk);
             } else if (imageCount > 1) {
                 generator.stream(question, effectiveProvider, hits.hits(), history.messages(),
-                    images, chunk -> {
-                        if (Thread.currentThread().isInterrupted()) {
-                            throw new CancellationException("客户端已断开");
-                        }
-                        answer.append(chunk);
-                        writer.delta(chunk);
-                    });
+                    images, onChunk);
             } else {
-                generator.stream(question, effectiveProvider, hits.hits(), history.messages(), chunk -> {
-                    if (Thread.currentThread().isInterrupted()) {
-                        throw new CancellationException("客户端已断开");
-                    }
-                    answer.append(chunk);
-                    writer.delta(chunk);
-                });
+                generator.stream(question, effectiveProvider, hits.hits(), history.messages(), onChunk);
             }
             checkGenerated(answer.toString(), hits.sources());
 
             writer.emit(StreamEventTypeEnum.USAGE, usage(answer.length(), hits.sources().size()));
-            boolean persisted = persist(principal, sessionId, writer.runId(), persistQuestion(question, imageCount),
+            boolean persisted = persist(principal, sessionId, writer.runId(),
+                persistQuestion(question, imageCount, documentCount),
                 answer.toString());
             writer.done(doneBody(false, sessionId, persisted));
         } catch (CancellationException ex) {
@@ -416,24 +444,63 @@ public class ProductionChatServiceImpl implements ProductionChatService {
     }
 
     /**
-     * 落库问句：有图只写占位前缀，不写二进制。刷新后跟问不再带原图。
+     * 落库问句：有图 / 文档只写占位前缀，不写二进制也不写抽出正文。刷新后跟问不再带原件。
      *
      * @param question   用户原句
      * @param imageCount 本轮张数
      * @return 写入会话的文本
      */
     static String persistQuestion(String question, int imageCount) {
+        return persistQuestion(question, imageCount, 0);
+    }
+
+    /**
+     * 落库问句：在 {@code [图片]} / {@code [图片×N]} 之后追加 {@code [文档]} / {@code [文档×N]}。
+     *
+     * @param question      用户原句
+     * @param imageCount    本轮张数
+     * @param documentCount 本轮文档件数
+     * @return 写入会话的文本
+     */
+    static String persistQuestion(String question, int imageCount, int documentCount) {
         String text = question == null ? "" : question;
-        if (imageCount <= 0) {
-            return text;
+        if (imageCount > 0 && !text.startsWith("[图片")) {
+            if (imageCount == 1) {
+                text = "[图片] " + text;
+            } else {
+                text = "[图片×" + imageCount + "] " + text;
+            }
         }
-        if (text.startsWith("[图片")) {
-            return text;
+        if (documentCount > 0 && !hasDocumentPrefix(text)) {
+            String docPrefix = documentCount == 1 ? "[文档] " : "[文档×" + documentCount + "] ";
+            if (text.startsWith("[图片")) {
+                int close = text.indexOf(']');
+                int after = close < 0 ? 0 : close + 1;
+                if (after < text.length() && text.charAt(after) == ' ') {
+                    after++;
+                }
+                text = text.substring(0, after) + docPrefix + text.substring(after);
+            } else {
+                text = docPrefix + text;
+            }
         }
-        if (imageCount == 1) {
-            return "[图片] " + text;
+        return text;
+    }
+
+    private static boolean hasDocumentPrefix(String text) {
+        return text.startsWith("[文档") || text.contains(" [文档");
+    }
+
+    private static int extractedChars(List<ChatDocument> documents) {
+        if (documents == null || documents.isEmpty()) {
+            return 0;
         }
-        return "[图片×" + imageCount + "] " + text;
+        int total = 0;
+        for (ChatDocument document : documents) {
+            String text = document.extractedText();
+            total += text == null ? 0 : text.length();
+        }
+        return total;
     }
 
     /** 读历史并按预算裁剪；会话关闭时返回空。 */

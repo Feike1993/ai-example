@@ -97,8 +97,21 @@ test.describe('工业级默认 E2E', () => {
     expect(body.code).toBe('auth_missing_token')
   })
 
-  test('alice 探针拒绝 txt 与超限，小 jpeg 返回摘要', async ({ request }) => {
+  test('alice 探针拒绝 exe 与超限，小 jpeg / txt / pdf 返回摘要', async ({ request }) => {
     const token = await fetchToken(request, 'alice')
+    const exe = await request.post('/ai-example/api/v1/media/probe', {
+      headers: { Authorization: `Bearer ${token}` },
+      multipart: {
+        file: {
+          name: 'a.exe',
+          mimeType: 'application/octet-stream',
+          buffer: Buffer.from([0x4d, 0x5a, 0x00]),
+        },
+      },
+    })
+    expect(exe.status()).toBe(422)
+    expect(((await exe.json()) as { code: string }).code).toBe('media_unsupported')
+
     const txt = await request.post('/ai-example/api/v1/media/probe', {
       headers: { Authorization: `Bearer ${token}` },
       multipart: {
@@ -109,8 +122,21 @@ test.describe('工业级默认 E2E', () => {
         },
       },
     })
-    expect(txt.status()).toBe(422)
-    expect(((await txt.json()) as { code: string }).code).toBe('media_unsupported')
+    expect(txt.ok()).toBeTruthy()
+    expect(((await txt.json()) as { mime: string }).mime).toBe('text/plain')
+
+    const pdf = await request.post('/ai-example/api/v1/media/probe', {
+      headers: { Authorization: `Bearer ${token}` },
+      multipart: {
+        file: {
+          name: 'a.pdf',
+          mimeType: 'application/pdf',
+          buffer: Buffer.from('%PDF-1.4\n'),
+        },
+      },
+    })
+    expect(pdf.ok()).toBeTruthy()
+    expect(((await pdf.json()) as { mime: string }).mime).toBe('application/pdf')
 
     const huge = Buffer.alloc(2 * 1024 * 1024 + 1, 0)
     huge[0] = 0xff
@@ -170,6 +196,34 @@ test.describe('工业级默认 E2E', () => {
     })
     expect(res.status()).toBe(422)
     expect(((await res.json()) as { code: string }).code).toBe('media_too_many')
+  })
+
+  test('alice 三份 txt 流式 422 media_too_many', async ({ request }) => {
+    const token = await fetchToken(request, 'alice')
+    const form = new FormData()
+    form.set('question', '总结这些文件')
+    for (let i = 0; i < 3; i += 1) {
+      form.append('document', new File(['hello'], `a${i}.txt`, { type: 'text/plain' }))
+    }
+    const res = await request.post('/ai-example/api/v1/chat/stream', {
+      headers: { Authorization: `Bearer ${token}` },
+      multipart: form,
+    })
+    expect(res.status()).toBe(422)
+    expect(((await res.json()) as { code: string }).code).toBe('media_too_many')
+  })
+
+  test('alice 文档含违禁词 422 input_deny', async ({ request }) => {
+    const token = await fetchToken(request, 'alice')
+    const form = new FormData()
+    form.set('question', '总结这份文件')
+    form.append('document', new File(['含有违禁演示词'], 'bad.txt', { type: 'text/plain' }))
+    const res = await request.post('/ai-example/api/v1/chat/stream', {
+      headers: { Authorization: `Bearer ${token}` },
+      multipart: form,
+    })
+    expect(res.status()).toBe(422)
+    expect(((await res.json()) as { code: string }).code).toBe('input_deny')
   })
 
   test('alice 重建语料返回 403', async ({ page }) => {

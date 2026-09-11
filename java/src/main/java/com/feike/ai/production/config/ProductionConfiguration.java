@@ -19,6 +19,8 @@ import com.feike.ai.production.guardrail.service.ProductionGuardrail;
 import com.feike.ai.production.lock.manager.InMemorySessionLock;
 import com.feike.ai.production.lock.manager.RedisSessionLock;
 import com.feike.ai.production.lock.manager.SessionLock;
+import com.feike.ai.production.media.manager.ProductionDocumentExtractor;
+import com.feike.ai.production.media.manager.ProductionDocumentOcr;
 import com.feike.ai.production.media.manager.ProductionMediaInspector;
 import com.feike.ai.production.media.service.ProductionMediaService;
 import com.feike.ai.production.media.service.impl.ProductionMediaServiceImpl;
@@ -375,9 +377,32 @@ public class ProductionConfiguration {
     @Bean
     public ProductionMediaInspector productionMediaInspector(
         ProductionProperties properties,
-        ProductionMetrics metrics
+        ProductionMetrics metrics,
+        ProductionDocumentExtractor extractor
     ) {
-        return new ProductionMediaInspector(properties, metrics);
+        return new ProductionMediaInspector(properties, metrics, extractor);
+    }
+
+    /**
+     * @param properties 抽出上限
+     * @return 数字抽取
+     */
+    @Bean
+    public ProductionDocumentExtractor productionDocumentExtractor(ProductionProperties properties) {
+        return new ProductionDocumentExtractor(properties);
+    }
+
+    /**
+     * @param properties 页数上限
+     * @param models     视觉客户端
+     * @return 扫描 PDF 转写
+     */
+    @Bean
+    public ProductionDocumentOcr productionDocumentOcr(
+        ProductionProperties properties,
+        ProductionModelFactory models
+    ) {
+        return new ProductionDocumentOcr(properties, models);
     }
 
     /**

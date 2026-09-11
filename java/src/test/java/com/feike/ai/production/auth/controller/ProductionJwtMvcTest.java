@@ -95,7 +95,9 @@ class ProductionJwtMvcTest {
             chatService, ingestService, null, runExecutor,
             null, bucket, null, audit, metrics, jsonMapper, null,
             new ProductionInstanceIdentity("test"),
-            new ProductionMediaInspector(properties, metrics)
+            new ProductionMediaInspector(properties, metrics),
+            null,
+            null
         );
         @SuppressWarnings("unchecked")
         ObjectProvider<RunEventLogDAO> logs = mock(ObjectProvider.class);

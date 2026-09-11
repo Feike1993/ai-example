@@ -345,10 +345,13 @@ export function chatStreamPostUrl(): string {
 /** 一轮最多几张图，与后端默认 PRODUCTION_MEDIA_MAX_IMAGES 对齐；后端仍是权威。 */
 export const PRODUCTION_MAX_IMAGES = 3
 
+/** 一轮最多几份文档，与后端默认 PRODUCTION_MEDIA_MAX_DOCUMENTS 对齐；后端仍是权威。 */
+export const PRODUCTION_MAX_DOCUMENTS = 2
+
 /**
- * 组装图文流式 FormData。多张图用同名 `image` 重复 part，兼容第九阶段单图 curl。
+ * 组装图文 / 文档流式 FormData。多张图用同名 `image`，多份文档用同名 `document`。
  *
- * @param params 问句与图片列表
+ * @param params 问句与附件列表
  */
 export function chatStreamForm(params: {
   question: string
@@ -357,6 +360,7 @@ export function chatStreamForm(params: {
   topK?: number
   queryExpansion?: string
   images: File[]
+  documents?: File[]
 }): FormData {
   const form = new FormData()
   form.set('question', params.question)
@@ -374,6 +378,9 @@ export function chatStreamForm(params: {
   }
   for (const image of params.images) {
     form.append('image', image)
+  }
+  for (const document of params.documents ?? []) {
+    form.append('document', document)
   }
   return form
 }

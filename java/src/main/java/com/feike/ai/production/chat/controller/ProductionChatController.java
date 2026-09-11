@@ -1,5 +1,6 @@
 package com.feike.ai.production.chat.controller;
 
+import com.feike.ai.production.chat.model.ChatDocument;
 import com.feike.ai.production.chat.model.ChatImage;
 import com.feike.ai.production.chat.model.ChatRequestDTO;
 import com.feike.ai.production.chat.model.LockProbeQuery;
@@ -16,7 +17,9 @@ import com.feike.ai.production.audit.service.AuditService;
 import com.feike.ai.production.auth.controller.JwtAuthFilter;
 import com.feike.ai.production.auth.model.ProductionPrincipal;
 import com.feike.ai.production.config.ProductionInstanceIdentity;
+import com.feike.ai.production.media.manager.ProductionDocumentOcr;
 import com.feike.ai.production.media.manager.ProductionMediaInspector;
+import com.feike.ai.production.guardrail.service.ProductionGuardrail;
 import com.feike.ai.production.observability.service.ProductionMetrics;
 import com.feike.ai.production.rag.ingest.model.IngestJobVO;
 import com.feike.ai.production.rag.ingest.service.ProductionIngestJobService;
@@ -87,6 +90,8 @@ public class ProductionChatController {
     private final Tracer tracer;
     private final ProductionInstanceIdentity instanceIdentity;
     private final ProductionMediaInspector mediaInspector;
+    private final ProductionDocumentOcr documentOcr;
+    private final ProductionGuardrail guardrail;
 
     /**
      * 单测用的窄构造：不接限流 / 审计 / Agent。
@@ -101,7 +106,7 @@ public class ProductionChatController {
         SseRunExecutor runExecutor
     ) {
         this(chatService, ingestService, null, runExecutor, null, null, null, null, null, null, null,
-            new ProductionInstanceIdentity("test"), null);
+            new ProductionInstanceIdentity("test"), null, null, null);
     }
 
     /**
@@ -117,7 +122,9 @@ public class ProductionChatController {
      * @param jsonMapper        幂等哈希
      * @param tracer            可选 Trace
      * @param instanceIdentity  本进程短名
-     * @param mediaInspector    带图校验；测试可空
+     * @param mediaInspector    带图 / 文档校验；测试可空
+     * @param documentOcr       扫描 PDF 转写；测试可空
+     * @param guardrail         输入护栏；测试可空
      */
     @Autowired
     public ProductionChatController(
@@ -133,7 +140,9 @@ public class ProductionChatController {
         JsonMapper jsonMapper,
         ObjectProvider<Tracer> tracer,
         ProductionInstanceIdentity instanceIdentity,
-        ProductionMediaInspector mediaInspector
+        ProductionMediaInspector mediaInspector,
+        ProductionDocumentOcr documentOcr,
+        ProductionGuardrail guardrail
     ) {
         this.chatService = chatService;
         this.ingestService = ingestService;
@@ -150,6 +159,8 @@ public class ProductionChatController {
             ? new ProductionInstanceIdentity("test")
             : instanceIdentity;
         this.mediaInspector = mediaInspector;
+        this.documentOcr = documentOcr;
+        this.guardrail = guardrail;
     }
 
     /**
@@ -277,9 +288,11 @@ public class ProductionChatController {
     }
 
     /**
-     * 图文流式问答。SSE 契约与 GET 相同；{@code meta.hasImage} / {@code meta.imageCount} 标明本轮是否带图。
+     * 图文 / 文档流式问答。SSE 契约与 GET 相同；{@code meta.hasImage} / {@code meta.imageCount}
+     * 标明本轮是否带图，{@code meta.hasDocument} / {@code meta.documentCount} 标明文档。
      * <p>
-     * 同名 {@code image} 可重复；有图时先做 mime / 大小 / 张数校验再进生成，避免无 Key 时把坏文件打到网关。
+     * 同名 {@code image}、{@code document} 可重复；有附件时先做 mime / 大小 / 件数 / 抽取（扫描 PDF 可选 OCR）
+     * 再进生成，避免无 Key 时把坏文件打到网关。文档正文进 {@code UserMessage} 文本，不把 PDF/Office 当视觉 Media。
      *
      * @param question       问题
      * @param sessionId      会话
@@ -287,6 +300,7 @@ public class ProductionChatController {
      * @param topK           topK
      * @param queryExpansion 查询扩展
      * @param image          可选同名多图
+     * @param document       可选同名多文档
      * @param http           身份
      * @param response       限流头
      * @return SSE
@@ -303,16 +317,40 @@ public class ProductionChatController {
         @RequestParam(required = false) Integer topK,
         @RequestParam(required = false) String queryExpansion,
         @RequestParam(required = false) MultipartFile[] image,
+        @RequestParam(required = false) MultipartFile[] document,
         HttpServletRequest http,
         HttpServletResponse response
     ) {
         ProductionPrincipal principal = rateLimit(http, response);
         List<ChatImage> images = List.of();
-        if (image != null && image.length > 0) {
+        List<ChatDocument> documents = List.of();
+        boolean ocrUsed = false;
+        boolean hasImages = hasParts(image);
+        boolean hasDocuments = hasParts(document);
+        if (hasImages || hasDocuments) {
             if (mediaInspector == null) {
                 throw new BusinessException(ErrorCodeEnum.MEDIA_UNSUPPORTED, "不支持的媒体类型");
             }
+        }
+        if (hasImages) {
             images = mediaInspector.inspectImages(image);
+        }
+        if (hasDocuments) {
+            documents = mediaInspector.inspectDocuments(document);
+            if (needsOcr(documents)) {
+                if (documentOcr == null) {
+                    throw new BusinessException(ErrorCodeEnum.MEDIA_UNREADABLE, "无法读取文档内容");
+                }
+                ProductionDocumentOcr.OcrBatch batch = documentOcr.transcribeIfNeeded(documents, provider);
+                documents = batch.documents();
+                ocrUsed = batch.ocrUsed();
+            }
+        }
+        if (guardrail != null) {
+            guardrail.checkInput(question);
+            for (ChatDocument extracted : documents) {
+                guardrail.checkInput(extracted.extractedText());
+            }
         }
         if (metrics != null) {
             metrics.chatRun();
@@ -321,9 +359,12 @@ public class ProductionChatController {
         audit(principal, "chat.stream", http, 200, null, question);
         ProductionPrincipal frozen = principal;
         List<ChatImage> frozenImages = images;
+        List<ChatDocument> frozenDocs = documents;
+        boolean frozenOcr = ocrUsed;
         return runExecutor.start(writer ->
             chatService.streamAnswer(
-                writer, frozen, sessionId, question, provider, topK, queryExpansion, frozenImages));
+                writer, frozen, sessionId, question, provider, topK, queryExpansion,
+                frozenImages, frozenDocs, frozenOcr));
     }
 
     /**
@@ -558,6 +599,27 @@ public class ProductionChatController {
         }
         // standalone MockMvc 测试不走 JWT 过滤器
         return new ProductionPrincipal("anonymous", "default", java.util.Set.of("USER"));
+    }
+
+    private static boolean hasParts(MultipartFile[] files) {
+        if (files == null) {
+            return false;
+        }
+        for (MultipartFile file : files) {
+            if (file != null && !file.isEmpty()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean needsOcr(List<ChatDocument> documents) {
+        for (ChatDocument document : documents) {
+            if (document.ocrCandidate()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void requireAgent() {

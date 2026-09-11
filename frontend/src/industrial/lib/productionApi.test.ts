@@ -113,6 +113,14 @@ describe('productionApi 鉴权头', () => {
     expect(form.getAll('image')).toEqual([a, b])
   })
 
+  it('两份 txt POST 的 FormData 有两个 document', () => {
+    const a = new File([new Uint8Array([1])], 'a.txt', { type: 'text/plain' })
+    const b = new File([new Uint8Array([2])], 'b.txt', { type: 'text/plain' })
+    const form = chatStreamForm({ question: '总结', images: [], documents: [a, b] })
+    expect(form.getAll('document')).toEqual([a, b])
+    expect(form.getAll('image')).toEqual([])
+  })
+
   it('媒体探针 POST multipart 且带 Authorization', async () => {
     setSession('tok-1', { username: 'alice', tenant: 'tenant-a', roles: ['USER'] })
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({

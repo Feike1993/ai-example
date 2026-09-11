@@ -1,5 +1,6 @@
 package com.feike.ai.production.media.manager;
 
+import com.feike.ai.production.chat.model.ChatDocument;
 import com.feike.ai.production.chat.model.ChatImage;
 import com.feike.ai.production.config.ProductionProperties;
 import com.feike.ai.production.media.model.MediaKindEnum;
@@ -20,20 +21,35 @@ import java.util.Locale;
 /**
  * 只校验 mime / 体积并算 SHA-256，不调模型、不落盘。
  * <p>
- * 探针、带图问答、转写共用这一把尺子，避免三处各写各的上限。
+ * 探针、带图问答、本轮文档、转写共用这一把尺子，避免三处各写各的上限。
  */
 public class ProductionMediaInspector {
 
     private final ProductionProperties.Media media;
     private final ProductionMetrics metrics;
+    private final ProductionDocumentExtractor extractor;
 
     /**
      * @param properties 允许列表与上限
      * @param metrics    接受 / 拒绝计数；可空
      */
     public ProductionMediaInspector(ProductionProperties properties, ProductionMetrics metrics) {
+        this(properties, metrics, new ProductionDocumentExtractor(properties));
+    }
+
+    /**
+     * @param properties 允许列表与上限
+     * @param metrics    接受 / 拒绝计数；可空
+     * @param extractor  文档抽取
+     */
+    public ProductionMediaInspector(
+        ProductionProperties properties,
+        ProductionMetrics metrics,
+        ProductionDocumentExtractor extractor
+    ) {
         this.media = properties.media();
         this.metrics = metrics;
+        this.extractor = extractor;
     }
 
     /**
@@ -87,6 +103,42 @@ public class ProductionMediaInspector {
             }
         }
         return List.copyOf(images);
+    }
+
+    /**
+     * 一轮问答的多份文档：先数件数，再逐件走 mime / 大小 / 抽取。
+     * <p>
+     * 空数组视为无文档。超过 {@code max-documents} 直接 422。数字抽取不调 VL。
+     *
+     * @param files 同名 {@code document} parts；可空
+     * @return 已抽取的附件；无文档时为空列表
+     */
+    public List<ChatDocument> inspectDocuments(MultipartFile[] files) {
+        List<MultipartFile> present = new ArrayList<>();
+        if (files != null) {
+            for (MultipartFile file : files) {
+                if (file != null && !file.isEmpty()) {
+                    present.add(file);
+                }
+            }
+        }
+        if (present.size() > media.maxDocuments()) {
+            reject(ErrorCodeEnum.MEDIA_TOO_MANY,
+                "一次最多上传 " + media.maxDocuments() + " 份文档");
+        }
+        List<ChatDocument> documents = new ArrayList<>();
+        for (MultipartFile file : present) {
+            MediaProbeVO probe = inspect(file, MediaKindEnum.DOCUMENT);
+            try {
+                documents.add(extractor.extract(
+                    file.getBytes(),
+                    probe.mime(),
+                    file.getOriginalFilename()));
+            } catch (IOException ex) {
+                throw new BusinessException(ErrorCodeEnum.BAD_REQUEST, "无法读取文档");
+            }
+        }
+        return List.copyOf(documents);
     }
 
     /**
@@ -154,7 +206,8 @@ public class ProductionMediaInspector {
         return switch (kind) {
             case IMAGE -> images.contains(mime);
             case AUDIO -> audios.contains(mime);
-            case ANY -> images.contains(mime) || audios.contains(mime);
+            case DOCUMENT -> media.documentMimes().contains(mime);
+            case ANY -> images.contains(mime) || audios.contains(mime) || media.documentMimes().contains(mime);
         };
     }
 
@@ -174,6 +227,16 @@ public class ProductionMediaInspector {
                 && startsWith(body, 'R', 'I', 'F', 'F')
                 && body[8] == 'W' && body[9] == 'A' && body[10] == 'V' && body[11] == 'E';
         }
+        if ("application/pdf".equals(mime)) {
+            return startsWith(body, '%', 'P', 'D', 'F');
+        }
+        if (ProductionDocumentExtractor.DOCX.equals(mime)
+            || ProductionDocumentExtractor.XLSX.equals(mime)) {
+            return startsWith(body, 'P', 'K');
+        }
+        if ("text/plain".equals(mime) || "text/markdown".equals(mime)) {
+            return body.length > 0 && !tooManyNuls(body);
+        }
         // webm / mpeg 容器花样多，允许列表 + 非空即可，避免误杀浏览器录音
         return body.length > 0;
     }
@@ -192,6 +255,9 @@ public class ProductionMediaInspector {
         if (body.length >= 12 && startsWith(body, 'R', 'I', 'F', 'F')
             && body[8] == 'W' && body[9] == 'A' && body[10] == 'V' && body[11] == 'E') {
             return "audio/wav";
+        }
+        if (startsWith(body, '%', 'P', 'D', 'F')) {
+            return "application/pdf";
         }
         return "";
     }
@@ -216,7 +282,33 @@ public class ProductionMediaInspector {
         if (lower.endsWith(".mp3") || lower.endsWith(".mpeg")) {
             return "audio/mpeg";
         }
+        if (lower.endsWith(".pdf")) {
+            return "application/pdf";
+        }
+        if (lower.endsWith(".txt")) {
+            return "text/plain";
+        }
+        if (lower.endsWith(".md") || lower.endsWith(".markdown")) {
+            return "text/markdown";
+        }
+        if (lower.endsWith(".docx")) {
+            return ProductionDocumentExtractor.DOCX;
+        }
+        if (lower.endsWith(".xlsx")) {
+            return ProductionDocumentExtractor.XLSX;
+        }
         return "";
+    }
+
+    private static boolean tooManyNuls(byte[] body) {
+        int limit = Math.min(body.length, 1024);
+        int nuls = 0;
+        for (int i = 0; i < limit; i++) {
+            if (body[i] == 0) {
+                nuls++;
+            }
+        }
+        return nuls > 8;
     }
 
     private static boolean startsWith(byte[] body, int... prefix) {

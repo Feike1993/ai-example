@@ -6,7 +6,7 @@ import { ResultBody } from '../../components/ResultBody'
 import { Workbench } from '../../components/Workbench'
 import { authHeaders, notifyUnauthorized, rememberRunId, rememberTraceId } from '../lib/auth'
 import { mergeAgentSteps } from '../lib/agentSteps'
-import { agentStreamUrl, chatStreamForm, chatStreamPostUrl, chatStreamUrl, clearSession, getIngestJob, getSession, postIngest, postSpeak, postTranscribe, PRODUCTION_MAX_IMAGES, resumeUrl } from '../lib/productionApi'
+import { agentStreamUrl, chatStreamForm, chatStreamPostUrl, chatStreamUrl, clearSession, getIngestJob, getSession, postIngest, postSpeak, postTranscribe, PRODUCTION_MAX_DOCUMENTS, PRODUCTION_MAX_IMAGES, resumeUrl } from '../lib/productionApi'
 import { toTurns, type Turn } from '../lib/sessionTurns'
 import {
   StreamAbortedError,
@@ -58,6 +58,7 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
   const [ingesting, setIngesting] = useState(false)
   const [images, setImages] = useState<File[]>([])
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
+  const [documents, setDocuments] = useState<File[]>([])
   const [recording, setRecording] = useState(false)
   const [speaking, setSpeaking] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
@@ -121,7 +122,9 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
     const asked = question
     const imagePrefix =
       images.length === 0 ? '' : images.length === 1 ? '[图片] ' : `[图片×${images.length}] `
-    const displayQuestion = mode === 'chat' ? `${imagePrefix}${asked}` : asked
+    const documentPrefix =
+      documents.length === 0 ? '' : documents.length === 1 ? '[文档] ' : `[文档×${documents.length}] `
+    const displayQuestion = mode === 'chat' ? `${imagePrefix}${documentPrefix}${asked}` : asked
     let current: Turn = { question: displayQuestion, answer: '', sources: [], usage: null, steps: [] }
     setPending(current)
     const update = (patch: Partial<Turn>) => {
@@ -131,10 +134,10 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
 
     let persisted = true
     try {
-      const withImage = mode === 'chat' && images.length > 0
+      const withAttachment = mode === 'chat' && (images.length > 0 || documents.length > 0)
       const url = mode === 'agent'
         ? agentStreamUrl({ question: asked, sessionId, provider })
-        : withImage
+        : withAttachment
           ? chatStreamPostUrl()
           : chatStreamUrl({
               question: asked,
@@ -149,8 +152,8 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
           signal: controller.signal,
           resumeUrl,
           maxResumes: 2,
-          method: withImage ? 'POST' : 'GET',
-          body: withImage
+          method: withAttachment ? 'POST' : 'GET',
+          body: withAttachment
             ? chatStreamForm({
                 question: asked,
                 sessionId,
@@ -158,6 +161,7 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
                 topK: Number(topK) || undefined,
                 queryExpansion,
                 images,
+                documents,
               })
             : undefined,
           headers: authHeaders(),
@@ -279,8 +283,16 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
     setImages([])
   }
 
+  const clearDocuments = () => {
+    setDocuments([])
+  }
+
   const removeImage = (index: number) => {
     setImages((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const removeDocument = (index: number) => {
+    setDocuments((prev) => prev.filter((_, i) => i !== index))
   }
 
   const onPickImages = (files: File[]) => {
@@ -293,6 +305,21 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
         setError(`一次最多上传 ${PRODUCTION_MAX_IMAGES} 张图片`)
         setErrorCode('media_too_many')
         return merged.slice(0, PRODUCTION_MAX_IMAGES)
+      }
+      return merged
+    })
+  }
+
+  const onPickDocuments = (files: File[]) => {
+    if (files.length === 0) {
+      return
+    }
+    setDocuments((prev) => {
+      const merged = [...prev, ...files]
+      if (merged.length > PRODUCTION_MAX_DOCUMENTS) {
+        setError(`一次最多上传 ${PRODUCTION_MAX_DOCUMENTS} 份文档`)
+        setErrorCode('media_too_many')
+        return merged.slice(0, PRODUCTION_MAX_DOCUMENTS)
       }
       return merged
     })
@@ -404,7 +431,7 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
       hint={
         mode === 'agent'
           ? 'Agent 模式会多发 step 事件。被角色策略拒绝的工具带 denied:true，不会静默吞掉。'
-          : `严格 SSE 契约：meta → sources → delta → usage → done。可附最多 ${PRODUCTION_MAX_IMAGES} 张图识图（不入库）；麦克风先转写再提问，朗读走 TTS。查询扩展默认关闭。`
+          : `严格 SSE 契约：meta → sources → delta → usage → done。可附最多 ${PRODUCTION_MAX_IMAGES} 张图识图、最多 ${PRODUCTION_MAX_DOCUMENTS} 份文档抽文本（不入库）；麦克风先转写再提问，朗读走 TTS。查询扩展默认关闭。`
       }
       streaming={streaming}
       form={
@@ -416,6 +443,7 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
               setMode(next)
               if (next === 'agent') {
                 clearImages()
+                clearDocuments()
               }
             }}
             data={[
@@ -460,7 +488,26 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
                 </Button>
                 {images.length > 0 ? (
                   <Button variant="subtle" color="red" onClick={clearImages} disabled={streaming}>
-                    清除全部
+                    清除图片
+                  </Button>
+                ) : null}
+                <Button component="label" variant="default" disabled={streaming}>
+                  选文档
+                  <input
+                    data-testid="document-pick"
+                    type="file"
+                    accept=".pdf,.txt,.md,.docx,.xlsx,application/pdf,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    multiple
+                    hidden
+                    onChange={(event) => {
+                      onPickDocuments(Array.from(event.currentTarget.files ?? []))
+                      event.currentTarget.value = ''
+                    }}
+                  />
+                </Button>
+                {documents.length > 0 ? (
+                  <Button variant="subtle" color="red" onClick={clearDocuments} disabled={streaming}>
+                    清除文档
                   </Button>
                 ) : null}
                 <Button
@@ -493,6 +540,27 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
                         清除
                       </Button>
                     </Stack>
+                  ))}
+                </Group>
+              ) : null}
+              {documents.length > 0 ? (
+                <Group gap="sm" data-testid="document-chip-list">
+                  {documents.map((file, index) => (
+                    <Group key={`${file.name}-${index}`} gap={4} wrap="nowrap">
+                      <Text size="sm" data-testid={`document-chip-${index}`}>
+                        {file.name}
+                      </Text>
+                      <Button
+                        size="xs"
+                        variant="subtle"
+                        color="red"
+                        data-testid={`document-remove-${index}`}
+                        onClick={() => removeDocument(index)}
+                        disabled={streaming}
+                      >
+                        清除
+                      </Button>
+                    </Group>
                   ))}
                 </Group>
               ) : null}

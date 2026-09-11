@@ -50,9 +50,9 @@ spring:
       enabled: true
       force: true
     multipart:
-      # 略大于单张 max-bytes；请求上限约 3×2MiB，让超张/超体积走到业务 422
+      # 3×2MiB 图 + 2×2MiB 文档 + 表单，让超件走到业务 422
       max-file-size: 3MB
-      max-request-size: 8MB
+      max-request-size: 12MB
   application:
     name: ai-example
   threads:
@@ -311,6 +311,16 @@ app:
       max-speak-chars: ${PRODUCTION_TTS_MAX_CHARS:200}
       # 一轮最多几张；超过走 422 media_too_many，不调模型
       max-images: ${PRODUCTION_MEDIA_MAX_IMAGES:3}
+      document-mimes:
+        - application/pdf
+        - text/plain
+        - text/markdown
+        - application/vnd.openxmlformats-officedocument.wordprocessingml.document
+        - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      max-documents: ${PRODUCTION_MEDIA_MAX_DOCUMENTS:2}
+      max-extract-chars: ${PRODUCTION_MEDIA_MAX_EXTRACT_CHARS:8000}
+      ocr-max-pages: ${PRODUCTION_MEDIA_OCR_MAX_PAGES:3}
+      ocr-min-chars: ${PRODUCTION_MEDIA_OCR_MIN_CHARS:20}
     users:
       - username: alice
         password: demo

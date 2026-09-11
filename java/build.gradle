@@ -41,6 +41,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-opentelemetry'
     implementation 'org.postgresql:postgresql'
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.0'
+    // 本轮文档抽取：数字 PDF / Office，不引入 Tika
+    implementation 'org.apache.pdfbox:pdfbox:3.0.5'
+    implementation 'org.apache.poi:poi-ooxml:5.4.1'
 
     // Redis（Lettuce）会拉 Netty DNS；Spring 默认常只解析到 osx-x86_64，
     // Apple Silicon 启动时找不到 aarch_64.jnilib 会打 ERROR 并回退系统 DNS。
