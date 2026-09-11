@@ -472,6 +472,34 @@ export function agentStreamUrl(params: {
 }
 
 /**
+ * 带附件流式 Agent 地址（POST multipart）。
+ */
+export function agentStreamPostUrl(): string {
+  return `${PRODUCTION_BASE}/agent/stream`
+}
+
+/**
+ * 组装 Agent 本轮图/文档 FormData。part 名与问答相同：同名 `image`、`document`。
+ *
+ * @param params 任务与附件
+ */
+export function agentStreamForm(params: {
+  question: string
+  sessionId?: string | null
+  provider?: string
+  images: File[]
+  documents?: File[]
+}): FormData {
+  return chatStreamForm({
+    question: params.question,
+    sessionId: params.sessionId,
+    provider: params.provider,
+    images: params.images,
+    documents: params.documents,
+  })
+}
+
+/**
  * 断线续传地址。
  *
  * @param runId 首条 meta 事件里的 runId

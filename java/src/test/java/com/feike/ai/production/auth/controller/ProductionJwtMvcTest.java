@@ -97,6 +97,7 @@ class ProductionJwtMvcTest {
             new ProductionInstanceIdentity("test"),
             new ProductionMediaInspector(properties, metrics),
             null,
+            null,
             null
         );
         @SuppressWarnings("unchecked")

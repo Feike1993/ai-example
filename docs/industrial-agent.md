@@ -82,7 +82,7 @@ pnpm run test -- src/industrial
 pnpm test:e2e
 ```
 
-默认 Playwright **不**打 `GET /agent/stream`。
+默认 Playwright **不**打 `GET /agent/stream` 真循环。带附件的 `POST /agent/stream` 超件数 / 违禁词 422 见第十二阶段 [industrial-agent-media.md](industrial-agent-media.md)。
 
 ## 刻意不做
 

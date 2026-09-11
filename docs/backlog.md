@@ -105,6 +105,7 @@
 | 图文多模态 / 语音（本机演示） | 工业级 | 已覆盖（第九阶段） | 不落盘、不进 pgvector；默认 E2E 不打 VL/ASR/TTS | 见 [industrial-media.md](industrial-media.md) |
 | 一轮多图 | 工业级 | 已覆盖（第十阶段） | 第九阶段刻意单图；同名 `image`、默认 3 张、不落 blob | 见 [industrial-multi-image.md](industrial-multi-image.md) |
 | 本轮文档附件（Office + 扫描 OCR） | 工业级 | 已覆盖（第十一阶段） | 第十阶段刻意不做抽文本；不落盘、不进 pgvector；默认 E2E 不打 LLM/VL | 见 [industrial-doc-attach.md](industrial-doc-attach.md) |
+| 生产 Agent 本轮看图 / 带文档 | 工业级 | 已覆盖（第十二阶段） | 第九–十一阶段刻意让 Agent 纯文本；默认视觉 `qwen-vl-plus` 不能同轮 Function Calling，故 VL 转写后再走文本循环 | 见 [industrial-agent-media.md](industrial-agent-media.md) |
 | 有副作用的真实外部工具 | 第一期 | 明确不做（本仓） | 演示工具保持幂等、可离线 | 业务项目 |
 | 仓库根目录 `package.json` / `pnpm start` | 前端引入后 | 已覆盖（仅脚本转发） | 根 `package.json` 无依赖、无 `start`，只转发 `test:e2e`，避免 pnpm 11 在 git 根误跑 install | 不要把 Vite 工程升到仓库根 |
 

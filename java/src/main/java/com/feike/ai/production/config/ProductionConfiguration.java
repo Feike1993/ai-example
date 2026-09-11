@@ -21,6 +21,7 @@ import com.feike.ai.production.lock.manager.RedisSessionLock;
 import com.feike.ai.production.lock.manager.SessionLock;
 import com.feike.ai.production.media.manager.ProductionDocumentExtractor;
 import com.feike.ai.production.media.manager.ProductionDocumentOcr;
+import com.feike.ai.production.media.manager.ProductionImageDescribe;
 import com.feike.ai.production.media.manager.ProductionMediaInspector;
 import com.feike.ai.production.media.service.ProductionMediaService;
 import com.feike.ai.production.media.service.impl.ProductionMediaServiceImpl;
@@ -403,6 +404,21 @@ public class ProductionConfiguration {
         ProductionModelFactory models
     ) {
         return new ProductionDocumentOcr(properties, models);
+    }
+
+    /**
+     * Agent 本轮看图：VL 只转写，不进工具循环。
+     *
+     * @param properties 抽出上限
+     * @param models     视觉客户端
+     * @return 图片转写
+     */
+    @Bean
+    public ProductionImageDescribe productionImageDescribe(
+        ProductionProperties properties,
+        ProductionModelFactory models
+    ) {
+        return new ProductionImageDescribe(properties, models);
     }
 
     /**

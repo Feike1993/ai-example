@@ -1,11 +1,14 @@
 package com.feike.ai.production.agent.service.impl;
 
 import com.feike.ai.production.agent.manager.ProductionTools;
+import com.feike.ai.production.agent.model.AgentTurnMedia;
 import com.feike.ai.production.agent.service.ProductionAgentLoop;
 import com.feike.ai.production.agent.service.ProductionAgentService;
 
 import com.feike.ai.core.context.ContextBudget;
 import com.feike.ai.production.audit.service.AuditService;
+import com.feike.ai.production.chat.model.ChatDocument;
+import com.feike.ai.production.chat.service.impl.ProductionChatServiceImpl;
 import com.feike.ai.production.config.ProductionProperties;
 import com.feike.ai.production.auth.model.ProductionPrincipal;
 import com.feike.ai.production.chat.service.SessionBusyException;
@@ -109,21 +112,25 @@ public class ProductionAgentServiceImpl implements ProductionAgentService {
     }
 
     /**
-     * 流式运行。
+     * 流式运行。循环始终走文本 ChatModel；图片转写必须在进循环前完成。
      *
      * @param writer    SSE
      * @param principal 用户
      * @param sessionId 会话
      * @param question  任务
      * @param provider  模型
+     * @param media     本轮附件；无则 {@link AgentTurnMedia#none()}
      */
+    @Override
     public void stream(
         SseStreamWriter writer,
         ProductionPrincipal principal,
         String sessionId,
         String question,
-        String provider
+        String provider,
+        AgentTurnMedia media
     ) {
+        AgentTurnMedia frozen = media == null ? AgentTurnMedia.none() : media;
         try {
             guardrail.checkInput(question);
         } catch (GuardrailBlockedException ex) {
@@ -132,7 +139,7 @@ public class ProductionAgentServiceImpl implements ProductionAgentService {
         }
         String id = resolve(sessionId);
         if (id == null) {
-            streamUnlocked(writer, principal, null, question, provider);
+            streamUnlocked(writer, principal, null, question, provider, frozen);
             return;
         }
         Optional<SessionLock.Handle> handle = sessionLock.tryAcquire(id);
@@ -141,7 +148,7 @@ public class ProductionAgentServiceImpl implements ProductionAgentService {
             return;
         }
         try (SessionLock.Handle ignored = handle.get()) {
-            streamUnlocked(writer, principal, id, question, provider);
+            streamUnlocked(writer, principal, id, question, provider, frozen);
         }
     }
 
@@ -150,7 +157,8 @@ public class ProductionAgentServiceImpl implements ProductionAgentService {
         ProductionPrincipal principal,
         String sessionId,
         String question,
-        String provider
+        String provider,
+        AgentTurnMedia media
     ) {
         try {
             List<Message> history = loadHistory(principal, sessionId);
@@ -160,6 +168,14 @@ public class ProductionAgentServiceImpl implements ProductionAgentService {
             meta.put("sessionId", sessionId);
             meta.put("tenant", principal.tenantId());
             meta.put("mode", "agent");
+            boolean hasImage = media.imageCount() > 0;
+            boolean hasDocument = media.documentCount() > 0;
+            meta.put("hasImage", hasImage);
+            meta.put("imageCount", media.imageCount());
+            meta.put("hasDocument", hasDocument);
+            meta.put("documentCount", media.documentCount());
+            meta.put("ocrUsed", media.ocrUsed());
+            meta.put("visionTranscribed", media.visionTranscribed());
             String traceId = org.slf4j.MDC.get("traceId");
             if (traceId != null) {
                 meta.put("traceId", traceId);
@@ -168,11 +184,12 @@ public class ProductionAgentServiceImpl implements ProductionAgentService {
 
             AtomicInteger denied = new AtomicInteger();
             ProductionTools tools = new ProductionTools(retrieval, ingest, principal, properties);
+            String userPrompt = buildUserPrompt(question, media);
             ProductionAgentLoop.Trace trace = ProductionAgentLoop.run(
                 models.chatModel(provider),
                 tools,
                 principal,
-                question,
+                userPrompt,
                 history,
                 properties.agent().maxSteps(),
                 step -> {
@@ -205,7 +222,10 @@ public class ProductionAgentServiceImpl implements ProductionAgentService {
                 "steps", trace.steps().size(),
                 "toolDenied", denied.get()
             ));
-            boolean persisted = persist(principal, sessionId, writer.runId(), question, answer);
+            boolean persisted = persist(
+                principal, sessionId, writer.runId(),
+                ProductionChatServiceImpl.persistQuestion(question, media.imageCount(), media.documentCount()),
+                answer);
             writer.done(Map.of(
                 "sessionId", sessionId,
                 "persisted", persisted,
@@ -220,6 +240,34 @@ public class ProductionAgentServiceImpl implements ProductionAgentService {
             log.error("agent run={} 失败", writer.runId(), ex);
             writer.error("upstream_error", "Agent 失败：" + ex.getMessage());
         }
+    }
+
+    /**
+     * 把文档摘录与图片转写拼进用户任务。无附件时保持原句，GET 文本路径行为不变。
+     *
+     * @param question 用户原句
+     * @param media    本轮附件
+     * @return 送进工具循环的纯文本
+     */
+    static String buildUserPrompt(String question, AgentTurnMedia media) {
+        if (media == null || (media.documentCount() == 0 && (media.imageTranscript() == null
+            || media.imageTranscript().isBlank()))) {
+            return question == null ? "" : question;
+        }
+        StringBuilder sb = new StringBuilder();
+        if (media.documentCount() > 0) {
+            sb.append("本轮附件文本：\n");
+            for (ChatDocument document : media.documents()) {
+                sb.append("[").append(document.filename() == null ? "document" : document.filename()).append("]\n")
+                    .append(document.extractedText() == null ? "" : document.extractedText())
+                    .append("\n\n");
+            }
+        }
+        if (media.imageTranscript() != null && !media.imageTranscript().isBlank()) {
+            sb.append("本轮图片转写：\n").append(media.imageTranscript()).append("\n\n");
+        }
+        sb.append("用户任务：").append(question == null ? "" : question);
+        return sb.toString();
     }
 
     private AgentAnswer runUnlocked(

@@ -2,7 +2,7 @@
 
 对照本机演示：**同名 `document`、数字抽文本、超件数 / 违禁词 422、扫描件 VL 转写选跑**。默认 Playwright 只验鉴权与进模型前的 422，不打 Chat LLM / VL。
 
-这是工业级第十一阶段，不是教学新样例。教学 `/chat` 与生产 Agent **本阶段仍纯文本**。第九阶段识图、第十阶段多图仍见 [industrial-media.md](industrial-media.md)、[industrial-multi-image.md](industrial-multi-image.md)。
+这是工业级第十一阶段，不是教学新样例。教学 `/chat` 仍纯文本。生产 Agent 本轮看图/带文档见第十二阶段 [industrial-agent-media.md](industrial-agent-media.md)。第九阶段识图、第十阶段多图仍见 [industrial-media.md](industrial-media.md)、[industrial-multi-image.md](industrial-multi-image.md)。
 
 入口：`/ai-example/api/v1/**` + [industrial.html](../frontend/industrial.html)。
 
@@ -14,7 +14,7 @@
 | 11f 扫描 OCR | PDFBox 抽出字数 `< ocrMinChars`（默认 20）且有页 → 渲染最多 `ocrMaxPages`（默认 3）页 PNG，现有 VL **只转写**。无 Key → `secret_unavailable`（503）；转写失败 → `media_unreadable`（422）。默认 E2E **不**送扫描件 |
 | 11b SSE | `POST /chat/stream` 同名 `document`。抽出（+ 可选 OCR）正文进 `UserMessage` **文本**，不把 PDF/Office 当视觉 Media。空检索有文档仍生成。`meta.hasDocument` / `documentCount` / `extractedChars` / `ocrUsed` |
 | 11c 落库 | `[文档]` / `[文档×N]` 占位，排在 `[图片]` 之后。不写 blob、不写抽出/OCR 正文 |
-| 11d 页面 | industrial 问答：文档多选（含 Office）、文件名芯片可单件清除、超过 2 件前端先拦。Agent 不显示选图/选文档 |
+| 11d 页面 | industrial 问答：文档多选（含 Office）、文件名芯片可单件清除、超过 2 件前端先拦。Agent 选图/选文档见第十二阶段 |
 | 11e E2E | alice 3 个 tiny txt **422** `media_too_many`；含「违禁演示词」的 txt **422** `input_deny`。默认套件**不**打 LLM / VL |
 
 ## 前置
@@ -76,7 +76,7 @@ curl -N http://127.0.0.1:8080/ai-example/api/v1/chat/stream \
 
 ## 3. 工业页
 
-问答模式：选文档 `accept` 含 pdf/txt/md/docx/xlsx；文件名芯片可单件清除；超过 2 件前端先提示 `media_too_many`，后端仍是权威。Agent 模式没有选图/选文档。
+问答模式：选文档 `accept` 含 pdf/txt/md/docx/xlsx；文件名芯片可单件清除；超过 2 件前端先提示 `media_too_many`，后端仍是权威。Agent 看图/带文档见 [industrial-agent-media.md](industrial-agent-media.md)。
 
 ## 4. 可选单测
 
@@ -98,6 +98,6 @@ pnpm test:e2e
 - pptx、旧版 `.doc` / `.xls`、Tesseract、视频
 - 知识库上传后台、抽出/OCR 正文进 pgvector
 - 把 jpeg/png 改走 `document` 抽字（识图仍是 `image`）
-- 音频直接进 VL、文生图、Agent 看图或带文档
+- 音频直接进 VL、文生图
 - 教学多模态 Tab；把 Chat LLM / VL 打进 CI
 - 无上限堆文件、把 PDF/Office 字节当视觉 Media 作答

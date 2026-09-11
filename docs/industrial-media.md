@@ -2,7 +2,7 @@
 
 对照本机演示：**探针不打模型、图文 SSE、ASR/TTS 本机选跑**。默认 Playwright 只验鉴权 / mime / 体积。
 
-这是工业级第九阶段，不是教学新样例。教学 `/chat` 与生产 Agent 本阶段仍只走文本。第六 / 七 / 八阶段仍见 [industrial-ha.md](industrial-ha.md)、[industrial-ops.md](industrial-ops.md)、[industrial-agent.md](industrial-agent.md)。第十阶段一轮多图见 [industrial-multi-image.md](industrial-multi-image.md)。第十一阶段本轮文档见 [industrial-doc-attach.md](industrial-doc-attach.md)。
+这是工业级第九阶段，不是教学新样例。教学 `/chat` 与生产 Agent 本阶段仍只走文本。第六 / 七 / 八阶段仍见 [industrial-ha.md](industrial-ha.md)、[industrial-ops.md](industrial-ops.md)、[industrial-agent.md](industrial-agent.md)。第十阶段一轮多图见 [industrial-multi-image.md](industrial-multi-image.md)。第十一阶段本轮文档见 [industrial-doc-attach.md](industrial-doc-attach.md)。第十二阶段 Agent 看图/带文档见 [industrial-agent-media.md](industrial-agent-media.md)。
 
 入口：`/ai-example/api/v1/**` + [industrial.html](../frontend/industrial.html)。
 
@@ -14,7 +14,7 @@
 | 9b 图文 | 文本仍用 `GET /chat/stream`。`POST /chat/stream` multipart（`question` + 可选 `image`）SSE 契约不变；`meta.hasImage`。有图用 Spring AI `UserMessage` + `Media`，模型 `PRODUCTION_VISION_MODEL`（默认 `qwen-vl-plus`），Provider 默认 dashscope。检索仍按文本；落库 `[图片]` 占位，不写 blob。当时只允许一张；多图见 [industrial-multi-image.md](industrial-multi-image.md) |
 | 9c ASR | `POST /speech/transcribe` → `{ text }`。默认套件只打坏 mime |
 | 9d TTS | `POST /speech/speak` JSON；空文本 400；违禁词 422 `input_deny`。音色 `PRODUCTION_TTS_VOICE` |
-| 9e 页面 | industrial 问答：选图 / 麦克风转写填问题 / 终答朗读。Agent 模式不显示选图 |
+| 9e 页面 | industrial 问答：选图 / 麦克风转写填问题 / 终答朗读。Agent 本轮看图见第十二阶段 |
 
 ## 前置
 
@@ -74,7 +74,7 @@ curl -sS http://127.0.0.1:8080/ai-example/api/v1/speech/speak \
 
 空文本 **400**；`{"text":"违禁演示词"}` **422** `input_deny`。音频不写入会话。
 
-工业页：问答模式选图预览、麦克风录音后填入问题框再流式提问、终答点「朗读」。Agent 模式没有选图。
+工业页：问答模式选图预览、麦克风录音后填入问题框再流式提问、终答点「朗读」。Agent 本轮看图见 [industrial-agent-media.md](industrial-agent-media.md)。
 
 ## 4. 可选单测
 
@@ -93,7 +93,7 @@ pnpm test:e2e
 ## 刻意不做
 
 - 对象存储、CDN、把图片进 pgvector、知识库上传后台
-- 文生图、实时全双工通话、Agent 工具看图
+- 文生图、实时全双工通话、Agent 工具看图（第十二阶段是 VL 转写后再走文本循环，不加 vision 工具）
 - 教学样例多模态 Tab；根目录 `pnpm start`
 - 把 VL / ASR / TTS 打进 CI
 - 图生图（多图已由第十阶段覆盖，见 [industrial-multi-image.md](industrial-multi-image.md)）

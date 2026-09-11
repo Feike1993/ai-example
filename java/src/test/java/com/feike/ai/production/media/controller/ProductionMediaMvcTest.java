@@ -100,7 +100,7 @@ class ProductionMediaMvcTest {
             chatService, mock(ProductionIngestService.class), null, runExecutor,
             null, bucket, null, audit, metrics, jsonMapper, null,
             new ProductionInstanceIdentity("test"), inspector,
-            null, new ProductionGuardrail(properties, metrics)
+            null, null, new ProductionGuardrail(properties, metrics)
         );
         ProductionMediaController media = new ProductionMediaController(
             new ProductionMediaServiceImpl(inspector),
@@ -358,6 +358,46 @@ class ProductionMediaMvcTest {
         assertTrue(body.contains("\"hasDocument\":true"), body);
         assertTrue(body.contains("\"documentCount\":1"), body);
         assertTrue(body.contains("event:done"), body);
+    }
+
+    @Test
+    void postAgentStreamWithoutTokenShouldBeUnauthorized() throws Exception {
+        mockMvc.perform(multipart("/api/v1/agent/stream")
+                .file(new MockMultipartFile("document", "a.txt", "text/plain", "hello".getBytes()))
+                .param("question", "总结这份文件"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("auth_missing_token"));
+    }
+
+    @Test
+    void postAgentStreamWithTooManyTxtShouldRejectBeforeLoop() throws Exception {
+        String token = login();
+        var request = multipart("/api/v1/agent/stream")
+            .param("question", "总结这些文件")
+            .header("Authorization", "Bearer " + token);
+        for (int i = 0; i < 3; i++) {
+            request.file(new MockMultipartFile(
+                "document", "a" + i + ".txt", "text/plain", "hello".getBytes()));
+        }
+        mockMvc.perform(request)
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.code").value("media_too_many"));
+        verify(generator, never()).stream(anyString(), any(), any(), any(), any());
+        verify(generator, never()).stream(anyString(), any(), any(), any(), any(ChatAttachments.class), any());
+    }
+
+    @Test
+    void postAgentStreamWithDenyWordTxtShouldRejectBeforeLoop() throws Exception {
+        String token = login();
+        mockMvc.perform(multipart("/api/v1/agent/stream")
+                .file(new MockMultipartFile(
+                    "document", "bad.txt", "text/plain", "含有违禁演示词".getBytes()))
+                .param("question", "总结这份文件")
+                .header("Authorization", "Bearer " + token))
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.code").value("input_deny"));
+        verify(generator, never()).stream(anyString(), any(), any(), any(), any());
+        verify(generator, never()).stream(anyString(), any(), any(), any(), any(ChatAttachments.class), any());
     }
 
     private String login() throws Exception {

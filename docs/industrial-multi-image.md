@@ -2,7 +2,7 @@
 
 对照本机演示：**同名多 `image`、超张数 422、落库占位、不打 VL**。默认 Playwright 只验鉴权与张数上限。
 
-这是工业级第十阶段，不是教学新样例。教学 `/chat` 与生产 Agent 本阶段仍只走文本。第九阶段单图识图仍见 [industrial-media.md](industrial-media.md)。
+这是工业级第十阶段，不是教学新样例。教学 `/chat` 与生产 Agent 本阶段仍只走文本。第九阶段单图识图仍见 [industrial-media.md](industrial-media.md)。第十二阶段 Agent 看图见 [industrial-agent-media.md](industrial-agent-media.md)。
 
 入口：`/ai-example/api/v1/**` + [industrial.html](../frontend/industrial.html)。
 
@@ -13,7 +13,7 @@
 | 10a 张数 | `POST /chat/stream` 4 张小 jpeg → **422** `media_too_many`，不调生成。单张 `.txt` 仍 422 `media_unsupported`。探针仍单文件 |
 | 10b 多图 SSE | 同名重复 part `image`。两张 tiny jpeg（空检索亦可）SSE 终态 `done`，`meta.hasImage=true`、`meta.imageCount=2`。无 Key 时坏文件仍在校验阶段失败 |
 | 10c 落库 | 0 张原文；1 张 `[图片] `；N>1 `[图片×N] `。不写二进制 |
-| 10d 页面 | industrial 问答：多选预览、可单张清除、超过 3 张前端先拦。Agent 模式不显示选图 |
+| 10d 页面 | industrial 问答：多选预览、可单张清除、超过 3 张前端先拦。Agent 本轮看图见第十二阶段 |
 | 10e E2E | 无 JWT `POST /chat/stream` **401**；alice 4 张 jpeg **422** `media_too_many`。默认套件**不**打 VL |
 
 ## 前置
@@ -61,7 +61,7 @@ curl -N http://127.0.0.1:8080/ai-example/api/v1/chat/stream \
 
 ## 3. 工业页
 
-问答模式：`<input multiple>` 预览列表可单张清除；超过 3 张前端先提示 `media_too_many`，后端仍是权威。Agent 模式没有选图。
+问答模式：`<input multiple>` 预览列表可单张清除；超过 3 张前端先提示 `media_too_many`，后端仍是权威。Agent 本轮看图见 [industrial-agent-media.md](industrial-agent-media.md)。
 
 ## 4. 可选单测
 
@@ -81,5 +81,5 @@ pnpm test:e2e
 
 - PDF / Office / 视频、文档抽文本进本轮（第十一阶段已覆盖 pdf / txt / md / docx / xlsx 与扫描 VL OCR；pptx / 旧 OLE `.doc`/`.xls` 仍不做，见 [industrial-doc-attach.md](industrial-doc-attach.md)）
 - 音频直接进 VL、知识库上传后台、图片进 pgvector
-- 文生图、Agent 看图、教学多模态 Tab
+- 文生图、教学多模态 Tab
 - 把 VL 打进 CI；无上限堆图

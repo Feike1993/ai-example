@@ -1,5 +1,6 @@
 package com.feike.ai.production.agent.service;
 
+import com.feike.ai.production.agent.model.AgentTurnMedia;
 import com.feike.ai.production.auth.model.ProductionPrincipal;
 import com.feike.ai.production.sse.service.SseStreamWriter;
 
@@ -40,13 +41,29 @@ public interface ProductionAgentService {
     );
 
     /**
-     * 流式运行。
+     * 流式运行（纯文本）。
+     */
+    default void stream(
+        SseStreamWriter writer,
+        ProductionPrincipal principal,
+        String sessionId,
+        String question,
+        String provider
+    ) {
+        stream(writer, principal, sessionId, question, provider, AgentTurnMedia.none());
+    }
+
+    /**
+     * 流式运行。有图时调用方应已完成 VL 转写，本方法只把正文拼进用户任务。
+     *
+     * @param media 本轮文档抽出与图片转写；无附件传 {@link AgentTurnMedia#none()}
      */
     void stream(
         SseStreamWriter writer,
         ProductionPrincipal principal,
         String sessionId,
         String question,
-        String provider
+        String provider,
+        AgentTurnMedia media
     );
 }

@@ -281,13 +281,13 @@ RUN_REDIS_IT=true REDIS_IT_HOST=localhost REDIS_IT_PORT=6379 \
 
 后端包 `com.feike.ai.production`，HTTP 前缀 `/ai-example/api/v1/**`，与教学样例路径不重叠。前端独立入口 [industrial.html](frontend/industrial.html)（样例场侧栏也有跳转）。
 
-这是**工业级链路**（第四阶段 Playwright E2E、第五阶段本机 k6、第六阶段双 Java、第七阶段 ops、第八阶段生产 Agent 策略/审计/步骤、第九阶段本机图文与语音、第十阶段一轮多图、第十一阶段本轮文档附件），与课程**第四期 Hybrid RAG + Eval**（[docs/phase4.md](docs/phase4.md)）不是同一件事。
+这是**工业级链路**（第四阶段 Playwright E2E、第五阶段本机 k6、第六阶段双 Java、第七阶段 ops、第八阶段生产 Agent 策略/审计/步骤、第九阶段本机图文与语音、第十阶段一轮多图、第十一阶段本轮文档附件、第十二阶段生产 Agent 本轮看图/带文档），与课程**第四期 Hybrid RAG + Eval**（[docs/phase4.md](docs/phase4.md)）不是同一件事。
 
 - 配置前缀 `app.production.*`（环境变量 `PRODUCTION_*` / `REDIS_*`）
 - RAG 拆成 ingest / retrieve / generate，不含教学用的 compare 分支；查询扩展默认 `none`，请求可开 `rewrite` / `hyde`（复用 `core/rag`）
 - `POST /api/v1/rag/ingest` 仅 ADMIN，**202** 任务；进度 `GET /api/v1/rag/ingest/jobs/{jobId}` 与 ops snapshot
 - SSE 契约：`meta → sources → delta* → step* → usage → done|error`，带 `runId` / `seq`；断线用 `GET /api/v1/runs/{runId}/stream` + `Last-Event-ID` 续传
-- **第四阶段 E2E**：`cd frontend && pnpm test:e2e`。默认套件覆盖登录、安全/可观测面板、401、alice ingest 403、输入护栏、alice/admin 工具探针、媒体探针 401/422、带图流式无 JWT 401、超张数 422、文档超件数 / 抽出违禁词 422（不打 Chat LLM / VL / ASR / TTS）。空检索会先走 Embedding，因此 `pnpm test:e2e:keys` 仅在已配 `PROVIDER_DASHSCOPE_API_KEY` 时跑。可选 `PLAYWRIGHT_BASE_URL=http://localhost:8088` 打 Compose 前端；不要用 `vite preview`（无 API 代理）。
+- **第四阶段 E2E**：`cd frontend && pnpm test:e2e`。默认套件覆盖登录、安全/可观测面板、401、alice ingest 403、输入护栏、alice/admin 工具探针、媒体探针 401/422、带图流式无 JWT 401、超张数 422、文档超件数 / 抽出违禁词 422、Agent 带文档超件数 / 违禁词 422（不打 Chat LLM / VL / ASR / TTS / 真 Agent 循环）。空检索会先走 Embedding，因此 `pnpm test:e2e:keys` 仅在已配 `PROVIDER_DASHSCOPE_API_KEY` 时跑。可选 `PLAYWRIGHT_BASE_URL=http://localhost:8088` 打 Compose 前端；不要用 `vite preview`（无 API 代理）。
 - **第五阶段压测**：`./loadtest/run.sh all`（Java 需在 8080 且已设 `PRODUCTION_KEK`）。本机 k6 打 `/api/v1`：廉价读、护栏 422、令牌桶 429、登录限流。默认不打 Chat LLM / Embedding，不进 CI。说明见 [loadtest/README.md](loadtest/README.md)。
 - **第六阶段多实例**：Compose 起 `java-a` + `java-b`，Nginx `:8088` 负载均衡。验证步骤（起栈、脚本、手工 curl、端口冲突）见 [docs/industrial-ha.md](docs/industrial-ha.md)；一键对照 `./scripts/industrial-ha.sh`。
 - **第七阶段**：生产 RAG 可选 rewrite/HyDE；ADMIN ingest 走 Redis Stream；`POST /api/v1/secrets/rotate` 本地重加密；Compose Prometheus `:9090` + Grafana `:3000`（scrape token，不匿名）；`./loadtest/run.sh` 写 `loadtest/results/latest-summary.json`，可观测面板展示。人工验证（起栈、curl、页面、KEK 轮换、Grafana、压测摘要）见 [docs/industrial-ops.md](docs/industrial-ops.md)。
@@ -295,6 +295,7 @@ RUN_REDIS_IT=true REDIS_IT_HOST=localhost REDIS_IT_PORT=6379 \
 - **第九阶段**：`POST /api/v1/media/probe`（只校验 mime/体积）；`POST /api/v1/chat/stream` multipart 识图（不落 blob）；`POST /api/v1/speech/transcribe` / `speak`。默认 E2E 不打 VL/ASR/TTS。见 [docs/industrial-media.md](docs/industrial-media.md)。
 - **第十阶段**：一轮多图，同名重复 `image` part，默认最多 3 张；超张数 422 `media_too_many`；落库 `[图片]` / `[图片×N]` 占位。见 [docs/industrial-multi-image.md](docs/industrial-multi-image.md)。
 - **第十一阶段**：本轮文档附件（pdf / txt / md / docx / xlsx）抽文本进上下文；扫描 PDF 抽出字太少时用现有 VL 只转写。同名 `document`，默认最多 2 份；超件数 / 违禁词 422。不落盘、不进 pgvector。见 [docs/industrial-doc-attach.md](docs/industrial-doc-attach.md)。
+- **第十二阶段**：生产 Agent 本轮看图/带文档。`POST /api/v1/agent/stream` 复用问答附件契约；有图先 VL 只转写，再走文本工具循环（默认 `qwen-vl-plus` 不能同轮 Function Calling）。`GET /agent/stream` 仍纯文本。见 [docs/industrial-agent-media.md](docs/industrial-agent-media.md)。
 
 ### 鉴权 / 信封加密 / 指标
 
@@ -318,7 +319,7 @@ RUN_REDIS_IT=true REDIS_IT_HOST=localhost REDIS_IT_PORT=6379 \
 
 **可观测。** 业务指标见 `GET /api/v1/ops/snapshot`（需登录）。Prometheus 刮取 `/ai-example/actuator/prometheus` 用 `PRODUCTION_METRICS_TOKEN`（Compose 默认 `dev-metrics-token`），不放行匿名。Grafana `http://localhost:3000`（默认 admin/admin），Jaeger `http://localhost:16686`。压测摘要 `GET /api/v1/ops/loadtest`。响应头带 `traceparent`，SSE `meta` 带 `traceId`。
 
-**Agent。** `POST /api/v1/agent` 与 `GET /api/v1/agent/stream`。USER 能用 `search_kb` / `add` / `get_weather`；`rebuild_index` 仅 ADMIN。被拒工具会发 `step` 且 `denied:true`。
+**Agent。** `POST /api/v1/agent` 与 `GET /api/v1/agent/stream` 为纯文本；带附件走 `POST /api/v1/agent/stream` multipart。USER 能用 `search_kb` / `add` / `get_weather`；`rebuild_index` 仅 ADMIN。被拒工具会发 `step` 且 `denied:true`。
 
 ### 多轮会话：教学版修好了什么
 

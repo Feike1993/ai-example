@@ -278,13 +278,13 @@ describe('ProductionChatPanel', () => {
     expect(screen.getByText('已按策略拒绝该工具。')).toBeInTheDocument()
   })
 
-  it('问答模式展示选图和选文档，Agent 模式不展示', async () => {
+  it('问答模式与 Agent 模式都展示选图和选文档', async () => {
     renderPanel(<ProductionChatPanel provider="deepseek" />)
     expect(screen.getByTestId('image-pick')).toBeInTheDocument()
     expect(screen.getByTestId('document-pick')).toBeInTheDocument()
     await userEvent.click(screen.getByText('Agent'))
-    expect(screen.queryByTestId('image-pick')).toBeNull()
-    expect(screen.queryByTestId('document-pick')).toBeNull()
+    expect(screen.getByTestId('image-pick')).toBeInTheDocument()
+    expect(screen.getByTestId('document-pick')).toBeInTheDocument()
   })
 
   it('选图后流式提问走 POST multipart', async () => {
@@ -334,6 +334,26 @@ describe('ProductionChatPanel', () => {
     await waitFor(() => expect(screen.getByText('已完成')).toBeInTheDocument())
 
     const streamCall = fetchImpl.mock.calls.find((call) => String(call[0]).includes('/chat/stream'))
+    expect(streamCall?.[1]?.method).toBe('POST')
+    expect(streamCall?.[1]?.body).toBeInstanceOf(FormData)
+    const form = streamCall?.[1]?.body as FormData
+    expect(form.getAll('document')).toHaveLength(2)
+  })
+
+  it('Agent 两份 txt POST 的 FormData 有两个 document', async () => {
+    const a = new File(['alpha'], 'a.txt', { type: 'text/plain' })
+    const b = new File(['beta'], 'b.txt', { type: 'text/plain' })
+    const inner = fakeFetch([META, SOURCES, DELTA, USAGE, DONE])
+    const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) => inner(input, init))
+    vi.stubGlobal('fetch', fetchImpl as unknown as typeof fetch)
+    renderPanel(<ProductionChatPanel provider="deepseek" />)
+
+    await userEvent.click(screen.getByText('Agent'))
+    await userEvent.upload(screen.getByTestId('document-pick'), [a, b])
+    await userEvent.click(screen.getByRole('button', { name: '流式提问' }))
+    await waitFor(() => expect(screen.getByText('已完成')).toBeInTheDocument())
+
+    const streamCall = fetchImpl.mock.calls.find((call) => String(call[0]).includes('/agent/stream'))
     expect(streamCall?.[1]?.method).toBe('POST')
     expect(streamCall?.[1]?.body).toBeInstanceOf(FormData)
     const form = streamCall?.[1]?.body as FormData

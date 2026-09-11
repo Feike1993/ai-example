@@ -226,6 +226,34 @@ test.describe('工业级默认 E2E', () => {
     expect(((await res.json()) as { code: string }).code).toBe('input_deny')
   })
 
+  test('alice 三份 txt Agent 流式 422 media_too_many', async ({ request }) => {
+    const token = await fetchToken(request, 'alice')
+    const form = new FormData()
+    form.set('question', '总结这些文件')
+    for (let i = 0; i < 3; i += 1) {
+      form.append('document', new File(['hello'], `a${i}.txt`, { type: 'text/plain' }))
+    }
+    const res = await request.post('/ai-example/api/v1/agent/stream', {
+      headers: { Authorization: `Bearer ${token}` },
+      multipart: form,
+    })
+    expect(res.status()).toBe(422)
+    expect(((await res.json()) as { code: string }).code).toBe('media_too_many')
+  })
+
+  test('alice Agent 文档含违禁词 422 input_deny', async ({ request }) => {
+    const token = await fetchToken(request, 'alice')
+    const form = new FormData()
+    form.set('question', '总结这份文件')
+    form.append('document', new File(['含有违禁演示词'], 'bad.txt', { type: 'text/plain' }))
+    const res = await request.post('/ai-example/api/v1/agent/stream', {
+      headers: { Authorization: `Bearer ${token}` },
+      multipart: form,
+    })
+    expect(res.status()).toBe(422)
+    expect(((await res.json()) as { code: string }).code).toBe('input_deny')
+  })
+
   test('alice 重建语料返回 403', async ({ page }) => {
     await login(page, 'alice')
     await page.getByRole('button', { name: '重建语料' }).click()

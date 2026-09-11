@@ -450,7 +450,7 @@ public class ProductionChatServiceImpl implements ProductionChatService {
      * @param imageCount 本轮张数
      * @return 写入会话的文本
      */
-    static String persistQuestion(String question, int imageCount) {
+    public static String persistQuestion(String question, int imageCount) {
         return persistQuestion(question, imageCount, 0);
     }
 
@@ -462,7 +462,7 @@ public class ProductionChatServiceImpl implements ProductionChatService {
      * @param documentCount 本轮文档件数
      * @return 写入会话的文本
      */
-    static String persistQuestion(String question, int imageCount, int documentCount) {
+    public static String persistQuestion(String question, int imageCount, int documentCount) {
         String text = question == null ? "" : question;
         if (imageCount > 0 && !text.startsWith("[图片")) {
             if (imageCount == 1) {

@@ -6,7 +6,7 @@ import { ResultBody } from '../../components/ResultBody'
 import { Workbench } from '../../components/Workbench'
 import { authHeaders, notifyUnauthorized, rememberRunId, rememberTraceId } from '../lib/auth'
 import { mergeAgentSteps } from '../lib/agentSteps'
-import { agentStreamUrl, chatStreamForm, chatStreamPostUrl, chatStreamUrl, clearSession, getIngestJob, getSession, postIngest, postSpeak, postTranscribe, PRODUCTION_MAX_DOCUMENTS, PRODUCTION_MAX_IMAGES, resumeUrl } from '../lib/productionApi'
+import { agentStreamForm, agentStreamPostUrl, agentStreamUrl, chatStreamForm, chatStreamPostUrl, chatStreamUrl, clearSession, getIngestJob, getSession, postIngest, postSpeak, postTranscribe, PRODUCTION_MAX_DOCUMENTS, PRODUCTION_MAX_IMAGES, resumeUrl } from '../lib/productionApi'
 import { toTurns, type Turn } from '../lib/sessionTurns'
 import {
   StreamAbortedError,
@@ -124,7 +124,7 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
       images.length === 0 ? '' : images.length === 1 ? '[图片] ' : `[图片×${images.length}] `
     const documentPrefix =
       documents.length === 0 ? '' : documents.length === 1 ? '[文档] ' : `[文档×${documents.length}] `
-    const displayQuestion = mode === 'chat' ? `${imagePrefix}${documentPrefix}${asked}` : asked
+    const displayQuestion = `${imagePrefix}${documentPrefix}${asked}`
     let current: Turn = { question: displayQuestion, answer: '', sources: [], usage: null, steps: [] }
     setPending(current)
     const update = (patch: Partial<Turn>) => {
@@ -134,9 +134,11 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
 
     let persisted = true
     try {
-      const withAttachment = mode === 'chat' && (images.length > 0 || documents.length > 0)
+      const withAttachment = images.length > 0 || documents.length > 0
       const url = mode === 'agent'
-        ? agentStreamUrl({ question: asked, sessionId, provider })
+        ? withAttachment
+          ? agentStreamPostUrl()
+          : agentStreamUrl({ question: asked, sessionId, provider })
         : withAttachment
           ? chatStreamPostUrl()
           : chatStreamUrl({
@@ -154,15 +156,23 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
           maxResumes: 2,
           method: withAttachment ? 'POST' : 'GET',
           body: withAttachment
-            ? chatStreamForm({
-                question: asked,
-                sessionId,
-                provider,
-                topK: Number(topK) || undefined,
-                queryExpansion,
-                images,
-                documents,
-              })
+            ? (mode === 'agent'
+              ? agentStreamForm({
+                  question: asked,
+                  sessionId,
+                  provider,
+                  images,
+                  documents,
+                })
+              : chatStreamForm({
+                  question: asked,
+                  sessionId,
+                  provider,
+                  topK: Number(topK) || undefined,
+                  queryExpansion,
+                  images,
+                  documents,
+                }))
             : undefined,
           headers: authHeaders(),
           handlers: {
@@ -430,7 +440,7 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
       title="生产问答"
       hint={
         mode === 'agent'
-          ? 'Agent 模式会多发 step 事件。被角色策略拒绝的工具带 denied:true，不会静默吞掉。'
+          ? 'Agent 模式会多发 step 事件。本轮可附图/文档：图先 VL 转写再走文本工具循环。被角色策略拒绝的工具带 denied:true，不会静默吞掉。'
           : `严格 SSE 契约：meta → sources → delta → usage → done。可附最多 ${PRODUCTION_MAX_IMAGES} 张图识图、最多 ${PRODUCTION_MAX_DOCUMENTS} 份文档抽文本（不入库）；麦克风先转写再提问，朗读走 TTS。查询扩展默认关闭。`
       }
       streaming={streaming}
@@ -439,12 +449,7 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
           <SegmentedControl
             value={mode}
             onChange={(value) => {
-              const next = value as 'chat' | 'agent'
-              setMode(next)
-              if (next === 'agent') {
-                clearImages()
-                clearDocuments()
-              }
+              setMode(value as 'chat' | 'agent')
             }}
             data={[
               { value: 'chat', label: '问答' },
@@ -471,100 +476,102 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
                   { value: 'hyde', label: 'HyDE' },
                 ]}
               />
-              <Group gap="sm" align="flex-end">
-                <Button component="label" variant="default" disabled={streaming}>
-                  选图
-                  <input
-                    data-testid="image-pick"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    multiple
-                    hidden
-                    onChange={(event) => {
-                      onPickImages(Array.from(event.currentTarget.files ?? []))
-                      event.currentTarget.value = ''
-                    }}
-                  />
-                </Button>
-                {images.length > 0 ? (
-                  <Button variant="subtle" color="red" onClick={clearImages} disabled={streaming}>
-                    清除图片
-                  </Button>
-                ) : null}
-                <Button component="label" variant="default" disabled={streaming}>
-                  选文档
-                  <input
-                    data-testid="document-pick"
-                    type="file"
-                    accept=".pdf,.txt,.md,.docx,.xlsx,application/pdf,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    multiple
-                    hidden
-                    onChange={(event) => {
-                      onPickDocuments(Array.from(event.currentTarget.files ?? []))
-                      event.currentTarget.value = ''
-                    }}
-                  />
-                </Button>
-                {documents.length > 0 ? (
-                  <Button variant="subtle" color="red" onClick={clearDocuments} disabled={streaming}>
-                    清除文档
-                  </Button>
-                ) : null}
-                <Button
-                  variant="default"
-                  data-testid="record-audio"
-                  onClick={() => void onToggleRecord()}
-                  disabled={streaming}
-                >
-                  {recording ? '停止录音' : '麦克风'}
-                </Button>
-              </Group>
-              {imagePreviews.length > 0 ? (
-                <Group gap="sm" data-testid="image-preview-list">
-                  {imagePreviews.map((src, index) => (
-                    <Stack key={`${images[index]?.name ?? index}-${src}`} gap={4} align="flex-start">
-                      <img
-                        data-testid="image-preview"
-                        src={src}
-                        alt={`待发送图片预览 ${index + 1}`}
-                        style={{ maxHeight: 120, maxWidth: 160, objectFit: 'contain' }}
-                      />
-                      <Button
-                        size="xs"
-                        variant="subtle"
-                        color="red"
-                        data-testid={`image-remove-${index}`}
-                        onClick={() => removeImage(index)}
-                        disabled={streaming}
-                      >
-                        清除
-                      </Button>
-                    </Stack>
-                  ))}
-                </Group>
-              ) : null}
-              {documents.length > 0 ? (
-                <Group gap="sm" data-testid="document-chip-list">
-                  {documents.map((file, index) => (
-                    <Group key={`${file.name}-${index}`} gap={4} wrap="nowrap">
-                      <Text size="sm" data-testid={`document-chip-${index}`}>
-                        {file.name}
-                      </Text>
-                      <Button
-                        size="xs"
-                        variant="subtle"
-                        color="red"
-                        data-testid={`document-remove-${index}`}
-                        onClick={() => removeDocument(index)}
-                        disabled={streaming}
-                      >
-                        清除
-                      </Button>
-                    </Group>
-                  ))}
-                </Group>
-              ) : null}
             </>
+          ) : null}
+          <Group gap="sm" align="flex-end">
+            <Button component="label" variant="default" disabled={streaming}>
+              选图
+              <input
+                data-testid="image-pick"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                multiple
+                hidden
+                onChange={(event) => {
+                  onPickImages(Array.from(event.currentTarget.files ?? []))
+                  event.currentTarget.value = ''
+                }}
+              />
+            </Button>
+            {images.length > 0 ? (
+              <Button variant="subtle" color="red" onClick={clearImages} disabled={streaming}>
+                清除图片
+              </Button>
+            ) : null}
+            <Button component="label" variant="default" disabled={streaming}>
+              选文档
+              <input
+                data-testid="document-pick"
+                type="file"
+                accept=".pdf,.txt,.md,.docx,.xlsx,application/pdf,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                multiple
+                hidden
+                onChange={(event) => {
+                  onPickDocuments(Array.from(event.currentTarget.files ?? []))
+                  event.currentTarget.value = ''
+                }}
+              />
+            </Button>
+            {documents.length > 0 ? (
+              <Button variant="subtle" color="red" onClick={clearDocuments} disabled={streaming}>
+                清除文档
+              </Button>
+            ) : null}
+            {mode === 'chat' ? (
+              <Button
+                variant="default"
+                data-testid="record-audio"
+                onClick={() => void onToggleRecord()}
+                disabled={streaming}
+              >
+                {recording ? '停止录音' : '麦克风'}
+              </Button>
+            ) : null}
+          </Group>
+          {imagePreviews.length > 0 ? (
+            <Group gap="sm" data-testid="image-preview-list">
+              {imagePreviews.map((src, index) => (
+                <Stack key={`${images[index]?.name ?? index}-${src}`} gap={4} align="flex-start">
+                  <img
+                    data-testid="image-preview"
+                    src={src}
+                    alt={`待发送图片预览 ${index + 1}`}
+                    style={{ maxHeight: 120, maxWidth: 160, objectFit: 'contain' }}
+                  />
+                  <Button
+                    size="xs"
+                    variant="subtle"
+                    color="red"
+                    data-testid={`image-remove-${index}`}
+                    onClick={() => removeImage(index)}
+                    disabled={streaming}
+                  >
+                    清除
+                  </Button>
+                </Stack>
+              ))}
+            </Group>
+          ) : null}
+          {documents.length > 0 ? (
+            <Group gap="sm" data-testid="document-chip-list">
+              {documents.map((file, index) => (
+                <Group key={`${file.name}-${index}`} gap={4} wrap="nowrap">
+                  <Text size="sm" data-testid={`document-chip-${index}`}>
+                    {file.name}
+                  </Text>
+                  <Button
+                    size="xs"
+                    variant="subtle"
+                    color="red"
+                    data-testid={`document-remove-${index}`}
+                    onClick={() => removeDocument(index)}
+                    disabled={streaming}
+                  >
+                    清除
+                  </Button>
+                </Group>
+              ))}
+            </Group>
           ) : null}
           <Group gap="sm">
             <Button data-testid="stream-submit" onClick={onStream} loading={streaming} disabled={!question.trim()}>

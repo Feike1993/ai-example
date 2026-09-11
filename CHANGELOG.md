@@ -238,7 +238,7 @@ Hybrid RAG、golden 评测、Redis 持久会话、逐步 tool SSE、流式 token
 - `POST /api/v1/media/probe`：JWT / mime / 体积，不调模型；422 `media_unsupported` / `media_too_large`
 - `POST /api/v1/chat/stream` multipart 识图：Spring AI `UserMessage` + `Media`；会话只存 `[图片]` 占位
 - `POST /api/v1/speech/transcribe`、`POST /api/v1/speech/speak`：信封 Key + compatible-mode，不打开 OpenAI Audio 自动配置
-- industrial.html：选图 / 麦克风转写 / 终答朗读；Agent 模式不选图
+- industrial.html：选图 / 麦克风转写 / 终答朗读；Agent 本轮看图见第十二阶段
 - 默认 Playwright 只打探针；真 VL/ASR/TTS 本机选跑
 - 见 [docs/industrial-media.md](docs/industrial-media.md)
 
@@ -246,7 +246,7 @@ Hybrid RAG、golden 评测、Redis 持久会话、逐步 tool SSE、流式 token
 
 - `POST /api/v1/chat/stream` 同名重复 `image`：默认最多 3 张，超过 422 `media_too_many`，不调模型
 - SSE `meta.hasImage` 保留，新增 `meta.imageCount`；落库 `[图片]` / `[图片×N]` 占位，不写 blob
-- industrial.html 多选预览、可单张清除；Agent 模式仍不选图
+- industrial.html 多选预览、可单张清除；Agent 本轮看图见第十二阶段
 - 默认 Playwright：无 JWT POST stream 401；alice 4 张 jpeg 422（不打 VL）
 - 见 [docs/industrial-multi-image.md](docs/industrial-multi-image.md)
 
@@ -255,6 +255,15 @@ Hybrid RAG、golden 评测、Redis 持久会话、逐步 tool SSE、流式 token
 - `POST /api/v1/chat/stream` 同名重复 `document`：pdf / txt / md / docx / xlsx 抽文本进 `UserMessage`；默认最多 2 份，超过 422 `media_too_many`
 - 扫描 PDF 抽出字太少时渲染页，复用现有 VL 只转写；无 Key 503，转写失败 422；默认 E2E 不触发
 - SSE `meta.hasDocument` / `documentCount`；落库 `[文档]` / `[文档×N]` 占位，不写 blob / 抽出正文
-- industrial.html 文档多选（含 Office）、芯片可单件清除；Agent 模式仍不选文档
+- industrial.html 文档多选（含 Office）、芯片可单件清除；Agent 带文档见第十二阶段
 - 默认 Playwright：alice 3 个 tiny txt 422；含违禁词的 txt 422 `input_deny`（不打 LLM / VL）
 - 见 [docs/industrial-doc-attach.md](docs/industrial-doc-attach.md)
+
+## [Unreleased] — 工业级第十二阶段（生产 Agent 本轮看图 / 带文档）
+
+- `POST /api/v1/agent/stream` multipart：同名 `image`/`document`，校验/OCR/护栏与问答相同；超件数 422 `media_too_many`，抽出违禁词 422 `input_deny`
+- 有图先用现有 VL 只转写/简述，再用文本 `ChatModel` 跑工具循环；默认 `qwen-vl-plus` 不支持 Function Calling。仅文档不调 VL。`GET /agent/stream` 仍纯文本
+- SSE `meta.hasImage` / `hasDocument` / `ocrUsed` / `visionTranscribed`；落库复用 `[图片]` / `[文档]` 占位
+- industrial.html Agent 模式可选图/选文档；有附件 POST，无附件仍 GET
+- 默认 Playwright：alice `POST /agent/stream` 3 txt 422；违禁 txt 422（不打 LLM / VL / 真循环）
+- 见 [docs/industrial-agent-media.md](docs/industrial-agent-media.md)

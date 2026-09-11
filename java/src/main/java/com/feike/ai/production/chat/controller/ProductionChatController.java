@@ -9,6 +9,7 @@ import com.feike.ai.production.chat.model.SessionVO;
 import com.feike.ai.production.chat.service.ProductionChatService;
 
 import com.feike.ai.production.agent.manager.ToolPolicy;
+import com.feike.ai.production.agent.model.AgentTurnMedia;
 import com.feike.ai.production.agent.model.AgentToolsVO;
 import com.feike.ai.production.agent.model.ToolProbeQuery;
 import com.feike.ai.production.agent.model.ToolProbeVO;
@@ -18,6 +19,7 @@ import com.feike.ai.production.auth.controller.JwtAuthFilter;
 import com.feike.ai.production.auth.model.ProductionPrincipal;
 import com.feike.ai.production.config.ProductionInstanceIdentity;
 import com.feike.ai.production.media.manager.ProductionDocumentOcr;
+import com.feike.ai.production.media.manager.ProductionImageDescribe;
 import com.feike.ai.production.media.manager.ProductionMediaInspector;
 import com.feike.ai.production.guardrail.service.ProductionGuardrail;
 import com.feike.ai.production.observability.service.ProductionMetrics;
@@ -91,6 +93,7 @@ public class ProductionChatController {
     private final ProductionInstanceIdentity instanceIdentity;
     private final ProductionMediaInspector mediaInspector;
     private final ProductionDocumentOcr documentOcr;
+    private final ProductionImageDescribe imageDescribe;
     private final ProductionGuardrail guardrail;
 
     /**
@@ -106,7 +109,7 @@ public class ProductionChatController {
         SseRunExecutor runExecutor
     ) {
         this(chatService, ingestService, null, runExecutor, null, null, null, null, null, null, null,
-            new ProductionInstanceIdentity("test"), null, null, null);
+            new ProductionInstanceIdentity("test"), null, null, null, null);
     }
 
     /**
@@ -124,6 +127,7 @@ public class ProductionChatController {
      * @param instanceIdentity  本进程短名
      * @param mediaInspector    带图 / 文档校验；测试可空
      * @param documentOcr       扫描 PDF 转写；测试可空
+     * @param imageDescribe     Agent 看图转写；测试可空
      * @param guardrail         输入护栏；测试可空
      */
     @Autowired
@@ -142,6 +146,7 @@ public class ProductionChatController {
         ProductionInstanceIdentity instanceIdentity,
         ProductionMediaInspector mediaInspector,
         ProductionDocumentOcr documentOcr,
+        ProductionImageDescribe imageDescribe,
         ProductionGuardrail guardrail
     ) {
         this.chatService = chatService;
@@ -160,6 +165,7 @@ public class ProductionChatController {
             : instanceIdentity;
         this.mediaInspector = mediaInspector;
         this.documentOcr = documentOcr;
+        this.imageDescribe = imageDescribe;
         this.guardrail = guardrail;
     }
 
@@ -322,45 +328,16 @@ public class ProductionChatController {
         HttpServletResponse response
     ) {
         ProductionPrincipal principal = rateLimit(http, response);
-        List<ChatImage> images = List.of();
-        List<ChatDocument> documents = List.of();
-        boolean ocrUsed = false;
-        boolean hasImages = hasParts(image);
-        boolean hasDocuments = hasParts(document);
-        if (hasImages || hasDocuments) {
-            if (mediaInspector == null) {
-                throw new BusinessException(ErrorCodeEnum.MEDIA_UNSUPPORTED, "不支持的媒体类型");
-            }
-        }
-        if (hasImages) {
-            images = mediaInspector.inspectImages(image);
-        }
-        if (hasDocuments) {
-            documents = mediaInspector.inspectDocuments(document);
-            if (needsOcr(documents)) {
-                if (documentOcr == null) {
-                    throw new BusinessException(ErrorCodeEnum.MEDIA_UNREADABLE, "无法读取文档内容");
-                }
-                ProductionDocumentOcr.OcrBatch batch = documentOcr.transcribeIfNeeded(documents, provider);
-                documents = batch.documents();
-                ocrUsed = batch.ocrUsed();
-            }
-        }
-        if (guardrail != null) {
-            guardrail.checkInput(question);
-            for (ChatDocument extracted : documents) {
-                guardrail.checkInput(extracted.extractedText());
-            }
-        }
+        PreparedAttachments prepared = prepareAttachments(image, document, question, provider, false);
         if (metrics != null) {
             metrics.chatRun();
         }
         attachTrace(response);
         audit(principal, "chat.stream", http, 200, null, question);
         ProductionPrincipal frozen = principal;
-        List<ChatImage> frozenImages = images;
-        List<ChatDocument> frozenDocs = documents;
-        boolean frozenOcr = ocrUsed;
+        List<ChatImage> frozenImages = prepared.images();
+        List<ChatDocument> frozenDocs = prepared.documents();
+        boolean frozenOcr = prepared.ocrUsed();
         return runExecutor.start(writer ->
             chatService.streamAnswer(
                 writer, frozen, sessionId, question, provider, topK, queryExpansion,
@@ -433,6 +410,62 @@ public class ProductionChatController {
         return runExecutor.start(writer -> {
             try {
                 agentService.stream(writer, frozen, sessionId, question, provider);
+            } finally {
+                int durationMs = (int) TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+                audit(frozen, "agent.done", http, 200, writer.runId(), question, durationMs, null, null);
+            }
+        }, runId -> audit(frozen, "agent.stream", http, 200, runId, question));
+    }
+
+    /**
+     * 带图 / 文档的流式 Agent。SSE 契约与 GET 相同。
+     * <p>
+     * 有图时先用现有 VL <strong>只转写/简述</strong>，再把正文交给文本工具循环。
+     * 默认视觉模型不支持 Function Calling，不要把 VL 和 tools 揉成一轮。
+     * 扫描 PDF 仍走文档 OCR；渲染页不进 Agent 识图 Media。
+     *
+     * @param question  任务
+     * @param sessionId 会话
+     * @param provider  模型
+     * @param image     可选同名多图
+     * @param document  可选同名多文档
+     * @param http      身份
+     * @param response  头
+     * @return SSE
+     */
+    @PostMapping(
+        value = "/agent/stream",
+        consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+        produces = MediaType.TEXT_EVENT_STREAM_VALUE
+    )
+    public SseEmitter agentStreamPost(
+        @RequestParam @NotBlank(message = "问题不能为空") String question,
+        @RequestParam(required = false) String sessionId,
+        @RequestParam(required = false) String provider,
+        @RequestParam(required = false) MultipartFile[] image,
+        @RequestParam(required = false) MultipartFile[] document,
+        HttpServletRequest http,
+        HttpServletResponse response
+    ) {
+        ProductionPrincipal principal = rateLimit(http, response);
+        PreparedAttachments prepared = prepareAttachments(image, document, question, provider, true);
+        requireAgent();
+        if (metrics != null) {
+            metrics.agentRun();
+        }
+        attachTrace(response);
+        ProductionPrincipal frozen = principal;
+        AgentTurnMedia media = new AgentTurnMedia(
+            prepared.documents(),
+            prepared.imageTranscript(),
+            prepared.imageCount(),
+            prepared.ocrUsed(),
+            prepared.visionTranscribed()
+        );
+        long startNanos = System.nanoTime();
+        return runExecutor.start(writer -> {
+            try {
+                agentService.stream(writer, frozen, sessionId, question, provider, media);
             } finally {
                 int durationMs = (int) TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
                 audit(frozen, "agent.done", http, 200, writer.runId(), question, durationMs, null, null);
@@ -613,6 +646,68 @@ public class ProductionChatController {
         return false;
     }
 
+    /**
+     * 本轮附件进内存：mime / 件数 / 抽出 / 可选 OCR 或图片 VL 转写，再护栏。
+     * <p>
+     * Agent 有图时 {@code transcribeImages=true}，在进 SSE 前完成转写，失败走 HTTP 422/503，
+     * 不把位图带进工具循环。问答识图仍保留原图给视觉 ChatModel。
+     */
+    private PreparedAttachments prepareAttachments(
+        MultipartFile[] image,
+        MultipartFile[] document,
+        String question,
+        String provider,
+        boolean transcribeImages
+    ) {
+        List<ChatImage> images = List.of();
+        List<ChatDocument> documents = List.of();
+        boolean ocrUsed = false;
+        boolean visionTranscribed = false;
+        String imageTranscript = "";
+        boolean hasImages = hasParts(image);
+        boolean hasDocuments = hasParts(document);
+        if (hasImages || hasDocuments) {
+            if (mediaInspector == null) {
+                throw new BusinessException(ErrorCodeEnum.MEDIA_UNSUPPORTED, "不支持的媒体类型");
+            }
+        }
+        if (hasImages) {
+            images = mediaInspector.inspectImages(image);
+        }
+        if (hasDocuments) {
+            documents = mediaInspector.inspectDocuments(document);
+            if (needsOcr(documents)) {
+                if (documentOcr == null) {
+                    throw new BusinessException(ErrorCodeEnum.MEDIA_UNREADABLE, "无法读取文档内容");
+                }
+                ProductionDocumentOcr.OcrBatch batch = documentOcr.transcribeIfNeeded(documents, provider);
+                documents = batch.documents();
+                ocrUsed = batch.ocrUsed();
+            }
+        }
+        int imageCount = images.size();
+        if (transcribeImages && !images.isEmpty()) {
+            if (imageDescribe == null) {
+                throw new BusinessException(ErrorCodeEnum.MEDIA_UNREADABLE, "无法识别图片内容");
+            }
+            ProductionImageDescribe.DescribeBatch batch = imageDescribe.describe(images, provider);
+            imageTranscript = batch.transcript();
+            visionTranscribed = batch.used();
+            images = List.of();
+        }
+        if (guardrail != null) {
+            guardrail.checkInput(question);
+            for (ChatDocument extracted : documents) {
+                guardrail.checkInput(extracted.extractedText());
+            }
+            if (!imageTranscript.isBlank()) {
+                guardrail.checkInput(imageTranscript);
+            }
+        }
+        return new PreparedAttachments(
+            images, documents, ocrUsed, visionTranscribed, imageTranscript, imageCount);
+    }
+
     private static boolean needsOcr(List<ChatDocument> documents) {
         for (ChatDocument document : documents) {
             if (document.ocrCandidate()) {
@@ -708,4 +803,21 @@ public class ProductionChatController {
      * @param existed   会话原先是否存在
      */
     public record ClearResult(String sessionId, boolean existed) {}
+
+    /**
+     * @param images             问答识图字节；Agent 转写后为空
+     * @param documents          抽出文档
+     * @param ocrUsed            文档是否 OCR
+     * @param visionTranscribed  是否 VL 转写过图片
+     * @param imageTranscript    图片转写正文
+     * @param imageCount         原图张数
+     */
+    private record PreparedAttachments(
+        List<ChatImage> images,
+        List<ChatDocument> documents,
+        boolean ocrUsed,
+        boolean visionTranscribed,
+        String imageTranscript,
+        int imageCount
+    ) {}
 }
