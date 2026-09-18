@@ -1,5 +1,5 @@
 import { SimpleGrid, Stack, Text, Title } from '@mantine/core'
-import type { ReactNode } from 'react'
+import type { ReactNode, Ref, UIEventHandler } from 'react'
 
 type WorkbenchProps = {
   title: string
@@ -7,12 +7,14 @@ type WorkbenchProps = {
   form: ReactNode
   result: ReactNode
   streaming?: boolean
+  resultRef?: Ref<HTMLDivElement>
+  onResultScroll?: UIEventHandler<HTMLDivElement>
 }
 
 /**
  * 输入 | 结果 双栏工作台，各样例面板共用。
  */
-export function Workbench({ title, hint, form, result, streaming = false }: WorkbenchProps) {
+export function Workbench({ title, hint, form, result, streaming = false, resultRef, onResultScroll }: WorkbenchProps) {
   return (
     <Stack gap="md" className="workbench">
       <div>
@@ -30,6 +32,8 @@ export function Workbench({ title, hint, form, result, streaming = false }: Work
         <div
           className={`pane pane-result${streaming ? ' is-streaming' : ''}`}
           style={{ padding: '1.25rem', borderRadius: 6 }}
+          ref={resultRef}
+          onScroll={onResultScroll}
         >
           {result}
         </div>

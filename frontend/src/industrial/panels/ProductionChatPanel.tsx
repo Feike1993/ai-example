@@ -1,5 +1,5 @@
-import { Alert, Badge, Button, Group, NumberInput, SegmentedControl, Stack, Text, Textarea } from '@mantine/core'
-import { useEffect, useRef, useState } from 'react'
+import { Alert, Badge, Button, Collapse, Group, NumberInput, SegmentedControl, Stack, Text, Textarea } from '@mantine/core'
+import { useEffect, useRef, useState, type UIEvent } from 'react'
 import { ApiError, describeError } from '../../api'
 import { MarkdownBody } from '../../components/MarkdownBody'
 import { ResultBody } from '../../components/ResultBody'
@@ -65,6 +65,8 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
   const streamGenRef = useRef(0)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
+  const resultPaneRef = useRef<HTMLDivElement>(null)
+  const followResultRef = useRef(true)
 
   useEffect(() => () => {
     abortRef.current?.abort()
@@ -125,6 +127,7 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
     setMalformed(0)
     setBusy(false)
     setStatus('streaming')
+    followResultRef.current = true
 
     const asked = question
     const imagePrefix =
@@ -454,6 +457,14 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
   const streaming = status === 'streaming'
   const visible = pending ? [...turns, pending] : turns
 
+  // 每个 delta 到达后，仅在用户仍停留在底部时跟随最新内容；手动上翻阅读历史不被打断。
+  useEffect(() => {
+    const pane = resultPaneRef.current
+    if (streaming && pane && followResultRef.current) {
+      pane.scrollTop = pane.scrollHeight
+    }
+  }, [pending?.answer, streaming])
+
   return (
     <Workbench
       title="生产问答"
@@ -664,6 +675,11 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
           ) : null}
         </ResultBody>
       }
+      resultRef={resultPaneRef}
+      onResultScroll={(event: UIEvent<HTMLDivElement>) => {
+        const pane = event.currentTarget
+        followResultRef.current = pane.scrollHeight - pane.clientHeight - pane.scrollTop <= 48
+      }}
     />
   )
 }
@@ -750,20 +766,31 @@ function StepList({ steps }: { steps: AgentStep[] }) {
 }
 
 function SourceList({ sources }: { sources: ProductionSource[] }) {
+  const [opened, setOpened] = useState(false)
+
   return (
     <Stack gap={6}>
-      <Text size="sm" fw={600}>
-        检索来源（{sources.length}）
-      </Text>
-      {sources.map((source) => (
-        <div key={source.id} className="industrial-source">
-          <Text size="xs" c="dimmed">
-            {source.source}
-            {source.heading ? ` · ${source.heading}` : ''}
-          </Text>
-          <Text size="sm">{source.excerpt}</Text>
-        </div>
-      ))}
+      <Group justify="space-between" gap="xs">
+        <Text size="sm" fw={600}>
+          检索来源（{sources.length}）
+        </Text>
+        <Button size="xs" variant="subtle" onClick={() => setOpened((value) => !value)}>
+          {opened ? '收起来源' : '查看来源'}
+        </Button>
+      </Group>
+      <Collapse expanded={opened}>
+        <Stack gap={6}>
+          {sources.map((source) => (
+            <div key={source.id} className="industrial-source">
+              <Text size="xs" c="dimmed">
+                {source.source}
+                {source.heading ? ` · ${source.heading}` : ''}
+              </Text>
+              <Text size="sm">{source.excerpt}</Text>
+            </div>
+          ))}
+        </Stack>
+      </Collapse>
     </Stack>
   )
 }

@@ -109,6 +109,25 @@ body {
   border-color: var(--industrial-accent);
 }
 
+/*
+ * 工业级问答的回答可能远长于左侧配置。通用 Workbench 默认让两栏等高，
+ * 会把整个页面撑得很长；这里让结果面板在桌面端独立滚动，输入区仍可完整展开。
+ */
+@media (min-width: 48em) {
+  .industrial-main .workbench-grid {
+    align-items: start;
+  }
+
+  .industrial-main .pane-result {
+    position: sticky;
+    top: 1rem;
+    max-height: min(52rem, calc(100dvh - 16rem));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+}
+
 .markdown-body {
   line-height: 1.7;
   word-break: break-word;
