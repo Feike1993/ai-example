@@ -7,7 +7,7 @@ COPY mcp-server/settings.gradle mcp-server/build.gradle mcp-server/gradle.proper
 RUN chmod +x ./gradlew
 
 # BuildKit cache：跨构建复用 ~/.gradle（发行包 + 依赖），避免每次重下
-RUN --mount=type=cache,target=/root/.gradle \
+RUN --mount=type=cache,id=ai-example-mcp-gradle,target=/root/.gradle \
     set -eu; \
     for attempt in 1 2 3; do \
         ./gradlew --no-daemon dependencies && exit 0; \
@@ -16,7 +16,7 @@ RUN --mount=type=cache,target=/root/.gradle \
     done
 
 COPY mcp-server/src ./src
-RUN --mount=type=cache,target=/root/.gradle \
+RUN --mount=type=cache,id=ai-example-mcp-gradle,target=/root/.gradle \
     ./gradlew --no-daemon bootJar
 
 FROM eclipse-temurin:25-jdk-jammy
