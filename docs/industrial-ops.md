@@ -53,7 +53,7 @@ least_conn；SSE 不缓冲
       ▼       ▼       ▼
 PostgreSQL  Redis   Micrometer
 / pgvector   │        │
-             │        └── Prometheus :9090 ── Grafana :3000
+             │        └── Prometheus :9090 ── Grafana :3300（容器内 :3000）
              └── Stream、任务 Hash、SSE 事件、会话锁
 ```
 
@@ -168,7 +168,7 @@ ENTRY=http://127.0.0.1:8088/ai-example
 2. 仓库根目录有 `.env`，其中 `PRODUCTION_KEK` 是 Base64 编码的 32 字节 AES-256 key。可用 `openssl rand -base64 32` 生成。
 3. `PRODUCTION_EVENT_LOG=redis`。设成 `memory` 时，入库会退回进程内队列，不能验收双实例竞争消费。
 4. `PRODUCTION_METRICS_TOKEN` 必须与 `deploy/prometheus/prometheus.yml` 中的 Bearer 一致。
-5. `:8080`、`:8082`、`:8088`、`:9090`、`:3000` 未被占用。端口冲突时修改映射，不要终止无关进程。
+5. `:8080`、`:8082`、`:8088`、`:9090`、`:3300` 未被占用。端口冲突时修改映射，不要终止无关进程。
 
 先检查配置，不启动服务：
 
@@ -430,7 +430,7 @@ curl -fsS http://127.0.0.1:9090/api/v1/targets \
 
 浏览器验证：
 
-1. 打开 `http://127.0.0.1:3000`，默认账号/密码为 `admin` / `admin`。
+1. 打开 `http://127.0.0.1:3300`，默认账号/密码为 `admin` / `admin`。
 2. 进入 `Industrial` 文件夹，打开「工业级 /api/v1」（UID `industrial-prod`）。
 3. 投递一次 ingest 或执行一次工业请求，等待至少一个 10 秒 scrape 周期。
 4. 确认看板有按 `instance` 区分的时序；不要要求两实例 counter 完全相等。

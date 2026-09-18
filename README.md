@@ -290,7 +290,7 @@ RUN_REDIS_IT=true REDIS_IT_HOST=localhost REDIS_IT_PORT=6379 \
 - **第四阶段 E2E**：`cd frontend && pnpm test:e2e`。默认套件覆盖登录、安全/可观测面板、401、alice ingest 403、输入护栏、alice/admin 工具探针、媒体探针 401/422、带图流式无 JWT 401、超张数 422、文档超件数 / 抽出违禁词 422、Agent 带文档超件数 / 违禁词 422（不打 Chat LLM / VL / ASR / TTS / 真 Agent 循环）。空检索会先走 Embedding，因此 `pnpm test:e2e:keys` 仅在已配 `PROVIDER_DASHSCOPE_API_KEY` 时跑。可选 `PLAYWRIGHT_BASE_URL=http://localhost:8088` 打 Compose 前端；不要用 `vite preview`（无 API 代理）。
 - **第五阶段压测**：`./loadtest/run.sh all`（Java 需在 8080 且已设 `PRODUCTION_KEK`）。本机 k6 打 `/api/v1`：廉价读、护栏 422、令牌桶 429、登录限流。默认不打 Chat LLM / Embedding，不进 CI。说明见 [loadtest/README.md](loadtest/README.md)。
 - **第六阶段多实例**：Compose 起 `java-a` + `java-b`，Nginx `:8088` 负载均衡。验证步骤（起栈、脚本、手工 curl、端口冲突）见 [docs/industrial-ha.md](docs/industrial-ha.md)；一键对照 `./scripts/industrial-ha.sh`。
-- **第七阶段**：生产 RAG 可选 rewrite/HyDE；ADMIN ingest 走 Redis Stream；`POST /api/v1/secrets/rotate` 本地重加密；Compose Prometheus `:9090` + Grafana `:3000`（scrape token，不匿名）；`./loadtest/run.sh` 写 `loadtest/results/latest-summary.json`，可观测面板展示。人工验证（起栈、curl、页面、KEK 轮换、Grafana、压测摘要）见 [docs/industrial-ops.md](docs/industrial-ops.md)。
+- **第七阶段**：生产 RAG 可选 rewrite/HyDE；ADMIN ingest 走 Redis Stream；`POST /api/v1/secrets/rotate` 本地重加密；Compose Prometheus `:9090` + Grafana `:3300`（容器内仍为 `3000`；scrape token，不匿名）；`./loadtest/run.sh` 写 `loadtest/results/latest-summary.json`，可观测面板展示。人工验证（起栈、curl、页面、KEK 轮换、Grafana、压测摘要）见 [docs/industrial-ops.md](docs/industrial-ops.md)。
 - **第八阶段**：`GET /api/v1/agent/tools` + `POST /api/v1/agent/tool-probe`（无 LLM）；审计补 `tool_name`/`denied`；`GET /api/v1/ops/runs/{runId}` 从 SSE 日志重建步骤。人工验证见 [docs/industrial-agent.md](docs/industrial-agent.md)。
 - **第九阶段**：`POST /api/v1/media/probe`（只校验 mime/体积）；`POST /api/v1/chat/stream` multipart 识图（不落 blob）；`POST /api/v1/speech/transcribe` / `speak`。默认 E2E 不打 VL/ASR/TTS。见 [docs/industrial-media.md](docs/industrial-media.md)。
 - **第十阶段**：一轮多图，同名重复 `image` part，默认最多 3 张；超张数 422 `media_too_many`；落库 `[图片]` / `[图片×N]` 占位。见 [docs/industrial-multi-image.md](docs/industrial-multi-image.md)。
@@ -317,7 +317,7 @@ RUN_REDIS_IT=true REDIS_IT_HOST=localhost REDIS_IT_PORT=6379 \
 
 **信封加密，不用 Vault。** LLM Key 与 JWT HMAC 用 AES-256-GCM 写入 Postgres 表 `prod_secret`。能解开密文的主密钥 KEK 只来自环境变量 `PRODUCTION_KEK`（`openssl rand -base64 32`），**永不入库**。轮换窗口内可同时设 `PRODUCTION_KEK_PREVIOUS`，ADMIN `POST /api/v1/secrets/rotate` 用当前 KEK 重加密；云 KMS 仍不做。缺 KEK 时应用照常启动，`/api/v1` 返回 503。
 
-**可观测。** 业务指标见 `GET /api/v1/ops/snapshot`（需登录）。Prometheus 刮取 `/ai-example/actuator/prometheus` 用 `PRODUCTION_METRICS_TOKEN`（Compose 默认 `dev-metrics-token`），不放行匿名。Grafana `http://localhost:3000`（默认 admin/admin），Jaeger `http://localhost:16686`。压测摘要 `GET /api/v1/ops/loadtest`。响应头带 `traceparent`，SSE `meta` 带 `traceId`。
+**可观测。** 业务指标见 `GET /api/v1/ops/snapshot`（需登录）。Prometheus 刮取 `/ai-example/actuator/prometheus` 用 `PRODUCTION_METRICS_TOKEN`（Compose 默认 `dev-metrics-token`），不放行匿名。Grafana `http://localhost:3300`（默认 admin/admin；容器内端口仍为 `3000`），Jaeger `http://localhost:16686`。压测摘要 `GET /api/v1/ops/loadtest`。响应头带 `traceparent`，SSE `meta` 带 `traceId`。
 
 **Agent。** `POST /api/v1/agent` 与 `GET /api/v1/agent/stream` 为纯文本；带附件走 `POST /api/v1/agent/stream` multipart。USER 能用 `search_kb` / `add` / `get_weather`；`rebuild_index` 仅 ADMIN。被拒工具会发 `step` 且 `denied:true`。
 
@@ -376,4 +376,3 @@ uv run python -m ai_example.samples.mcp_client_http
 uv run python -m ai_example.samples.hyde_rag
 uv run pytest
 ```
-

@@ -68,7 +68,7 @@ curl -sS -D - -o /tmp/run.json \
 
 ## 4. Grafana
 
-探针几次后打开 `http://localhost:3000` 看板「工业级 /api/v1」，应有 Agent 次数、工具拒绝。匿名 `/actuator/prometheus` 仍不是 200。
+探针几次后打开 `http://localhost:3300` 看板「工业级 /api/v1」，应有 Agent 次数、工具拒绝。匿名 `/actuator/prometheus` 仍不是 200。
 
 ## 5. 可选单测
 

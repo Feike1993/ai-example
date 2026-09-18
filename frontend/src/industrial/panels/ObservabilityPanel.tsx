@@ -7,7 +7,7 @@ import { getLastRunId, getLastTraceId, rememberTraceId } from '../lib/auth'
 import { getLoadtestSummary, getOpsSnapshot, getRunTimeline, type OpsSnapshot } from '../lib/productionApi'
 
 const JAEGER_UI = 'http://localhost:16686'
-const GRAFANA_UI = 'http://localhost:3000'
+const GRAFANA_UI = 'http://localhost:3300'
 
 /**
  * 可观测面板：业务指标快照与 Jaeger 深链。
