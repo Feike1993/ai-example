@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { ApiError, describeError } from '../../api'
 import { ResultBody } from '../../components/ResultBody'
 import { Workbench } from '../../components/Workbench'
-import { getLastRunId, getLastTraceId, rememberTraceId } from '../lib/auth'
+import { getLastRunId, getLastTraceId } from '../lib/auth'
 import { getLoadtestSummary, getOpsSnapshot, getRunTimeline, type OpsSnapshot } from '../lib/productionApi'
 
 const JAEGER_UI = 'http://localhost:16686'
@@ -25,7 +25,6 @@ export function ObservabilityPanel() {
     try {
       const data = await getOpsSnapshot()
       setSnapshot(data)
-      rememberTraceId(data.traceId)
       const lastRun = getLastRunId()
       if (lastRun) {
         setRunId(lastRun)
@@ -45,7 +44,7 @@ export function ObservabilityPanel() {
     void load()
   }, [])
 
-  const traceId = snapshot?.traceId || lastTrace
+  const traceId = lastTrace ?? snapshot?.traceId
   const rows: Array<[string, string | number]> = snapshot
     ? [
         ['问答次数', snapshot.chatRuns],

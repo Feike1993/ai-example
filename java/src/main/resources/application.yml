@@ -32,7 +32,9 @@ management:
     tracing:
       export:
         otlp:
-          endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+          # 不使用 OTEL_EXPORTER_OTLP_ENDPOINT：该 SDK 保留变量把它当基础 URL，
+          # 会自动追加 /v1/traces，传入完整路径会变成重复路径并导致 Jaeger 404。
+          endpoint: ${APP_OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
   endpoint:
     health:
       probes:
