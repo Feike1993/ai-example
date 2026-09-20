@@ -65,7 +65,6 @@ import tools.jackson.databind.json.JsonMapper;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -562,7 +561,7 @@ public class ProductionChatController {
     @PostMapping("/agent/tool-probe")
     public ToolProbeVO toolProbe(@Valid @RequestBody ToolProbeQuery query, HttpServletRequest http) {
         ProductionPrincipal principal = principal(http);
-        String tool = query.tool().trim().toLowerCase(Locale.ROOT);
+        String tool = ToolPolicy.normalize(query.tool());
         boolean allowed = ToolPolicy.allows(principal, tool);
         if (!allowed && metrics != null) {
             metrics.toolDenied();

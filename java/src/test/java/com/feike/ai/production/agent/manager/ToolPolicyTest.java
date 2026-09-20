@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("ToolPolicy")
@@ -24,5 +25,13 @@ class ToolPolicyTest {
     void adminShouldAllowRebuildIndex() {
         ProductionPrincipal admin = new ProductionPrincipal("admin", "tenant-a", Set.of("ADMIN", "USER"));
         assertTrue(ToolPolicy.allows(admin, "rebuild_index"));
+    }
+
+    @Test
+    void shouldNormalizeToolNameBeforePolicyCheck() {
+        ProductionPrincipal admin = new ProductionPrincipal("admin", "tenant-a", Set.of("ADMIN", "USER"));
+
+        assertEquals("rebuild_index", ToolPolicy.normalize(" REBUILD_INDEX "));
+        assertTrue(ToolPolicy.allows(admin, " REBUILD_INDEX "));
     }
 }

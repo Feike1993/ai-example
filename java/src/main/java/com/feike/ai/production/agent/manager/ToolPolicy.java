@@ -19,6 +19,7 @@ public final class ToolPolicy {
     private ToolPolicy() {}
 
     /**
+     * 按角色返回允许的工具名。
      * @param principal 调用方
      * @return 允许的工具名
      */
@@ -37,10 +38,20 @@ public final class ToolPolicy {
      * @return 是否允许执行
      */
     public static boolean allows(ProductionPrincipal principal, String toolName) {
-        if (toolName == null || toolName.isBlank()) {
+        String normalized = normalize(toolName);
+        if (normalized.isEmpty()) {
             return false;
         }
-        return allowed(principal).contains(toolName.trim().toLowerCase(Locale.ROOT))
-            || allowed(principal).contains(toolName.trim());
+        return allowed(principal).contains(normalized);
+    }
+
+    /**
+     * 规范化外部传入的工具名，供权限判断、审计与接口响应使用。
+     *
+     * @param toolName 工具名
+     * @return 去除首尾空白并转换为小写后的工具名；空值返回空字符串
+     */
+    public static String normalize(String toolName) {
+        return toolName == null ? "" : toolName.trim().toLowerCase(Locale.ROOT);
     }
 }
