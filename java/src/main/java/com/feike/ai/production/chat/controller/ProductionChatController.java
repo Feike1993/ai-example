@@ -710,13 +710,23 @@ public class ProductionChatController {
     /**
      * 本轮附件进内存：mime / 件数 / 抽出 / 可选 OCR 或图片 VL 转写，再护栏。
      * <p>
+     * 处理顺序刻意固定为“判断有效附件 → 媒体校验与内容抽取 → 必要时模型转写 →
+     * 对最终文本统一执行输入护栏”。这样可以先在受控边界内拒绝超量、超大或类型不符的文件，
+     * 再把文档抽取文本和图片转写文本纳入与用户问题相同的安全检查，避免附件内容绕过护栏。
+     * <p>
+     * 文档优先使用本地数字文本抽取，仅对标记为 {@link ChatDocument#ocrCandidate() OCR 候选}
+     * 的扫描 PDF 调用视觉模型。OCR 返回后不再保留源文件字节，降低本轮后续处理的内存占用。
+     * <p>
      * Agent 有图时 {@code transcribeImages=true}，在进 SSE 前完成转写，失败走 HTTP 422/503，
      * 不把位图带进工具循环。问答识图仍保留原图给视觉 ChatModel。
-     * @param image            图片附件
-     * @param document         文档附件
-     * @param question         问题
-     * @param provider         提供者
-     * @param transcribeImages 是否转写图片
+     *
+     * @param image            图片附件；数组可空，空 part 会被忽略
+     * @param document         文档附件；数组可空，空 part 会被忽略
+     * @param question         用户问题，将与附件抽取出的文本一起接受输入护栏检查
+     * @param provider         OCR 和图片转写使用的视觉模型提供者；为空时由模型工厂使用默认配置
+     * @param transcribeImages 是否先把图片转成文本；{@code true} 用于 Agent，{@code false} 用于视觉问答
+     * @return 已校验并完成必要转写的附件，以及 OCR、图片转写和原始图片数量元数据
+     * @throws BusinessException 当媒体能力未装配、附件不合法、内容不可读或模型转写失败时
      */
     private PreparedAttachments prepareAttachments(
         MultipartFile[] image,
@@ -725,11 +735,15 @@ public class ProductionChatController {
         String provider,
         boolean transcribeImages
     ) {
+        // 下游始终接收不可变空集合和空字符串而非 null，调用方无需为“无附件”另开分支。
         List<ChatImage> images = List.of();
         List<ChatDocument> documents = List.of();
         boolean ocrUsed = false;
         boolean visionTranscribed = false;
         String imageTranscript = "";
+
+        // Spring 可能传入 null 数组、null 元素或空 part；只有实际有内容时才要求媒体组件存在，
+        // 从而允许未装配媒体能力的部署继续处理纯文本请求。
         boolean hasImages = hasParts(image);
         boolean hasDocuments = hasParts(document);
         if (hasImages || hasDocuments) {
@@ -737,31 +751,45 @@ public class ProductionChatController {
                 throw new BusinessException(ErrorCodeEnum.MEDIA_UNSUPPORTED, "不支持的媒体类型");
             }
         }
+
+        // 所有图片先统一执行数量、大小、MIME 与文件特征校验；后续模型只接触已通过边界检查的字节。
         if (hasImages) {
             images = mediaInspector.inspectImages(image);
         }
         if (hasDocuments) {
+            // inspectDocuments 同时完成媒体校验和本地文本抽取；此阶段不直接调用视觉模型。
             documents = mediaInspector.inspectDocuments(document);
             if (needsOcr(documents)) {
+                // 仅扫描 PDF 等本地抽取不足的候选需要 OCR；能力未装配时明确失败，
+                // 不能把内容为空或不完整的文档静默交给后续模型。
                 if (documentOcr == null) {
                     throw new BusinessException(ErrorCodeEnum.MEDIA_UNREADABLE, "无法读取文档内容");
                 }
+                // 批处理器会保留已成功数字抽取的文档，只转写候选文档，并在转写后清除源字节。
                 ProductionDocumentOcr.OcrBatch batch = documentOcr.transcribeIfNeeded(documents, provider);
                 documents = batch.documents();
                 ocrUsed = batch.ocrUsed();
             }
         }
+
+        // Agent 路径随后会丢弃图片，因此必须先保存原始张数，供响应、审计或指标描述本轮附件规模。
         int imageCount = images.size();
         if (transcribeImages && !images.isEmpty()) {
+            // 工具循环使用文本模型，而默认视觉模型不保证支持 Function Calling；先把图片转成受控文本，
+            // 再交给 Agent，可避免在同一轮同时传递位图和转写文本造成重复理解或能力不兼容。
             if (imageDescribe == null) {
                 throw new BusinessException(ErrorCodeEnum.MEDIA_UNREADABLE, "无法识别图片内容");
             }
             ProductionImageDescribe.DescribeBatch batch = imageDescribe.describe(images, provider);
             imageTranscript = batch.transcript();
             visionTranscribed = batch.used();
+            // 转写完成后位图不再参与 Agent 请求；清空既表达消费语义，也缩短大字节数组的存活链路。
             images = List.of();
         }
+
         if (guardrail != null) {
+            // 护栏放在抽取和转写之后，确保用户原问题、文档正文和图片正文走同一安全边界；
+            // 同时仍位于聊天或 Agent 调用之前，命中规则时不会启动后续 SSE 与模型执行。
             guardrail.checkInput(question);
             for (ChatDocument extracted : documents) {
                 guardrail.checkInput(extracted.extractedText());

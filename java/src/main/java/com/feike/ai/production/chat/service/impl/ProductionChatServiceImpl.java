@@ -327,6 +327,7 @@ public class ProductionChatServiceImpl implements ProductionChatService {
         int documentCount = documents == null ? 0 : documents.size();
         boolean hasImage = imageCount > 0;
         boolean hasDocument = documentCount > 0;
+        // 如果有图片，则优先使用图片提供者
         String effectiveProvider = provider;
         if (hasImage && (effectiveProvider == null || effectiveProvider.isBlank())) {
             effectiveProvider = properties.media().visionProvider();

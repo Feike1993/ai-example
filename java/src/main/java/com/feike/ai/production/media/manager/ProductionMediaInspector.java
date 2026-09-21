@@ -188,22 +188,44 @@ public class ProductionMediaInspector {
         return inspectBody(file, kind).probe();
     }
 
+    /**
+     * 一次性读取并校验上传文件，同时把校验摘要与原始字节返回给后续处理。
+     * <p>
+     * 这里将 {@link MultipartFile} 转成字节后复用同一份内容，避免调用方为了抽取、转写或构造
+     * 模型消息而再次读取上传流。实际的大小限制、MIME 归一化、允许列表、文件特征校验和
+     * SHA-256 计算统一委托给 {@link #inspectBytes(byte[], String, MediaKindEnum)}，保证文件上传
+     * 与内存字节两条入口遵循同一套安全边界。
+     *
+     * @param file 上传文件，不能为空或空文件
+     * @param kind 调用方期望的媒体种类，用于约束 MIME 允许范围
+     * @return 已校验的媒体摘要及其原始字节；两者对应同一次读取
+     * @throws BusinessException 当文件为空、读取失败或未通过媒体校验时
+     */
     private InspectedMedia inspectBody(MultipartFile file, MediaKindEnum kind) {
+        // 在读取上传流之前统一拒绝空 part，避免将“未上传”误判成无法识别的媒体类型。
         if (file == null || file.isEmpty()) {
             reject(ErrorCodeEnum.BAD_REQUEST, "未上传文件");
         }
+
         byte[] body;
         try {
+            // MultipartFile 的底层实现可能来自内存或临时文件；只读取一次，后续校验与消费共享该字节数组。
             body = file.getBytes();
         } catch (IOException ex) {
+            // 上传内容读取失败属于客户端请求无法完成，而不是媒体格式不受支持。
             throw new BusinessException(ErrorCodeEnum.BAD_REQUEST, "无法读取上传文件");
         }
+
         String declared = file.getContentType();
         if (declared == null || declared.isBlank()) {
+            // 部分客户端不会发送 Content-Type，此时文件扩展名只作为 MIME 候选提示；
+            // inspectBytes 仍会结合允许列表和文件特征校验，不能仅凭文件名信任内容。
             declared = file.getOriginalFilename() == null
                 ? ""
                 : mimeFromName(file.getOriginalFilename());
         }
+
+        // 摘要和 body 必须来自同一份字节，避免校验内容与后续实际处理内容不一致（TOCTOU）。
         return new InspectedMedia(inspectBytes(body, declared, kind), body);
     }
 
