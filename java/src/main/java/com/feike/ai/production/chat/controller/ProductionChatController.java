@@ -92,8 +92,8 @@ public class ProductionChatController {
     private final ProductionMetrics metrics;
     private final JsonMapper jsonMapper;
     private final Tracer tracer;
-    private final ProductionInstanceIdentity instanceIdentity;
-    private final ProductionMediaInspector mediaInspector;
+    private final ProductionInstanceIdentity instanceIdentity;//
+    private final ProductionMediaInspector mediaInspector; //
     private final ProductionDocumentOcr documentOcr;
     private final ProductionImageDescribe imageDescribe;
     private final ProductionGuardrail guardrail;
@@ -690,6 +690,11 @@ public class ProductionChatController {
         return JwtAuthFilter.require(http);
     }
 
+    /**
+     * 是否有附件。
+     * @param files 附件
+     * @return 是否有附件
+     */
     private static boolean hasParts(MultipartFile[] files) {
         if (files == null) {
             return false;
@@ -707,6 +712,11 @@ public class ProductionChatController {
      * <p>
      * Agent 有图时 {@code transcribeImages=true}，在进 SSE 前完成转写，失败走 HTTP 422/503，
      * 不把位图带进工具循环。问答识图仍保留原图给视觉 ChatModel。
+     * @param image            图片附件
+     * @param document         文档附件
+     * @param question         问题
+     * @param provider         提供者
+     * @param transcribeImages 是否转写图片
      */
     private PreparedAttachments prepareAttachments(
         MultipartFile[] image,
@@ -882,6 +892,7 @@ public class ProductionChatController {
     public record ClearResult(String sessionId, boolean existed) {}
 
     /**
+     * 准备附件。
      * @param images             问答识图字节；Agent 转写后为空
      * @param documents          抽出文档
      * @param ocrUsed            文档是否 OCR

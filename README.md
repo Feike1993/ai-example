@@ -140,25 +140,43 @@ docker compose down
 
 ## 本地开发（宿主机）
 
-改 Java / 前端时不要用整套 Compose 跑 `java-a` / `java-b` 与 `frontend` 容器，让依赖进 Docker、应用留在本机。四个终端（或等价后台进程）：
+改 Java / 前端时不要用整套 Compose 跑 `java-a` / `java-b` 与 `frontend` 容器，让依赖进 Docker、应用留在本机。先复制环境文件，然后按实际需要启动下面的服务；Docker 命令会在后台运行，MCP、Java 和前端命令各在一个终端执行。
 
 ```bash
 cp .env.example .env
 # 至少填 PROVIDER_DEEPSEEK_API_KEY（聊天）与 PROVIDER_DASHSCOPE_API_KEY（RAG Embedding）
 # 工业级 /api/v1 还需要 PRODUCTION_KEK（例如 openssl rand -base64 32）
 
-# 1) 依赖：把端口打到宿主机。Jaeger 可选（见下方 Trace）
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis
+# 必选：PostgreSQL + pgvector（Java 启动、RAG 都需要）
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres
 
-# 2) MCP 远端（默认 app.ai.mcp.mode=remote）。只跑教学 inprocess 可跳过
-cd mcp-server && ./gradlew bootRun
+# 可选：Redis（工业级 /api/v1 的 run 状态、SSE 断线续传需要；只跑教学样例可不启动）
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d redis
 
-# 3) Java 主服务（会读仓库根目录 .env）
-cd java && ./gradlew bootRun
+# 可选：Jaeger（仅在 .env 打开 OTEL_TRACING_EXPORT=true 后需要）
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d jaeger
 
-# 4) Playground
-cd frontend && pnpm install && pnpm dev
+# 可选：Prometheus + Grafana（工业级指标看板；会连同 java-a、java-b 一起启动）
+# 先停止宿主机的 Java，避免 java-a 占用 8080
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build prometheus grafana
+
+# 可选：独立 MCP Server（默认 MCP_MODE=remote 需要；MCP_MODE=inprocess 时跳过）
+(cd mcp-server && ./gradlew bootRun)
+
+# Java 主服务（会读仓库根目录 .env）
+(cd java && ./gradlew bootRun)
+
+# Playground 前端
+(cd frontend && pnpm install && pnpm dev)
 ```
+
+| 服务 | 何时启动 | 宿主机地址 / 说明 |
+| --- | --- | --- |
+| PostgreSQL + pgvector | 必选 | `localhost:5432` |
+| Redis | 工业级 `/api/v1/**` 必选；教学样例可选 | `localhost:6379` |
+| Jaeger | 需要查看 Trace 时可选 | UI：`http://localhost:16686/`；OTLP：`localhost:4318` |
+| MCP Server | `MCP_MODE=remote` 时必选；`inprocess` 时可选 | `http://localhost:8081/mcp` |
+| Prometheus + Grafana | 工业级指标看板可选 | `http://localhost:9090/`、`http://localhost:3300/`；会启动 Compose 双 Java，不能与宿主机 Java 同时运行 |
 
 
 | 入口         | 地址                                                                             |
@@ -277,6 +295,39 @@ RUN_REDIS_IT=true REDIS_IT_HOST=localhost REDIS_IT_PORT=6379 \
   ./gradlew test --tests RedisSessionLockIT
 ```
 
+## 跑前端
+
+```bash
+cd frontend
+pnpm install
+pnpm dev
+```
+
+打开 [http://localhost:5173](http://localhost:5173) 。侧栏含各期样例（进阶含 Hybrid / 评测 / 记忆 / HyDE；MCP 默认 remote，可面板切 inprocess；remote 需 mcp-server）。工业级入口：[http://localhost:5173/industrial.html](http://localhost:5173/industrial.html) 。
+
+```bash
+pnpm test          # Vitest + Testing Library（SSE / Markdown 等）
+pnpm test:e2e        # 工业级 Playwright 默认套件（无头；缺 Chromium 时会先下载）
+pnpm test:e2e:headed # 弹出浏览器并放慢操作，便于看过程
+pnpm test:e2e:ui     # Playwright UI，可逐步回放
+pnpm test:e2e:keys   # 空检索 / ingest / 跨租户（另需 Embedding Key）
+pnpm build
+```
+
+请在 `frontend/` 下执行。仓库根也可以 `pnpm test:e2e`（只转发到 frontend，没有 `pnpm start`）。
+
+## 跑 Python 对照
+
+```bash
+cd python
+uv sync --group dev
+uv run python -m ai_example.samples.context_memory
+uv run python -m ai_example.samples.multi_agent
+uv run python -m ai_example.samples.mcp_client_http
+uv run python -m ai_example.samples.hyde_rag
+uv run pytest
+```
+
 ## 工业级链路（与 samples 分开）
 
 后端包 `com.feike.ai.production`，HTTP 前缀 `/ai-example/api/v1/**`，与教学样例路径不重叠。前端独立入口 [industrial.html](frontend/industrial.html)（样例场侧栏也有跳转）。
@@ -343,36 +394,3 @@ RUN_REDIS_IT=true REDIS_IT_HOST=localhost REDIS_IT_PORT=6379 \
 **落库失败不改变已发出的结论。** 答案此刻已经流到用户屏幕上了，再发 `error` 只会让人不知道到底成没成。持久化异常降级为 `done` 负载里的 `persisted:false`，前端据此提示「本轮未计入历史」。
 
 **锁不是正确性的前提。** Redis 锁在主从切换、网络分区、持有者停顿超过 TTL 时都可能被两个持有者同时认为归自己所有，所以它只负责减少冲突、给用户一个明确的「会话忙」（`session_busy`，同步接口 409）。真正兜底的是 `prod_chat_message` 的复合主键与 `turn_id` 唯一索引。
-
-## 跑前端
-
-```bash
-cd frontend
-pnpm install
-pnpm dev
-```
-
-打开 [http://localhost:5173](http://localhost:5173) 。侧栏含各期样例（进阶含 Hybrid / 评测 / 记忆 / HyDE；MCP 默认 remote，可面板切 inprocess；remote 需 mcp-server）。工业级入口：[http://localhost:5173/industrial.html](http://localhost:5173/industrial.html) 。
-
-```bash
-pnpm test          # Vitest + Testing Library（SSE / Markdown 等）
-pnpm test:e2e        # 工业级 Playwright 默认套件（无头；缺 Chromium 时会先下载）
-pnpm test:e2e:headed # 弹出浏览器并放慢操作，便于看过程
-pnpm test:e2e:ui     # Playwright UI，可逐步回放
-pnpm test:e2e:keys   # 空检索 / ingest / 跨租户（另需 Embedding Key）
-pnpm build
-```
-
-请在 `frontend/` 下执行。仓库根也可以 `pnpm test:e2e`（只转发到 frontend，没有 `pnpm start`）。
-
-## 跑 Python 对照
-
-```bash
-cd python
-uv sync --group dev
-uv run python -m ai_example.samples.context_memory
-uv run python -m ai_example.samples.multi_agent
-uv run python -m ai_example.samples.mcp_client_http
-uv run python -m ai_example.samples.hyde_rag
-uv run pytest
-```

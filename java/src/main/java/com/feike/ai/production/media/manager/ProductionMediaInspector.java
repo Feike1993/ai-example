@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Locale;
 
 /**
+ * 媒体校验器
  * 只校验 mime / 体积并算 SHA-256，不调模型、不落盘。
  * <p>
  * 探针、带图问答、本轮文档、转写共用这一把尺子，避免三处各写各的上限。
