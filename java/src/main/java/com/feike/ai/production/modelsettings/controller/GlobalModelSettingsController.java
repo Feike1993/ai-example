@@ -28,5 +28,11 @@ public class GlobalModelSettingsController {
     @PutMapping("/routes/{capability}") public void saveRoute(@PathVariable String capability, @RequestBody RouteUpsertRequest body, HttpServletRequest http) {
         ProductionPrincipal p = requireAdmin(http); settings.saveRoute(capability, body); models.invalidate(); audit.record(p.tenantId(), p.subject(), "model.route.save", "/api/v1/model-settings/routes/" + capability, 204, null, null, null, null);
     }
-    private static ProductionPrincipal requireAdmin(HttpServletRequest http) { ProductionPrincipal p = JwtAuthFilter.require(http); if (!p.admin()) throw new BusinessException(ErrorCodeEnum.FORBIDDEN); return p; }
+    private static ProductionPrincipal requireAdmin(HttpServletRequest http) {
+        ProductionPrincipal p = JwtAuthFilter.require(http);
+        if (!p.admin()) {
+            throw new BusinessException(ErrorCodeEnum.FORBIDDEN, "禁止访问，只有admin 用户有访问权限");
+        }
+        return p;
+    }
 }
