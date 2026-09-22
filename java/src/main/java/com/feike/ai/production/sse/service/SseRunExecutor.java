@@ -108,26 +108,9 @@ public class SseRunExecutor {
         SseEmitter emitter = new SseEmitter(timeoutMs + EMITTER_GRACE_MS);
         String owner = tenantId == null || tenantId.isBlank() ? MDC.get("tenant") : tenantId;
         SseStreamWriter writer = new SseStreamWriter(
-            runId, new SseEmitterSink(emitter), eventLog, jsonMapper, owner);
+            runId, createSink(emitter), eventLog, jsonMapper, owner);
 
         AtomicReference<Future<?>> taskRef = new AtomicReference<>();
-        writer.onDisconnect(() -> cancelTask(taskRef));
-
-        Map<String, String> mdc = MDC.getCopyOfContextMap();
-        Future<?> task = workers.submit(() -> {
-            if (mdc != null) {
-                MDC.setContextMap(mdc);
-            }
-            try {
-                pipeline.accept(writer);
-            } finally {
-                MDC.clear();
-                // 管线无论如何收场，都不能留下 STREAMING 的僵尸 run
-                writer.close();
-            }
-        });
-        taskRef.set(task);
-
         long heartbeatMs = properties.stream().heartbeatInterval().toMillis();
         ScheduledFuture<?> heartbeat = scheduler.scheduleAtFixedRate(
             writer::heartbeat, heartbeatMs, heartbeatMs, TimeUnit.MILLISECONDS);
@@ -138,23 +121,37 @@ public class SseRunExecutor {
                 cancelTask(taskRef);
             }
         }, timeoutMs, TimeUnit.MILLISECONDS);
-
         Runnable cleanup = () -> {
             heartbeat.cancel(false);
             watchdog.cancel(false);
         };
-        emitter.onCompletion(cleanup);
-        emitter.onTimeout(() -> {
-            cleanup.run();
-            cancelTask(taskRef);
-            writer.cancel();
+
+        Map<String, String> mdc = MDC.getCopyOfContextMap();
+        Future<?> task = workers.submit(() -> {
+            if (mdc != null) {
+                MDC.setContextMap(mdc);
+            }
+            try {
+                pipeline.accept(writer);
+            } finally {
+                try {
+                    // 管线无论如何收场，都不能留下 STREAMING 的僵尸 run
+                    writer.close();
+                } finally {
+                    cleanup.run();
+                    MDC.clear();
+                }
+            }
         });
-        emitter.onError(ex -> {
-            cleanup.run();
-            cancelTask(taskRef);
-            writer.cancel();
-        });
+        taskRef.set(task);
         return emitter;
+    }
+
+    /**
+     * 创建首次连接的事件出口。包可见性用于断连回归测试注入会抛异常的 sink。
+     */
+    EventSink createSink(SseEmitter emitter) {
+        return new SseEmitterSink(emitter);
     }
 
     /**

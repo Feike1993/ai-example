@@ -11,7 +11,6 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -119,15 +118,11 @@ class SseStreamWriterTest {
         RecordingSink sink = new RecordingSink();
         InMemoryRunEventLogDAOImpl log = new InMemoryRunEventLogDAOImpl();
         SseStreamWriter writer = new SseStreamWriter("run-6", sink, log, JSON);
-        AtomicBoolean disconnected = new AtomicBoolean(false);
-        writer.onDisconnect(() -> disconnected.set(true));
-
         writer.delta("先收到这段");
         sink.breakConnection();
         writer.delta("断开后的这段只入日志");
         writer.done(Map.of());
 
-        assertTrue(disconnected.get(), "断开应触发取消回调");
         assertEquals(1, sink.written().size(), "断开后不应再写出");
         // 日志里仍是完整的三条，重连才能补齐
         assertEquals(3, log.replay("run-6", -1).size());

@@ -24,8 +24,8 @@ import java.util.concurrent.atomic.AtomicLong;
  *   <li>终态事件恰好一条且必须是最后一条，终态之后的写入直接丢弃并告警；</li>
  *   <li>所有写出的事件同时落到 {@link RunEventLogDAO}，断线重连才有东西可回放。</li>
  * </ol>
- * 写出失败（客户端已断开）不再向上抛：此时业务侧继续算下去也没人接收，
- * 但事件仍然记进日志，重连后可以补齐——这正是「断流不等于失败」的实现基础。
+ * 写出失败（客户端已断开）不再向上抛：业务管线会继续生成，
+ * 后续事件仍然记进日志，重连后可以补齐——这正是「断流不等于失败」的实现基础。
  */
 public class SseStreamWriter implements AutoCloseable {
 
@@ -39,7 +39,6 @@ public class SseStreamWriter implements AutoCloseable {
     private final AtomicBoolean terminated = new AtomicBoolean(false);
     private volatile RunStateEnum terminalState;
     private volatile boolean sinkBroken;
-    private volatile Runnable disconnectListener;
 
     /**
      * @param runId      本次 run 标识
@@ -91,22 +90,6 @@ public class SseStreamWriter implements AutoCloseable {
      */
     public RunStateEnum terminalState() {
         return terminalState;
-    }
-
-    /**
-     * 注册「客户端已断开」回调，只会触发一次。
-     * <p>
-     * 写出失败是这里唯一能察觉断开的时机——SseEmitter 的 onError 不一定被触发，
-     * 因为 send 抛出的 IOException 被本类吞掉了。调用方据此中断上游 LLM 调用，
-     * 否则一个已经没人看的回答会继续烧 token 直到生成结束。
-     *
-     * @param listener 断开回调
-     */
-    public void onDisconnect(Runnable listener) {
-        this.disconnectListener = listener;
-        if (sinkBroken) {
-            listener.run();
-        }
     }
 
     /**
@@ -248,10 +231,6 @@ public class SseStreamWriter implements AutoCloseable {
         }
         sinkBroken = true;
         log.info("run={} 连接已断开，后续事件只入日志等待重连: {}", runId, ex.toString());
-        Runnable listener = disconnectListener;
-        if (listener != null) {
-            listener.run();
-        }
     }
 
     private String serialize(Object payload) {

@@ -10,8 +10,8 @@ import java.io.IOException;
  * 把事件写进 Spring MVC 的 {@link SseEmitter}。
  * <p>
  * 用 SseEmitter 而不是样例里的 {@code Flux<ServerSentEvent>}：本模块需要显式控制
- * {@code id:} 字段（Last-Event-ID 续传的载体）、心跳注释帧，以及在客户端断开时
- * 立刻回调取消上游 LLM 调用，这些在 Flux 返回值上都得绕。
+ * {@code id:} 字段（Last-Event-ID 续传的载体）和心跳注释帧。
+ * 客户端断开只关闭当前传输，不取消后台 run；后续事件仍写入日志供续传。
  */
 public class SseEmitterSink implements EventSink {
 
