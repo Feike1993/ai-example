@@ -114,6 +114,9 @@ public class DashScopeSpeechClient {
      */
     public byte[] speak(String text) {
         ModelRouteVO route = route("tts", media.ttsProvider(), media.ttsModel());
+        if (isDashScopeQwenTts(route)) {
+            return speakDashScopeQwenTts(route, text);
+        }
         Map<String, String> payload = Map.of(
             "model", route.model(),
             "input", text,
@@ -137,6 +140,42 @@ public class DashScopeSpeechClient {
         return audio;
     }
 
+    /**
+     * Qwen-TTS 不兼容 OpenAI {@code /audio/speech}：先取得 DashScope 返回的签名音频 URL，再下载音频。
+     */
+    private byte[] speakDashScopeQwenTts(ModelRouteVO route, String text) {
+        Map<String, Object> payload = Map.of(
+            "model", route.model(),
+            "input", Map.of("text", text, "voice", effectiveVoice(route))
+        );
+        HttpRequest request = authorizedDashScopeQwenTts(route.providerId())
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofByteArray(jsonMapper.writeValueAsBytes(payload)))
+            .build();
+        HttpResponse<String> response = sendText(request);
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            throw speechFailed("语音合成失败", response.body());
+        }
+        String audioUrl = audioUrl(response.body());
+        if (audioUrl == null || audioUrl.isBlank()) {
+            throw speechFailed("语音合成失败", response.body());
+        }
+        HttpResponse<byte[]> audioResponse = sendBytes(HttpRequest.newBuilder(URI.create(audioUrl))
+            .timeout(REQUEST_TIMEOUT)
+            .GET()
+            .build());
+        if (audioResponse.statusCode() < 200 || audioResponse.statusCode() >= 300) {
+            String body = new String(audioResponse.body() == null ? new byte[0] : audioResponse.body(), StandardCharsets.UTF_8);
+            throw speechFailed("语音音频下载失败", body);
+        }
+        byte[] audio = audioResponse.body();
+        if (audio == null || audio.length == 0) {
+            throw new BusinessException(ErrorCodeEnum.SPEECH_FAILED, "语音合成返回空音频，请稍后重试");
+        }
+        return audio;
+    }
+
     private HttpRequest.Builder authorized(String providerId, String path) {
         if (!secrets.available()) {
             throw new SecretUnavailableException("工业级密钥不可用，无法调用语音接口");
@@ -156,9 +195,51 @@ public class DashScopeSpeechClient {
             .header("Authorization", "Bearer " + apiKey);
     }
 
+    private HttpRequest.Builder authorizedDashScopeQwenTts(String providerId) {
+        if (!secrets.available()) {
+            throw new SecretUnavailableException("工业级密钥不可用，无法调用语音接口");
+        }
+        AiProperties.Provider cfg = aiProperties.providers().get(providerId);
+        if (cfg == null) {
+            throw new BusinessException(ErrorCodeEnum.UNKNOWN_PROVIDER, "未知 LLM Provider: " + providerId);
+        }
+        String apiKey = secrets.get(SecretResolver.llmKey(providerId)).orElse("");
+        if (apiKey.isBlank()) {
+            throw new SecretUnavailableException("prod_secret 中没有 llm." + providerId);
+        }
+        URI base = URI.create(cfg.baseUrl());
+        String endpoint = base.getScheme() + "://" + base.getAuthority()
+            + "/api/v1/services/aigc/multimodal-generation/generation";
+        return HttpRequest.newBuilder()
+            .uri(URI.create(endpoint))
+            .timeout(REQUEST_TIMEOUT)
+            .header("Authorization", "Bearer " + apiKey);
+    }
+
     private ModelRouteVO route(String capability, String fallbackProvider, String fallbackModel) {
         ModelRouteVO route = settings == null ? null : settings.route(capability);
         return route == null ? new ModelRouteVO(capability, fallbackProvider, fallbackModel, null) : route;
+    }
+
+    private static boolean isDashScopeQwenTts(ModelRouteVO route) {
+        return "dashscope".equals(route.providerId())
+            && (route.model().startsWith("qwen3-tts-") || route.model().startsWith("qwen-tts"));
+    }
+
+    private String effectiveVoice(ModelRouteVO route) {
+        return route.voice() == null || route.voice().isBlank() ? media.ttsVoice() : route.voice();
+    }
+
+    private String audioUrl(String body) {
+        try {
+            JsonNode root = jsonMapper.readTree(body);
+            JsonNode output = root.get("output");
+            JsonNode audio = output == null ? null : output.get("audio");
+            JsonNode url = audio == null ? null : audio.get("url");
+            return url == null || url.isNull() ? null : url.asText("");
+        } catch (RuntimeException ex) {
+            return null;
+        }
     }
 
     private HttpResponse<String> sendText(HttpRequest request) {
