@@ -6,11 +6,13 @@ import { getAudit, getMe, postChat, postIngest, postMediaProbe, postToolProbe, p
 describe('productionApi 鉴权头', () => {
   beforeEach(() => {
     sessionStorage.clear()
+    localStorage.clear()
   })
 
   afterEach(() => {
     vi.unstubAllGlobals()
     sessionStorage.clear()
+    localStorage.clear()
   })
 
   it('登录后请求带 Authorization', async () => {

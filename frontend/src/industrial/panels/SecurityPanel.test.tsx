@@ -12,12 +12,14 @@ function renderPanel(ui: ReactElement) {
 describe('SecurityPanel', () => {
   beforeEach(() => {
     sessionStorage.clear()
+    localStorage.clear()
     setSession('tok-1', { username: 'alice', tenant: 'tenant-a', roles: ['USER'] })
   })
 
   afterEach(() => {
     vi.unstubAllGlobals()
     sessionStorage.clear()
+    localStorage.clear()
   })
 
   it('展示本租户审计列表', async () => {

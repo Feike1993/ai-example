@@ -1,4 +1,4 @@
-/** sessionStorage 键：工业级 JWT。刷新页保留，关标签页即清。 */
+/** 同源页签共享的登录态键。退出登录时主动清理。 */
 const TOKEN_KEY = 'ai-example.production.token'
 const USER_KEY = 'ai-example.production.user'
 const RATE_KEY = 'ai-example.production.rateRemaining'
@@ -25,19 +25,29 @@ export const DEMO_ACCOUNTS: Array<{ username: string; tenant: string; roles: str
  * @returns 当前访问令牌；未登录为 null
  */
 export function getAccessToken(): string | null {
-  return sessionStorage.getItem(TOKEN_KEY)
+  const shared = localStorage.getItem(TOKEN_KEY)
+  if (shared) {
+    return shared
+  }
+  const legacy = sessionStorage.getItem(TOKEN_KEY)
+  if (legacy) {
+    localStorage.setItem(TOKEN_KEY, legacy)
+  }
+  return legacy
 }
 
 /**
  * @returns 登录时缓存的主体
  */
 export function getProductionUser(): ProductionUser | null {
-  const raw = sessionStorage.getItem(USER_KEY)
+  const raw = localStorage.getItem(USER_KEY) ?? sessionStorage.getItem(USER_KEY)
   if (!raw) {
     return null
   }
   try {
-    return JSON.parse(raw) as ProductionUser
+    const user = JSON.parse(raw) as ProductionUser
+    localStorage.setItem(USER_KEY, raw)
+    return user
   } catch {
     return null
   }
@@ -50,12 +60,16 @@ export function getProductionUser(): ProductionUser | null {
  * @param user  主体
  */
 export function setSession(token: string, user: ProductionUser): void {
-  sessionStorage.setItem(TOKEN_KEY, token)
-  sessionStorage.setItem(USER_KEY, JSON.stringify(user))
+  localStorage.setItem(TOKEN_KEY, token)
+  localStorage.setItem(USER_KEY, JSON.stringify(user))
+  sessionStorage.removeItem(TOKEN_KEY)
+  sessionStorage.removeItem(USER_KEY)
 }
 
 /** 清登录态，不派发事件。 */
 export function clearAuth(): void {
+  localStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem(USER_KEY)
   sessionStorage.removeItem(TOKEN_KEY)
   sessionStorage.removeItem(USER_KEY)
 }

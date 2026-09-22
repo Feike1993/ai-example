@@ -23,7 +23,7 @@ export function SceneToolbar({ scene, user, onLogin, onLogout }: SceneToolbarPro
         </a>
       </nav>
       <div className="scene-toolbar-actions">
-        <a className="scene-settings-link" href="/industrial.html?section=modelSettings">
+        <a className="scene-settings-link" href="/industrial.html?section=modelSettings" target="_blank" rel="noopener noreferrer">
           <span aria-hidden="true">⚙</span>
           模型与服务设置
         </a>
