@@ -82,6 +82,30 @@ describe('ProductionChatPanel', () => {
     expect(screen.getByText('这是答案。')).toBeInTheDocument()
   })
 
+  it('断流后优先展示事件日志中的业务错误', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes('/ops/runs/run-1')) {
+        return new Response(JSON.stringify({
+          runId: 'run-1',
+          state: 'ERROR',
+          tenant: 'tenant-a',
+          mode: null,
+          steps: [],
+          done: null,
+          error: { code: 'citation_required', message: '回答缺少有效引用，已拒绝展示' },
+        }), { status: 200 })
+      }
+      return sseResponse([META, SOURCES, DELTA])
+    }) as unknown as typeof fetch)
+    renderPanel(<ProductionChatPanel provider="deepseek" />)
+
+    await userEvent.click(screen.getByRole('button', { name: '流式提问' }))
+
+    await waitFor(() => expect(screen.getByText('回答缺少有效引用，已拒绝展示')).toBeInTheDocument())
+    expect(screen.getByText('citation_required')).toBeInTheDocument()
+    expect(screen.queryByText('结果可能不完整')).toBeNull()
+  })
+
   it('HTTP 错误展示后端中文业务句', async () => {
     vi.stubGlobal('fetch', fakeFetch([], {
       status: 503,

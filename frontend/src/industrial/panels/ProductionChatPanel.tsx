@@ -6,7 +6,7 @@ import { ResultBody } from '../../components/ResultBody'
 import { Workbench } from '../../components/Workbench'
 import { authHeaders, notifyUnauthorized, rememberRunId, rememberTraceId } from '../lib/auth'
 import { mergeAgentSteps } from '../lib/agentSteps'
-import { agentStreamForm, agentStreamPostUrl, chatStreamForm, chatStreamPostUrl, clearSession, getIngestJob, getSession, postIngest, postSpeak, postTranscribe, PRODUCTION_MAX_DOCUMENTS, PRODUCTION_MAX_IMAGES, resumeUrl } from '../lib/productionApi'
+import { agentStreamForm, agentStreamPostUrl, chatStreamForm, chatStreamPostUrl, clearSession, getIngestJob, getRunTimeline, getSession, postIngest, postSpeak, postTranscribe, PRODUCTION_MAX_DOCUMENTS, PRODUCTION_MAX_IMAGES, resumeUrl } from '../lib/productionApi'
 import { toTurns, type Turn } from '../lib/sessionTurns'
 import {
   StreamAbortedError,
@@ -25,6 +25,28 @@ const SESSION_STORAGE_KEY = 'ai-example.production.sessionId'
 
 /** 会话被占用时后端返回的错误码，与 ProductionChatService.SESSION_BUSY 一致。 */
 const SESSION_BUSY = 'session_busy'
+
+/**
+ * 首个 SSE 连接和续传都断开时，事件日志可能已经记录了明确的业务终态。
+ * 优先恢复它，避免把“引用缺失”等可读错误笼统显示成“结果可能不完整”。
+ */
+async function terminalError(runId: string | null): Promise<{ code: string | null; message: string } | null> {
+  if (!runId) {
+    return null
+  }
+  try {
+    const timeline = await getRunTimeline(runId)
+    const message = timeline.error?.message
+    if (typeof message !== 'string' || message.trim() === '') {
+      return null
+    }
+    const code = timeline.error?.code
+    return { code: typeof code === 'string' ? code : null, message }
+  } catch {
+    // 时间线同样不可用时，仍按真正断流处理。
+    return null
+  }
+}
 
 /**
  * 生产链路多轮问答面板。
@@ -253,8 +275,18 @@ export function ProductionChatPanel({ provider }: ProductionChatPanelProps) {
           setErrorCode(err.code)
         }
       } else if (err instanceof StreamAbortedError) {
-        setError(err.message)
-        setErrorCode(null)
+        const recovered = await terminalError(err.runId)
+        if (streamGenRef.current !== requestId) {
+          return
+        }
+        if (recovered) {
+          update({ incomplete: false })
+          setError(recovered.message)
+          setErrorCode(recovered.code)
+        } else {
+          setError(err.message)
+          setErrorCode(null)
+        }
       } else if (err instanceof ApiError && err.status === 401) {
         notifyUnauthorized()
       } else if (err instanceof ApiError) {
