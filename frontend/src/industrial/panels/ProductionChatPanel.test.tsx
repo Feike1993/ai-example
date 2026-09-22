@@ -71,6 +71,20 @@ describe('ProductionChatPanel', () => {
     expect(screen.getByText('hybrid')).toBeInTheDocument()
   })
 
+  it('未显式选择 Provider 时交给后端全局能力路由', async () => {
+    const inner = fakeFetch([META, SOURCES, DELTA, USAGE, DONE])
+    const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) => inner(input, init))
+    vi.stubGlobal('fetch', fetchImpl as unknown as typeof fetch)
+    renderPanel(<ProductionChatPanel />)
+
+    await userEvent.click(screen.getByRole('button', { name: '流式提问' }))
+    await waitFor(() => expect(screen.getByText('已完成')).toBeInTheDocument())
+
+    const streamCall = fetchImpl.mock.calls.find((call) => String(call[0]).includes('/chat/stream'))
+    const body = JSON.parse(String(streamCall?.[1]?.body)) as Record<string, unknown>
+    expect(body).not.toHaveProperty('provider')
+  })
+
   it('中途断流标注结果不完整，而不是当成回答完毕', async () => {
     vi.stubGlobal('fetch', fakeFetch([META, SOURCES, DELTA]))
     renderPanel(<ProductionChatPanel provider="deepseek" />)

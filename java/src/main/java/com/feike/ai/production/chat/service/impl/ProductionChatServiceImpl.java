@@ -327,11 +327,9 @@ public class ProductionChatServiceImpl implements ProductionChatService {
         int documentCount = documents == null ? 0 : documents.size();
         boolean hasImage = imageCount > 0;
         boolean hasDocument = documentCount > 0;
-        // 如果有图片，则优先使用图片提供者
+        // 保留空 Provider：生成层会按附件类型分别采用全局 chat / vision 能力路由。
+        // 在这里写入启动配置会绕过数据库中的全局模型设置。
         String effectiveProvider = provider;
-        if (hasImage && (effectiveProvider == null || effectiveProvider.isBlank())) {
-            effectiveProvider = properties.media().visionProvider();
-        }
         try {
             History history = loadHistory(principal, sessionId);
             org.slf4j.MDC.put("runId", writer.runId());

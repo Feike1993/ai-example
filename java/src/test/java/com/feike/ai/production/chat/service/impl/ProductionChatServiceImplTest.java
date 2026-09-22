@@ -126,7 +126,11 @@ class ProductionChatServiceImplTest {
         CollectingSink sink = new CollectingSink();
         service.streamAnswer(writer(sink), ALICE, null, "描述图片", null, null, null, jpeg, "image/jpeg");
 
-        verify(generator).stream(anyString(), any(), any(), any(), any(), any(), any());
+        verify(retrieval).retrieve(org.mockito.ArgumentMatchers.argThat(query ->
+            query != null && query.provider() == null
+        ));
+        verify(generator).stream(
+            anyString(), org.mockito.ArgumentMatchers.isNull(), any(), any(), any(), any(), any());
         assertTrue(sink.dataOf(StreamEventTypeEnum.META).contains("\"hasImage\":true"));
         assertTrue(sink.dataOf(StreamEventTypeEnum.META).contains("\"imageCount\":1"));
         assertTrue(sink.dataOf(StreamEventTypeEnum.DELTA).contains("猫"));

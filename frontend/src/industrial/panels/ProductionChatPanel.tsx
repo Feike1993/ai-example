@@ -18,7 +18,8 @@ import {
 } from '../lib/sseClient'
 
 type ProductionChatPanelProps = {
-  provider: string
+  /** 显式覆盖 Provider；未传时由后端按 chat / vision 能力路由。 */
+  provider?: string
 }
 
 const SESSION_STORAGE_KEY = 'ai-example.production.sessionId'

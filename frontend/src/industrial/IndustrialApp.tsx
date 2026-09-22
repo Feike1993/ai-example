@@ -76,7 +76,7 @@ export function IndustrialApp() {
       </AppShell.Navbar>
       <AppShell.Main>
         <SceneToolbar scene="industrial" user={user} onLogin={() => undefined} onLogout={onLogout} />
-        {section === 'chat' && <ProductionChatPanel provider="deepseek" />}
+        {section === 'chat' && <ProductionChatPanel />}
         {section === 'modelSettings' && <ModelSettingsPanel />}
         {section === 'security' && <SecurityPanel onLogout={onLogout} />}
         {section === 'observability' && <ObservabilityPanel />}
