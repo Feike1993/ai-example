@@ -80,6 +80,26 @@ export type OpsSnapshot = {
   ingestError?: string | null
 }
 
+export type GlobalProvider = { id: string; label: string; baseUrl: string; model: string; capabilities: string[]; keyConfigured: boolean }
+export type ModelRoute = { capability: string; providerId: string; model: string; voice: string | null }
+export type ModelSettings = { providers: GlobalProvider[]; routes: ModelRoute[] }
+
+export async function getModelSettings(fetchImpl: typeof fetch = fetch): Promise<ModelSettings> {
+  return requestJson<ModelSettings>(`${PRODUCTION_BASE}/model-settings`, { method: 'GET' }, fetchImpl)
+}
+
+export async function putModelRoute(capability: string, body: Omit<ModelRoute, 'capability'>, fetchImpl: typeof fetch = fetch): Promise<void> {
+  await requestJson<void>(`${PRODUCTION_BASE}/model-settings/routes/${encodeURIComponent(capability)}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  }, fetchImpl)
+}
+
+export async function putGlobalProvider(id: string, body: { label: string; baseUrl: string; model: string; capabilities: string[]; apiKey?: string }, fetchImpl: typeof fetch = fetch): Promise<void> {
+  await requestJson<void>(`${PRODUCTION_BASE}/model-settings/providers/${encodeURIComponent(id)}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  }, fetchImpl)
+}
+
 /** 一条已落库的会话消息，与后端 SessionMessage 对齐。 */
 export type SessionMessage = {
   seq: number
@@ -538,6 +558,9 @@ async function requestJson<T>(
   if (!response.ok) {
     const parsed = parseProductionError(response.status, text)
     throw new ApiError(response.status, text, parsed.message, parsed.code)
+  }
+  if (response.status === 204 || text.trim() === '') {
+    return undefined as T
   }
   return JSON.parse(text) as T
 }

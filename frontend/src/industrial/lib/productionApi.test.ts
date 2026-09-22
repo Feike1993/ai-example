@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api'
 import { getAccessToken, setSession, UNAUTHORIZED_EVENT } from './auth'
-import { getAudit, getMe, postChat, postIngest, postMediaProbe, postToolProbe, agentStreamForm, agentStreamPostUrl, chatStreamForm, chatStreamUrl } from './productionApi'
+import { getAudit, getMe, postChat, postIngest, postMediaProbe, postToolProbe, putGlobalProvider, agentStreamForm, agentStreamPostUrl, chatStreamForm, chatStreamUrl } from './productionApi'
 
 describe('productionApi 鉴权头', () => {
   beforeEach(() => {
@@ -91,6 +91,18 @@ describe('productionApi 鉴权头', () => {
     const call = fetchImpl.mock.calls[0] as unknown as [RequestInfo, RequestInit?]
     expect(String(call[0])).toContain('/agent/tool-probe')
     expect(call[1]?.method).toBe('POST')
+  })
+
+  it('Provider 保存成功时允许 200 空响应体', async () => {
+    setSession('tok-1', { username: 'admin', tenant: 'tenant-a', roles: ['ADMIN'] })
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 200 }))
+
+    await expect(putGlobalProvider('deepseek', {
+      label: 'DeepSeek',
+      baseUrl: 'https://api.deepseek.com',
+      model: 'deepseek-flash',
+      capabilities: ['chat', 'tools'],
+    }, fetchImpl as unknown as typeof fetch)).resolves.toBeUndefined()
   })
 
   it('流式地址默认不带 queryExpansion，HyDE 才写入', () => {

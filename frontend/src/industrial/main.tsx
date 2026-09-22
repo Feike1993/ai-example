@@ -1,6 +1,7 @@
 import '@mantine/core/styles.css'
 import '@mantine/notifications/styles.css'
 import './industrial.css'
+import '../shared/scene-toolbar.css'
 
 import { MantineProvider } from '@mantine/core'
 import { Notifications } from '@mantine/notifications'

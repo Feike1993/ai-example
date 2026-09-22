@@ -284,6 +284,8 @@ export type ProviderView = {
   label: string
   model: string
   configured: boolean
+  /** 老版本目录未提供时，前端按仅支持 chat 安全降级。 */
+  capabilities?: string[]
 }
 
 export type ProviderListResponse = {

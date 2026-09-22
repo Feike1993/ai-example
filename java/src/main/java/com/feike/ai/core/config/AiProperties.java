@@ -3,8 +3,10 @@ package com.feike.ai.core.config;
 import com.feike.ai.samples.mcp.service.McpSampleService;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -96,6 +98,7 @@ public record AiProperties(
      *                       否则默认开思考会把正文写进 {@code reasoning}、{@code content} 为空
      * @param bypassProxy    {@code true} 时 OkHttp 使用 {@link java.net.Proxy#NO_PROXY}，
      *                       避免 IDE/系统 HTTPS 代理把「公网域名解析到内网 IP」的网关打到代理上超时
+     * @param capabilities   此 Provider 当前模型支持的能力，例如 {@code chat}、{@code vision}、{@code embedding}
      */
     public record Provider(
         String label,
@@ -104,8 +107,33 @@ public record AiProperties(
         String model,
         Double temperature,
         Boolean enableThinking,
-        Boolean bypassProxy
-    ) {}
+        Boolean bypassProxy,
+        List<String> capabilities
+    ) {
+        /** 保持既有测试和代码中的七参数 Provider 构造方式兼容。 */
+        public Provider(
+            String label,
+            String baseUrl,
+            String apiKey,
+            String model,
+            Double temperature,
+            Boolean enableThinking,
+            Boolean bypassProxy
+        ) {
+            this(label, baseUrl, apiKey, model, temperature, enableThinking, bypassProxy, List.of("chat"));
+        }
+
+        @ConstructorBinding
+        public Provider {
+            capabilities = capabilities == null || capabilities.isEmpty()
+                ? List.of("chat")
+                : capabilities.stream()
+                    .filter(item -> item != null && !item.isBlank())
+                    .map(item -> item.trim().toLowerCase(java.util.Locale.ROOT))
+                    .distinct()
+                    .toList();
+        }
+    }
 
     /**
      * 结构化输出的重试与修复开关。

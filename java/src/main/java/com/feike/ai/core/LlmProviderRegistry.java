@@ -66,7 +66,7 @@ public class LlmProviderRegistry {
             String id = entry.getKey();
             String label = cfg.label() == null || cfg.label().isBlank() ? id : cfg.label();
             boolean configured = cfg.apiKey() != null && !cfg.apiKey().isBlank();
-            views.add(new ProviderVO(id, label, cfg.model(), configured));
+            views.add(new ProviderVO(id, label, cfg.model(), configured, cfg.capabilities()));
         }
         return views;
     }

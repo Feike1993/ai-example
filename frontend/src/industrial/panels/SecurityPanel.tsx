@@ -176,12 +176,14 @@ export function SecurityPanel({ onLogout }: SecurityPanelProps) {
 
 type LoginFormProps = {
   onLoggedIn: () => void
+  title?: string
+  subtitle?: string
 }
 
 /**
  * 工业级登录门。
  */
-export function LoginForm({ onLoggedIn }: LoginFormProps) {
+export function LoginForm({ onLoggedIn, title = '工业级链路登录', subtitle = '教学样例路径仍然匿名开放；这里只武装 /api/v1。演示密码均为 demo。' }: LoginFormProps) {
   const [username, setUsername] = useState('alice')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -208,10 +210,10 @@ export function LoginForm({ onLoggedIn }: LoginFormProps) {
   return (
     <Stack gap="md" maw={420} mx="auto" mt="xl">
       <Text fw={700} size="lg" data-testid="login-title">
-        工业级链路登录
+        {title}
       </Text>
       <Text size="sm" c="dimmed">
-        教学样例路径仍然匿名开放；这里只武装 /api/v1。演示密码均为 demo。
+        {subtitle}
       </Text>
       {error ? (
         <Alert color="red" variant="light" title="登录失败">

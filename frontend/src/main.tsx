@@ -3,6 +3,7 @@ import '@mantine/notifications/styles.css'
 import '@mantine/code-highlight/styles.css'
 import 'highlight.js/styles/github.css'
 import './styles.css'
+import './shared/scene-toolbar.css'
 
 import { CodeHighlightAdapterProvider, createHighlightJsAdapter } from '@mantine/code-highlight'
 import { MantineProvider } from '@mantine/core'

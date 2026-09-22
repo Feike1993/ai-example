@@ -7,6 +7,9 @@
   --industrial-ink: #10151c;
   --industrial-line: #d6dbe2;
   --industrial-accent: #2f6f5f;
+  --industrial-sidebar: #e5eeea;
+  --industrial-sidebar-ink: #183b32;
+  --industrial-sidebar-muted: #516a62;
 }
 
 body {
@@ -17,8 +20,10 @@ body {
 }
 
 .industrial-navbar {
-  background: var(--industrial-ink);
-  border-right: none;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.3), transparent 38%),
+    var(--industrial-sidebar);
+  border-right: 1px solid rgba(39, 91, 77, 0.12);
 }
 
 .industrial-navbar-inner {
@@ -26,11 +31,12 @@ body {
   flex-direction: column;
   justify-content: space-between;
   height: 100%;
-  color: #e7ebf0;
+  color: var(--industrial-sidebar-ink);
 }
 
 .industrial-navbar-inner :where(.mantine-Text-root) {
-  color: #93a1b1;
+  color: var(--industrial-sidebar-muted);
+  font-weight: 500;
 }
 
 .industrial-wordmark {
@@ -43,40 +49,183 @@ body {
 }
 
 .industrial-wordmark-mark {
-  padding: 0.1rem 0.35rem;
-  border-radius: 3px;
-  background: var(--industrial-accent);
+  padding: 0.16rem 0.48rem;
+  border-radius: 5px;
+  background: #2b7d69;
   color: #fff;
   font-size: 0.85rem;
+  box-shadow: 0 5px 14px rgba(40, 112, 92, 0.18);
 }
 
 .industrial-wordmark-rest {
   font-size: 1.05rem;
-  color: #e7ebf0;
+  color: #183b32;
+  font-weight: 800;
 }
 
 .industrial-nav-item {
-  border-radius: 4px;
-  color: #c6cfd9;
+  position: relative;
+  margin-bottom: 0.3rem;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: #294c42;
+  transition: background 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.industrial-nav-item:hover {
+  background: rgba(255, 255, 255, 0.55);
+  color: #123f34;
 }
 
 .industrial-nav-item[data-active] {
-  background: rgba(47, 111, 95, 0.24);
-  color: #fff;
+  border-color: rgba(47, 126, 105, 0.15);
+  background: rgba(255, 255, 255, 0.92);
+  color: #0f4739;
+  box-shadow: 0 8px 22px rgba(38, 84, 71, 0.08);
 }
 
-.industrial-back {
-  color: #93a1b1;
-  font-size: 0.75rem;
-  text-decoration: none;
+.industrial-nav-item[data-active]::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 22%;
+  width: 3px;
+  height: 56%;
+  border-radius: 0 3px 3px 0;
+  background: #2aa78a;
 }
 
-.industrial-back:hover {
-  color: #fff;
+.industrial-nav-item .mantine-NavLink-description {
+  color: var(--industrial-sidebar-muted);
+  font-weight: 500;
+}
+
+.industrial-nav-item[data-active] .mantine-NavLink-description {
+  color: #42665c;
+}
+
+.industrial-nav-item .mantine-NavLink-label {
+  font-weight: 650;
+  letter-spacing: -0.01em;
 }
 
 .industrial-main {
   background: #f4f6f8;
+}
+
+.model-settings-page {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding-bottom: 2rem;
+}
+
+.model-settings-heading h1 {
+  letter-spacing: -0.04em;
+}
+
+.model-settings-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.model-route-grid {
+  align-content: start;
+}
+
+.model-route-card {
+  min-height: 280px;
+  border-color: #e1e8ed;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 24px rgba(30, 51, 64, 0.04);
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.model-route-card:hover {
+  border-color: #b9d9d1;
+  box-shadow: 0 12px 30px rgba(30, 73, 61, 0.08);
+  transform: translateY(-2px);
+}
+
+.model-route-icon,
+.route-number {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.65rem;
+  background: #d7f5ed;
+  color: #087d71;
+}
+
+.model-route-icon svg {
+  display: block;
+}
+
+.model-route-icon--vision { background: #dbeeff; color: #2478c9; }
+.model-route-icon--embedding { background: #eee3ff; color: #8253c6; }
+.model-route-icon--asr,
+.model-route-icon--tts { background: #d7f5ed; color: #008d80; }
+
+.model-route-copy {
+  min-height: 2.8rem;
+  line-height: 1.55;
+}
+
+.model-route-select .mantine-Input-input {
+  min-height: 2.75rem;
+  font-weight: 650;
+  color: #20342e;
+}
+
+.model-option-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.model-route-footer .mantine-Badge-root {
+  text-transform: none;
+}
+
+.route-rule {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  border-color: #e1e8ed;
+  background: #fbfdfe;
+}
+
+.route-rule .mantine-Group-root { gap: 0.7rem; }
+
+.route-number {
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 50%;
+}
+
+.provider-management {
+  border-color: #e1e8ed;
+  background: #fff;
+}
+
+.provider-add {
+  background: #008e82;
+}
+
+.provider-management th {
+  color: #435167;
+  background: #f1f5f8;
+}
+
+.provider-management td,
+.provider-management th {
+  border-color: #e7edf1;
+}
+
+@media (max-width: 70em) {
+  .model-settings-overview { grid-template-columns: 1fr; }
 }
 
 .industrial-source {
@@ -109,23 +258,41 @@ body {
   border-color: var(--industrial-accent);
 }
 
-/*
- * 工业级问答的回答可能远长于左侧配置。通用 Workbench 默认让两栏等高，
- * 会把整个页面撑得很长；这里让结果面板在桌面端独立滚动，输入区仍可完整展开。
- */
+/* 工业级工作台在桌面端保持等高；内容超出时各自在面板内部滚动。 */
 @media (min-width: 48em) {
   .industrial-main .workbench-grid {
-    align-items: start;
+    align-items: stretch;
+    height: clamp(32rem, calc(100dvh - 20rem), 42rem);
   }
 
-  .industrial-main .pane-result {
-    position: sticky;
-    top: 1rem;
-    max-height: min(52rem, calc(100dvh - 16rem));
+  .industrial-main .workbench-grid > .pane {
+    height: 100%;
+    min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-gutter: stable;
   }
+
+  .industrial-main .pane-result {
+    position: static;
+    max-height: none;
+  }
+}
+
+.industrial-main .workbench-grid > .pane {
+  border-radius: 10px !important;
+  box-shadow: 0 8px 26px rgba(28, 54, 46, 0.045);
+}
+
+.industrial-main .workbench-grid > .pane::-webkit-scrollbar {
+  width: 8px;
+}
+
+.industrial-main .workbench-grid > .pane::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: #b9c6c1;
+  background-clip: padding-box;
 }
 
 .markdown-body {

@@ -7,6 +7,9 @@ import com.feike.ai.production.secret.service.SecretUnavailableException;
 import com.feike.ai.core.config.AiProperties;
 import com.feike.ai.core.ApiPathResolver;
 import com.feike.ai.production.config.ProductionProperties;
+import com.feike.ai.production.modelsettings.model.GlobalProviderVO;
+import com.feike.ai.production.modelsettings.model.ModelRouteVO;
+import com.feike.ai.production.modelsettings.service.GlobalModelSettingsService;
 import com.feike.ai.production.web.BusinessException;
 import com.feike.ai.production.web.ErrorCodeEnum;
 import com.openai.client.OpenAIClient;
@@ -33,6 +36,7 @@ public class ProductionModelFactory {
     private final AiProperties aiProperties;
     private final SecretResolver secrets;
     private final ProductionProperties production;
+    private final GlobalModelSettingsService settings;
     private final Map<String, OpenAiChatModel> cache = new ConcurrentHashMap<>();
 
     /**
@@ -53,9 +57,17 @@ public class ProductionModelFactory {
         SecretResolver secrets,
         ProductionProperties production
     ) {
+        this(aiProperties, secrets, production, null);
+    }
+
+    /** 数据库存储的全局 Provider/路由优先于启动 YAML；YAML 仍是首次灌入的兼容来源。 */
+    public ProductionModelFactory(
+        AiProperties aiProperties, SecretResolver secrets, ProductionProperties production, GlobalModelSettingsService settings
+    ) {
         this.aiProperties = aiProperties;
         this.secrets = secrets;
         this.production = production;
+        this.settings = settings;
     }
 
     /**
@@ -92,14 +104,18 @@ public class ProductionModelFactory {
      * @return 视觉 ChatModel
      */
     public ChatModel visionChatModel(String providerId) {
-        String visionModel = production == null ? "qwen-vl-plus" : production.media().visionModel();
+        ModelRouteVO route = settings == null ? null : settings.route("vision");
+        String visionModel = route == null
+            ? (production == null ? "qwen-vl-plus" : production.media().visionModel())
+            : route.model();
         String id = resolveVisionId(providerId);
         return cache.computeIfAbsent(id + ":vision:" + visionModel, key -> build(id, visionModel));
     }
 
     private String resolveId(String providerId) {
         if (providerId == null || providerId.isBlank()) {
-            return aiProperties.defaultProvider();
+            ModelRouteVO route = settings == null ? null : settings.route("chat");
+            return route == null ? aiProperties.defaultProvider() : route.providerId();
         }
         return providerId.trim();
     }
@@ -107,6 +123,10 @@ public class ProductionModelFactory {
     private String resolveVisionId(String providerId) {
         if (providerId != null && !providerId.isBlank()) {
             return providerId.trim();
+        }
+        ModelRouteVO route = settings == null ? null : settings.route("vision");
+        if (route != null) {
+            return route.providerId();
         }
         if (production != null) {
             return production.media().visionProvider();
@@ -119,25 +139,27 @@ public class ProductionModelFactory {
             throw new SecretUnavailableException("工业级密钥不可用，无法创建 ChatModel");
         }
         AiProperties.Provider cfg = aiProperties.providers().get(providerId);
-        if (cfg == null) {
+        GlobalProviderVO dynamic = settings == null ? null : settings.provider(providerId);
+        if (cfg == null && dynamic == null) {
             throw new BusinessException(ErrorCodeEnum.UNKNOWN_PROVIDER, "未知 LLM Provider: " + providerId);
         }
         String apiKey = secrets.get(SecretResolver.llmKey(providerId)).orElse("");
         if (apiKey.isBlank()) {
             throw new SecretUnavailableException("prod_secret 中没有 llm." + providerId);
         }
-        boolean bypassProxy = Boolean.TRUE.equals(cfg.bypassProxy());
+        boolean bypassProxy = cfg != null && Boolean.TRUE.equals(cfg.bypassProxy());
         OpenAIClient openAiClient = ApiPathResolver.buildOpenAiClient(
-            cfg.baseUrl(),
+            dynamic == null ? cfg.baseUrl() : dynamic.baseUrl(),
             apiKey,
             bypassProxy
         );
-        Double temperature = cfg.temperature() != null ? cfg.temperature() : aiProperties.temperature();
-        String model = modelOverride == null || modelOverride.isBlank() ? cfg.model() : modelOverride;
+        Double temperature = cfg != null && cfg.temperature() != null ? cfg.temperature() : aiProperties.temperature();
+        String defaultModel = dynamic == null ? cfg.model() : dynamic.model();
+        String model = modelOverride == null || modelOverride.isBlank() ? defaultModel : modelOverride;
         var optionsBuilder = OpenAiChatOptions.builder()
             .model(model)
             .temperature(temperature);
-        if (cfg.enableThinking() != null) {
+        if (cfg != null && cfg.enableThinking() != null) {
             optionsBuilder.extraBody(Map.of(
                 "chat_template_kwargs",
                 Map.of("enable_thinking", cfg.enableThinking())
@@ -149,5 +171,10 @@ public class ProductionModelFactory {
             .openAiClientAsync(openAiClient.async())
             .options(optionsBuilder.build())
             .build();
+    }
+
+    /** 管理员保存配置后清空本实例缓存；下一次调用按数据库路由重建。 */
+    public void invalidate() {
+        cache.clear();
     }
 }

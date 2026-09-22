@@ -4,6 +4,9 @@ import com.feike.ai.core.config.AiProperties;
 import com.feike.ai.core.model.ProviderVO;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.context.properties.bind.Bindable;
+import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.LinkedHashMap;
@@ -34,6 +37,29 @@ class LlmProviderRegistryTest {
     void shouldRejectUnknownProvider() {
         LlmProviderRegistry registry = registry();
         assertThrows(ResponseStatusException.class, () -> registry.resolveProviderId("openai"));
+    }
+
+    @Test
+    void shouldBindProviderMapWhenCompatibilityConstructorExists() {
+        Map<String, Object> source = new LinkedHashMap<>();
+        source.put("app.ai.default-provider", "deepseek");
+        source.put("app.ai.providers.deepseek.label", "DeepSeek");
+        source.put("app.ai.providers.deepseek.base-url", "https://api.deepseek.com");
+        source.put("app.ai.providers.deepseek.api-key", "sk-test");
+        source.put("app.ai.providers.deepseek.model", "deepseek-chat");
+        source.put("app.ai.providers.deepseek.capabilities[0]", "chat");
+        source.put("app.ai.providers.dashscope.label", "阿里云百炼");
+        source.put("app.ai.providers.dashscope.base-url", "https://dashscope.aliyuncs.com/compatible-mode");
+        source.put("app.ai.providers.dashscope.api-key", "sk-test");
+        source.put("app.ai.providers.dashscope.model", "qwen-max");
+        source.put("app.ai.providers.dashscope.capabilities[0]", "embedding");
+
+        AiProperties properties = new Binder(new MapConfigurationPropertySource(source))
+            .bind("app.ai", Bindable.of(AiProperties.class))
+            .orElseThrow(() -> new AssertionError("app.ai 配置绑定失败"));
+
+        assertEquals(List.of("deepseek", "dashscope"), properties.providers().keySet().stream().toList());
+        assertEquals(List.of("embedding"), properties.providers().get("dashscope").capabilities());
     }
 
     @Test

@@ -316,7 +316,9 @@ public record ProductionProperties(
      * @param visionModel      视觉模型名，默认 {@code qwen-vl-plus}
      * @param visionProvider   有图时默认 Provider，默认 dashscope
      * @param asrModel         ASR 模型
+     * @param asrProvider      ASR Provider；为空时兼容性回退到视觉 Provider
      * @param ttsModel         TTS 模型
+     * @param ttsProvider      TTS Provider；为空时兼容性回退到视觉 Provider
      * @param ttsVoice         演示音色，写死一个配置项
      * @param maxSpeakChars    TTS 输入字符上限
      * @param maxImages        一轮问答最多几张图；默认 3
@@ -333,7 +335,9 @@ public record ProductionProperties(
         String visionModel,
         String visionProvider,
         String asrModel,
+        String asrProvider,
         String ttsModel,
+        String ttsProvider,
         String ttsVoice,
         Integer maxSpeakChars,
         Integer maxImages,
@@ -345,6 +349,18 @@ public record ProductionProperties(
     ) {
         /** 默认 2MiB，与探针 / 带图流式同一把尺子。 */
         public static final long DEFAULT_MAX_BYTES = 2L * 1024 * 1024;
+
+        /** 兼容旧的 Media 构造器：语音 Provider 默认沿用视觉 Provider。 */
+        public Media(
+            Long maxBytes, List<String> imageMimes, List<String> audioMimes, String visionModel,
+            String visionProvider, String asrModel, String ttsModel, String ttsVoice, Integer maxSpeakChars,
+            Integer maxImages, List<String> documentMimes, Integer maxDocuments, Integer maxExtractChars,
+            Integer ocrMaxPages, Integer ocrMinChars
+        ) {
+            this(maxBytes, imageMimes, audioMimes, visionModel, visionProvider, asrModel, visionProvider,
+                ttsModel, visionProvider, ttsVoice, maxSpeakChars, maxImages, documentMimes, maxDocuments,
+                maxExtractChars, ocrMaxPages, ocrMinChars);
+        }
 
         public Media {
             if (maxBytes == null || maxBytes < 1) {
@@ -369,8 +385,14 @@ public record ProductionProperties(
             if (asrModel == null || asrModel.isBlank()) {
                 asrModel = "qwen3-asr-flash";
             }
+            if (asrProvider == null || asrProvider.isBlank()) {
+                asrProvider = visionProvider;
+            }
             if (ttsModel == null || ttsModel.isBlank()) {
                 ttsModel = "qwen3-tts-flash";
+            }
+            if (ttsProvider == null || ttsProvider.isBlank()) {
+                ttsProvider = visionProvider;
             }
             if (ttsVoice == null || ttsVoice.isBlank()) {
                 ttsVoice = "Cherry";

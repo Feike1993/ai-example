@@ -3,6 +3,8 @@ package com.feike.ai.production.speech.manager;
 import com.feike.ai.core.ApiPathResolver;
 import com.feike.ai.core.config.AiProperties;
 import com.feike.ai.production.config.ProductionProperties;
+import com.feike.ai.production.modelsettings.model.ModelRouteVO;
+import com.feike.ai.production.modelsettings.service.GlobalModelSettingsService;
 import com.feike.ai.production.secret.dao.SecretResolver;
 import com.feike.ai.production.secret.service.SecretUnavailableException;
 import com.feike.ai.production.web.BusinessException;
@@ -35,6 +37,7 @@ public class DashScopeSpeechClient {
     private final ProductionProperties.Media media;
     private final HttpClient http;
     private final JsonMapper jsonMapper;
+    private final GlobalModelSettingsService settings;
 
     /**
      * @param aiProperties baseUrl
@@ -62,11 +65,16 @@ public class DashScopeSpeechClient {
         JsonMapper jsonMapper,
         HttpClient http
     ) {
+        this(aiProperties, secrets, properties, jsonMapper, http, null);
+    }
+
+    public DashScopeSpeechClient(AiProperties aiProperties, SecretResolver secrets, ProductionProperties properties, JsonMapper jsonMapper, HttpClient http, GlobalModelSettingsService settings) {
         this.aiProperties = aiProperties;
         this.secrets = secrets;
         this.media = properties.media();
         this.jsonMapper = jsonMapper;
         this.http = http;
+        this.settings = settings;
     }
 
     /**
@@ -79,8 +87,9 @@ public class DashScopeSpeechClient {
      */
     public String transcribe(byte[] audio, String mime, String filename) {
         String boundary = "----feike" + UUID.randomUUID().toString().replace("-", "");
-        byte[] body = multipart(boundary, audio, mime, filename == null ? "audio.webm" : filename);
-        HttpRequest request = authorized("/audio/transcriptions")
+        ModelRouteVO route = route("asr", media.asrProvider(), media.asrModel());
+        byte[] body = multipart(boundary, audio, mime, filename == null ? "audio.webm" : filename, route.model());
+        HttpRequest request = authorized(route.providerId(), "/audio/transcriptions")
             .header("Content-Type", "multipart/form-data; boundary=" + boundary)
             .POST(HttpRequest.BodyPublishers.ofByteArray(body))
             .build();
@@ -104,13 +113,14 @@ public class DashScopeSpeechClient {
      * @return 音频字节
      */
     public byte[] speak(String text) {
+        ModelRouteVO route = route("tts", media.ttsProvider(), media.ttsModel());
         Map<String, String> payload = Map.of(
-            "model", media.ttsModel(),
+            "model", route.model(),
             "input", text,
             "voice", media.ttsVoice()
         );
         byte[] json = jsonMapper.writeValueAsBytes(payload);
-        HttpRequest request = authorized("/audio/speech")
+        HttpRequest request = authorized(route.providerId(), "/audio/speech")
             .header("Content-Type", "application/json")
             .header("Accept", "audio/mpeg")
             .POST(HttpRequest.BodyPublishers.ofByteArray(json))
@@ -127,23 +137,28 @@ public class DashScopeSpeechClient {
         return audio;
     }
 
-    private HttpRequest.Builder authorized(String path) {
+    private HttpRequest.Builder authorized(String providerId, String path) {
         if (!secrets.available()) {
             throw new SecretUnavailableException("工业级密钥不可用，无法调用语音接口");
         }
-        AiProperties.Provider cfg = aiProperties.providers().get(media.visionProvider());
+        AiProperties.Provider cfg = aiProperties.providers().get(providerId);
         if (cfg == null) {
-            throw new BusinessException(ErrorCodeEnum.UNKNOWN_PROVIDER, "未知 LLM Provider: " + media.visionProvider());
+            throw new BusinessException(ErrorCodeEnum.UNKNOWN_PROVIDER, "未知 LLM Provider: " + providerId);
         }
-        String apiKey = secrets.get(SecretResolver.llmKey(media.visionProvider())).orElse("");
+        String apiKey = secrets.get(SecretResolver.llmKey(providerId)).orElse("");
         if (apiKey.isBlank()) {
-            throw new SecretUnavailableException("prod_secret 中没有 llm." + media.visionProvider());
+            throw new SecretUnavailableException("prod_secret 中没有 llm." + providerId);
         }
         String base = ApiPathResolver.resolveVersionedBaseUrl(cfg.baseUrl());
         return HttpRequest.newBuilder()
             .uri(URI.create(base + path))
             .timeout(REQUEST_TIMEOUT)
             .header("Authorization", "Bearer " + apiKey);
+    }
+
+    private ModelRouteVO route(String capability, String fallbackProvider, String fallbackModel) {
+        ModelRouteVO route = settings == null ? null : settings.route(capability);
+        return route == null ? new ModelRouteVO(capability, fallbackProvider, fallbackModel, null) : route;
     }
 
     private HttpResponse<String> sendText(HttpRequest request) {
@@ -168,13 +183,13 @@ public class DashScopeSpeechClient {
         }
     }
 
-    private byte[] multipart(String boundary, byte[] audio, String mime, String filename) {
+    private byte[] multipart(String boundary, byte[] audio, String mime, String filename, String model) {
         String dash = "--" + boundary;
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         try {
             write(out, dash + "\r\n");
             write(out, "Content-Disposition: form-data; name=\"model\"\r\n\r\n");
-            write(out, media.asrModel() + "\r\n");
+            write(out, model + "\r\n");
             write(out, dash + "\r\n");
             write(out, "Content-Disposition: form-data; name=\"file\"; filename=\""
                 + sanitizeFilename(filename) + "\"\r\n");

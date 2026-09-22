@@ -25,6 +25,7 @@ import com.feike.ai.production.media.manager.ProductionImageDescribe;
 import com.feike.ai.production.media.manager.ProductionMediaInspector;
 import com.feike.ai.production.media.service.ProductionMediaService;
 import com.feike.ai.production.media.service.impl.ProductionMediaServiceImpl;
+import com.feike.ai.production.modelsettings.service.GlobalModelSettingsService;
 import com.feike.ai.production.observability.service.ProductionMetrics;
 import com.feike.ai.production.rag.generate.service.ProductionAnswerGenerator;
 import com.feike.ai.production.rag.ingest.service.ProductionIngestJobService;
@@ -361,6 +362,14 @@ public class ProductionConfiguration {
         return new SecretBootstrap(secrets, ai);
     }
 
+    /** 全局 Provider 元数据和能力路由；密钥由 SecretResolver 单独加密保存。 */
+    @Bean
+    public GlobalModelSettingsService globalModelSettingsService(
+        JdbcTemplate jdbc, AiProperties ai, ProductionProperties properties, SecretResolver secrets
+    ) {
+        return new GlobalModelSettingsService(jdbc, ai, properties, secrets);
+    }
+
     /**
      * @param ai      baseUrl/model
      * @param secrets 解密 key
@@ -370,9 +379,10 @@ public class ProductionConfiguration {
     public ProductionModelFactory productionModelFactory(
         AiProperties ai,
         SecretResolver secrets,
-        ProductionProperties properties
+        ProductionProperties properties,
+        GlobalModelSettingsService settings
     ) {
-        return new ProductionModelFactory(ai, secrets, properties);
+        return new ProductionModelFactory(ai, secrets, properties, settings);
     }
 
     /**
@@ -447,9 +457,10 @@ public class ProductionConfiguration {
         AiProperties ai,
         SecretResolver secrets,
         ProductionProperties properties,
-        JsonMapper jsonMapper
+        JsonMapper jsonMapper,
+        GlobalModelSettingsService settings
     ) {
-        return new DashScopeSpeechClient(ai, secrets, properties, jsonMapper);
+        return new DashScopeSpeechClient(ai, secrets, properties, jsonMapper, java.net.http.HttpClient.newHttpClient(), settings);
     }
 
     /**

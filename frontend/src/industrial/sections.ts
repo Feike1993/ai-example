@@ -1,5 +1,5 @@
 /** 工业级区的导航项 id。 */
-export type IndustrialSectionId = 'chat' | 'observability' | 'security'
+export type IndustrialSectionId = 'chat' | 'modelSettings' | 'observability' | 'security'
 
 export type IndustrialSection = {
   id: IndustrialSectionId

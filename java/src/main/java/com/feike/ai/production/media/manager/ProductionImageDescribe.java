@@ -23,12 +23,16 @@ import java.util.List;
  */
 public class ProductionImageDescribe {
 
+    /** 约束视觉模型只做可见内容转写，避免在图片预处理阶段回答问题或触发工具调用。 */
     private static final String DESCRIBE_SYSTEM = """
         你只转写或简述图中可见内容。只根据画面本身，不要回答用户任务，不要调工具，不要发挥或猜测意图。
         多张图时按顺序用 [图片1]、[图片2] 分段。若没有可见内容则输出空。
         """;
 
+    /** 媒体处理配置，用于限制图片转写文本的最大字符数。 */
     private final ProductionProperties.Media media;
+
+    /** 模型工厂，根据请求指定或默认的 Provider 创建视觉模型客户端。 */
     private final ProductionModelFactory models;
 
     /**

@@ -1,6 +1,5 @@
-import { AppShell, NavLink, SegmentedControl, Select, Stack, Text } from '@mantine/core'
+import { AppShell, Modal, NavLink, SegmentedControl, Stack, Text } from '@mantine/core'
 import { useEffect, useMemo, useState } from 'react'
-import { listProviders, type ProviderView } from './api'
 import { EvalPanel } from './panels/EvalPanel'
 import { HybridRagPanel } from './panels/HybridRagPanel'
 import { HydePanel } from './panels/HydePanel'
@@ -27,6 +26,9 @@ import { MultiAgentPanel } from './panels/MultiAgentPanel'
 import { RagPanel } from './panels/RagPanel'
 import { StructuredPanel } from './panels/StructuredPanel'
 import { ToolsPanel } from './panels/ToolsPanel'
+import { SceneToolbar } from './shared/SceneToolbar'
+import { clearAuth, getAccessToken, getProductionUser, UNAUTHORIZED_EVENT } from './industrial/lib/auth'
+import { LoginForm } from './industrial/panels/SecurityPanel'
 import { stageHints, stageLabels, type LearningStage } from './shared/brand'
 import {
   advancedSamples,
@@ -37,40 +39,26 @@ import {
   type PlaygroundSampleId,
 } from './shared/samples'
 
-const PROVIDER_STORAGE_KEY = 'ai-example.provider'
-
 function sampleStage(id: PlaygroundSampleId): LearningStage {
   return advancedSamples.some((item) => item.id === id) ? 'advanced' : 'baseline'
 }
 
 /**
- * 样例 playground 壳：侧栏品牌、模型选择、各期接口面板。
+ * 样例 playground 壳：侧栏课程导航、统一登录入口与全局模型设置入口。
  */
 function App() {
   const [sample, setSample] = useState<PlaygroundSampleId>('chat')
-  const [provider, setProvider] = useState('deepseek')
-  const [providers, setProviders] = useState<ProviderView[]>([])
+  const provider = 'deepseek'
+  const [authed, setAuthed] = useState(() => Boolean(getAccessToken()))
+  const [loginOpened, setLoginOpened] = useState(false)
 
   const stage = sampleStage(sample)
   const advancedGroups = useMemo(() => groupAdvancedSamples(), [])
 
   useEffect(() => {
-    void listProviders()
-      .then((data) => {
-        setProviders(data.providers)
-        const stored = localStorage.getItem(PROVIDER_STORAGE_KEY)
-        const allowed = new Set(data.providers.map((item) => item.id))
-        if (stored && allowed.has(stored)) {
-          setProvider(stored)
-          return
-        }
-        setProvider(data.defaultProvider || 'deepseek')
-      })
-      .catch(() => {
-        setProviders([
-          { id: 'deepseek', label: 'DeepSeek', model: 'deepseek-v4-flash', configured: false },
-        ])
-      })
+    const onUnauthorized = () => setAuthed(false)
+    window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized)
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized)
   }, [])
 
   const onStageChange = (value: string) => {
@@ -82,15 +70,7 @@ function App() {
     setSample(list[0].id)
   }
 
-  const onProviderChange = (value: string | null) => {
-    if (!value) {
-      return
-    }
-    setProvider(value)
-    localStorage.setItem(PROVIDER_STORAGE_KEY, value)
-  }
-
-  const selected = providers.find((item) => item.id === provider)
+  const onLogout = () => { clearAuth(); setAuthed(false) }
 
   return (
     <AppShell
@@ -149,29 +129,15 @@ function App() {
                   </Stack>
                 ))}
           </Stack>
-          <Select
-            label="模型"
-            size="xs"
-            description={selected ? selected.model : '默认 DeepSeek'}
-            data={providers.map((item) => ({
-              value: item.id,
-              label: item.configured ? item.label : `${item.label}（未配 Key）`,
-            }))}
-            value={provider}
-            onChange={onProviderChange}
-            allowDeselect={false}
-          />
         </div>
         <Stack gap={4}>
-          <a className="promo-entry" href="/industrial.html">
-            工业级 · 生产链路 →
-          </a>
           <a className="promo-entry" href="/promo.html">
             宣传页 · 8 样例路径 →
           </a>
         </Stack>
       </AppShell.Navbar>
       <AppShell.Main>
+        <SceneToolbar scene="learning" user={authed ? getProductionUser() : null} onLogin={() => setLoginOpened(true)} onLogout={onLogout} />
         {sample === 'chat' && <ChatPanel provider={provider} />}
         {sample === 'structured' && <StructuredPanel provider={provider} />}
         {sample === 'tools' && <ToolsPanel provider={provider} />}
@@ -225,6 +191,9 @@ function App() {
         {sample === 'memoryInformedRag' && <MemoryInformedRagPanel provider={provider} />}
         {sample === 'ragMemoryCompare' && <RagMemoryComparePanel provider={provider} />}
       </AppShell.Main>
+      <Modal opened={loginOpened} onClose={() => setLoginOpened(false)} title="统一登录">
+        <LoginForm title="平台登录" subtitle="登录后可进入全局模型与服务设置；教学样例仍可匿名使用。演示密码均为 demo。" onLoggedIn={() => { setAuthed(true); setLoginOpened(false) }} />
+      </Modal>
     </AppShell>
   )
 }
