@@ -17,7 +17,7 @@ import org.springframework.context.annotation.Configuration;
 public class RagInfrastructureConfiguration {
 
     /**
-     * Embedding 固定走 {@code app.ai.embedding-provider}（默认 DashScope），与 Chat Provider 解耦。
+     * Embedding 读取数据库中的 {@code embedding} 能力路由，与 Chat Provider 解耦。
      *
      * @param registry LLM 注册中心
      * @return EmbeddingModel Bean，供 PgVectorStore 注入

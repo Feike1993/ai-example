@@ -19,7 +19,7 @@ public class LlmProviderController {
     private final LlmProviderRegistry registry;
 
     /**
-     * @param registry 读取 app.ai.providers
+     * @param registry 读取数据库模型设置
      */
     public LlmProviderController(LlmProviderRegistry registry) {
         this.registry = registry;

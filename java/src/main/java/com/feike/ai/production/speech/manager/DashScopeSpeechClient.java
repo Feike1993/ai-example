@@ -1,8 +1,7 @@
 package com.feike.ai.production.speech.manager;
 
 import com.feike.ai.core.ApiPathResolver;
-import com.feike.ai.core.config.AiProperties;
-import com.feike.ai.production.config.ProductionProperties;
+import com.feike.ai.production.modelsettings.model.GlobalProviderVO;
 import com.feike.ai.production.modelsettings.model.ModelRouteVO;
 import com.feike.ai.production.modelsettings.service.GlobalModelSettingsService;
 import com.feike.ai.production.secret.dao.SecretResolver;
@@ -32,46 +31,34 @@ public class DashScopeSpeechClient {
 
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(60);
 
-    private final AiProperties aiProperties;
     private final SecretResolver secrets;
-    private final ProductionProperties.Media media;
     private final HttpClient http;
     private final JsonMapper jsonMapper;
     private final GlobalModelSettingsService settings;
 
     /**
-     * @param aiProperties baseUrl
      * @param secrets      信封 Key
-     * @param properties   模型与音色
      * @param jsonMapper   解析错误体
      */
     public DashScopeSpeechClient(
-        AiProperties aiProperties,
         SecretResolver secrets,
-        ProductionProperties properties,
-        JsonMapper jsonMapper
+        JsonMapper jsonMapper,
+        GlobalModelSettingsService settings
     ) {
-        this(aiProperties, secrets, properties, jsonMapper,
-            HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build());
+        this(secrets, jsonMapper,
+            HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build(), settings);
     }
 
     /**
      * @param http 可注入的客户端，便于单测
      */
     public DashScopeSpeechClient(
-        AiProperties aiProperties,
         SecretResolver secrets,
-        ProductionProperties properties,
         JsonMapper jsonMapper,
-        HttpClient http
+        HttpClient http,
+        GlobalModelSettingsService settings
     ) {
-        this(aiProperties, secrets, properties, jsonMapper, http, null);
-    }
-
-    public DashScopeSpeechClient(AiProperties aiProperties, SecretResolver secrets, ProductionProperties properties, JsonMapper jsonMapper, HttpClient http, GlobalModelSettingsService settings) {
-        this.aiProperties = aiProperties;
         this.secrets = secrets;
-        this.media = properties.media();
         this.jsonMapper = jsonMapper;
         this.http = http;
         this.settings = settings;
@@ -87,7 +74,7 @@ public class DashScopeSpeechClient {
      */
     public String transcribe(byte[] audio, String mime, String filename) {
         String boundary = "----feike" + UUID.randomUUID().toString().replace("-", "");
-        ModelRouteVO route = route("asr", media.asrProvider(), media.asrModel());
+        ModelRouteVO route = route("asr");
         byte[] body = multipart(boundary, audio, mime, filename == null ? "audio.webm" : filename, route.model());
         HttpRequest request = authorized(route.providerId(), "/audio/transcriptions")
             .header("Content-Type", "multipart/form-data; boundary=" + boundary)
@@ -113,14 +100,14 @@ public class DashScopeSpeechClient {
      * @return 音频字节
      */
     public byte[] speak(String text) {
-        ModelRouteVO route = route("tts", media.ttsProvider(), media.ttsModel());
+        ModelRouteVO route = route("tts");
         if (isDashScopeQwenTts(route)) {
             return speakDashScopeQwenTts(route, text);
         }
         Map<String, String> payload = Map.of(
             "model", route.model(),
             "input", text,
-            "voice", media.ttsVoice()
+            "voice", effectiveVoice(route)
         );
         byte[] json = jsonMapper.writeValueAsBytes(payload);
         HttpRequest request = authorized(route.providerId(), "/audio/speech")
@@ -180,15 +167,15 @@ public class DashScopeSpeechClient {
         if (!secrets.available()) {
             throw new SecretUnavailableException("工业级密钥不可用，无法调用语音接口");
         }
-        AiProperties.Provider cfg = aiProperties.providers().get(providerId);
-        if (cfg == null) {
+        GlobalProviderVO provider = settings.provider(providerId);
+        if (provider == null) {
             throw new BusinessException(ErrorCodeEnum.UNKNOWN_PROVIDER, "未知 LLM Provider: " + providerId);
         }
         String apiKey = secrets.get(SecretResolver.llmKey(providerId)).orElse("");
         if (apiKey.isBlank()) {
             throw new SecretUnavailableException("prod_secret 中没有 llm." + providerId);
         }
-        String base = ApiPathResolver.resolveVersionedBaseUrl(cfg.baseUrl());
+        String base = ApiPathResolver.resolveVersionedBaseUrl(provider.baseUrl());
         return HttpRequest.newBuilder()
             .uri(URI.create(base + path))
             .timeout(REQUEST_TIMEOUT)
@@ -199,15 +186,15 @@ public class DashScopeSpeechClient {
         if (!secrets.available()) {
             throw new SecretUnavailableException("工业级密钥不可用，无法调用语音接口");
         }
-        AiProperties.Provider cfg = aiProperties.providers().get(providerId);
-        if (cfg == null) {
+        GlobalProviderVO provider = settings.provider(providerId);
+        if (provider == null) {
             throw new BusinessException(ErrorCodeEnum.UNKNOWN_PROVIDER, "未知 LLM Provider: " + providerId);
         }
         String apiKey = secrets.get(SecretResolver.llmKey(providerId)).orElse("");
         if (apiKey.isBlank()) {
             throw new SecretUnavailableException("prod_secret 中没有 llm." + providerId);
         }
-        URI base = URI.create(cfg.baseUrl());
+        URI base = URI.create(provider.baseUrl());
         String endpoint = base.getScheme() + "://" + base.getAuthority()
             + "/api/v1/services/aigc/multimodal-generation/generation";
         return HttpRequest.newBuilder()
@@ -216,9 +203,12 @@ public class DashScopeSpeechClient {
             .header("Authorization", "Bearer " + apiKey);
     }
 
-    private ModelRouteVO route(String capability, String fallbackProvider, String fallbackModel) {
+    private ModelRouteVO route(String capability) {
         ModelRouteVO route = settings == null ? null : settings.route(capability);
-        return route == null ? new ModelRouteVO(capability, fallbackProvider, fallbackModel, null) : route;
+        if (route == null) {
+            throw new BusinessException(ErrorCodeEnum.BAD_REQUEST, "模型与服务设置缺少 " + capability + " 能力路由");
+        }
+        return route;
     }
 
     private static boolean isDashScopeQwenTts(ModelRouteVO route) {
@@ -227,7 +217,10 @@ public class DashScopeSpeechClient {
     }
 
     private String effectiveVoice(ModelRouteVO route) {
-        return route.voice() == null || route.voice().isBlank() ? media.ttsVoice() : route.voice();
+        if (route.voice() == null || route.voice().isBlank()) {
+            throw new BusinessException(ErrorCodeEnum.BAD_REQUEST, "模型与服务设置中的 TTS 音色不能为空");
+        }
+        return route.voice();
     }
 
     private String audioUrl(String body) {

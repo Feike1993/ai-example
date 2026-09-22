@@ -10,7 +10,7 @@ import {
 
 test.describe('工业级 @keys E2E', () => {
   test.beforeEach(() => {
-    test.skip(!hasEmbeddingKey(), '需要 PROVIDER_DASHSCOPE_API_KEY 或 E2E_HAS_EMBEDDING=1')
+    test.skip(!hasEmbeddingKey(), '数据库已配置 Embedding 路由和密钥时设置 E2E_HAS_EMBEDDING=1')
   })
 
   test('@keys 空检索返回固定拒答', async ({ page }) => {
@@ -63,7 +63,7 @@ test.describe('工业级 @keys E2E', () => {
   })
 
   test('@keys ingest 后相关问题出现正文', async ({ page }) => {
-    test.skip(!hasChatKey(), '完整生成还需要 Chat Provider Key')
+    test.skip(!hasChatKey(), '数据库已配置 Chat 路由和密钥时设置 E2E_HAS_CHAT=1')
     await login(page, 'admin')
     await page.getByRole('button', { name: '重建语料' }).click()
     await expect(page.getByText(/已重建语料/)).toBeVisible({ timeout: 120_000 })

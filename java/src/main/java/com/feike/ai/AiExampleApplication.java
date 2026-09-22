@@ -34,8 +34,8 @@ public class AiExampleApplication {
     /**
      * 启动样例 HTTP 服务。
      * <p>
-     * 本地 API Key 请用 {@code ./gradlew bootRun}（会注入仓库根目录 {@code .env}）；
-     * IDE 直跑主类不会自动读 {@code .env}，需自行配置运行环境变量。
+     * 本地需在环境变量提供 {@code PRODUCTION_KEK}，Provider/API Key 在数据库
+     * “模型与服务设置”中维护。IDE 直跑主类不会自动读 {@code .env}。
      *
      * @param args 命令行参数，当前未使用
      */

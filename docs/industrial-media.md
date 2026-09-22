@@ -11,9 +11,9 @@
 | 切片 | 通过标准 |
 | --- | --- |
 | 9a 探针 | `POST /media/probe`：无 JWT **401**；当时 `.txt` **422** `media_unsupported`（第十一阶段起探针接受 pdf/txt/md/docx/xlsx，违禁类型改用 `.exe` 等）；超 2MiB **422** `media_too_large`。alice 小 jpeg **200** `{ mime, bytes, sha256 }`，不调 LLM |
-| 9b 图文 | 文本仍用 `GET /chat/stream`。`POST /chat/stream` multipart（`question` + 可选 `image`）SSE 契约不变；`meta.hasImage`。有图用 Spring AI `UserMessage` + `Media`，模型 `PRODUCTION_VISION_MODEL`（默认 `qwen-vl-plus`），Provider 默认 dashscope。检索仍按文本；落库 `[图片]` 占位，不写 blob。当时只允许一张；多图见 [industrial-multi-image.md](industrial-multi-image.md) |
+| 9b 图文 | 文本仍用 `GET /chat/stream`。`POST /chat/stream` multipart（`question` + 可选 `image`）SSE 契约不变；`meta.hasImage`。有图用 Spring AI `UserMessage` + `Media`，Provider 与模型读取“模型与服务设置”的视觉路由。检索仍按文本；落库 `[图片]` 占位，不写 blob。当时只允许一张；多图见 [industrial-multi-image.md](industrial-multi-image.md) |
 | 9c ASR | `POST /speech/transcribe` → `{ text }`。默认套件只打坏 mime |
-| 9d TTS | `POST /speech/speak` JSON；空文本 400；违禁词 422 `input_deny`。音色 `PRODUCTION_TTS_VOICE` |
+| 9d TTS | `POST /speech/speak` JSON；空文本 400；违禁词 422 `input_deny`。Provider、模型与音色读取“模型与服务设置”的 TTS 路由。 |
 | 9e 页面 | industrial 问答：选图 / 麦克风转写填问题 / 终答朗读。Agent 本轮看图见第十二阶段 |
 
 ## 前置

@@ -62,22 +62,12 @@ export async function readSessionId(page: Page): Promise<string | null> {
  * 是否已配置 Embedding（空检索 / ingest 仍要打向量接口）。
  */
 export function hasEmbeddingKey(): boolean {
-  if (process.env.E2E_HAS_EMBEDDING === '1') {
-    return true
-  }
-  const key = process.env.PROVIDER_DASHSCOPE_API_KEY ?? ''
-  return key.length > 8 && !key.includes('your-')
+  return process.env.E2E_HAS_EMBEDDING === '1'
 }
 
 /**
  * 是否已配置 Chat Provider Key（命中后完整生成）。
  */
 export function hasChatKey(): boolean {
-  const keys = [
-    process.env.PROVIDER_DEEPSEEK_API_KEY,
-    process.env.AI_API_KEY,
-    process.env.PROVIDER_KIMI_API_KEY,
-    process.env.PROVIDER_GLM_API_KEY,
-  ]
-  return keys.some((value) => Boolean(value && value.length > 8 && !value.includes('your-')))
+  return process.env.E2E_HAS_CHAT === '1'
 }

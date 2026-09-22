@@ -135,7 +135,7 @@ body {
 }
 
 .model-route-card {
-  min-height: 280px;
+  min-height: 350px;
   border-color: #e1e8ed;
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 8px 24px rgba(30, 51, 64, 0.04);

@@ -58,7 +58,7 @@
 | MCP Client 真连远端 Streamable HTTP | 第二期 | 已覆盖 | 第六期 `app.ai.mcp.mode=remote` | 鉴权见第九期 |
 | MCP HTTP Bearer 鉴权（Server + Client） | 第六期刻意留白 | 已覆盖 | 第九期 | 见 [19-mcp-bearer.md](samples/19-mcp-bearer.md) |
 | RAG 知识库产品化（上传后台 / 权限 / 多租户） | 第二期 | 明确不做（本仓） | 样例不是知识库产品 | 业务项目 |
-| Provider 配置 DB 热更新 | 第一期 | 候选 | `.env` + `app.ai.providers` 足够学习 | 业务项目 |
+| Provider 配置 DB 热更新 | 第一期 | 已覆盖 | 教学场与工业场统一读取 `prod_model_provider` / `prod_model_route`；API Key 加密存储 | 设置页保存后模型缓存失效 |
 | 绑定 interview-guide 特殊环境变量 / 文案 | 维护期 | 明确不做（本仓） | 本仓独立 cookbook | — |
 
 ### RAG 进阶

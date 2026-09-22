@@ -44,13 +44,8 @@ class GuardrailSampleServiceImplTest {
         when(promptLoader.load(anyString())).thenReturn("system");
 
         AiProperties properties = new AiProperties(
-            "deepseek",
-            0.2,
-            Map.of(),
             new AiProperties.Structured(2, true, true, true, 200, false),
             new AiProperties.Agent(8),
-            "dashscope",
-            new AiProperties.Embedding("text-embedding-v3", 1024),
             new AiProperties.Rag(true, 4, 400, 1, true, new AiProperties.Rag.Hybrid(true, 60, 4, false), new AiProperties.Rag.Hyde(true, true), new AiProperties.Rag.Chunking("ai-example-demo-semantic", "ai-example-demo-parent", 200, true)),
             new AiProperties.ContextSettings(24, 2000, 6, "memory"),
             new AiProperties.MultiAgent(4, 6),

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api'
 import { getAccessToken, setSession, UNAUTHORIZED_EVENT } from './auth'
-import { getAudit, getMe, postChat, postIngest, postMediaProbe, postToolProbe, putGlobalProvider, agentStreamForm, agentStreamPostUrl, chatStreamForm, chatStreamUrl } from './productionApi'
+import { getAudit, getMe, getModelSettings, postChat, postIngest, postMediaProbe, postToolProbe, putGlobalProvider, agentStreamForm, agentStreamPostUrl, chatStreamForm, chatStreamUrl } from './productionApi'
 
 describe('productionApi 鉴权头', () => {
   beforeEach(() => {
@@ -95,16 +95,34 @@ describe('productionApi 鉴权头', () => {
     expect(call[1]?.method).toBe('POST')
   })
 
-  it('Provider 保存成功时允许 200 空响应体', async () => {
+  it('Provider 保存多个模型时按数组提交并允许 200 空响应体', async () => {
     setSession('tok-1', { username: 'admin', tenant: 'tenant-a', roles: ['ADMIN'] })
     const fetchImpl = vi.fn(async () => new Response(null, { status: 200 }))
 
     await expect(putGlobalProvider('deepseek', {
       label: 'DeepSeek',
       baseUrl: 'https://api.deepseek.com',
-      model: 'deepseek-flash',
+      models: ['deepseek-flash', 'deepseek-reasoner'],
       capabilities: ['chat', 'tools'],
     }, fetchImpl as unknown as typeof fetch)).resolves.toBeUndefined()
+
+    const call = fetchImpl.mock.calls[0] as unknown as [RequestInfo, RequestInit?]
+    expect(JSON.parse(String(call[1]?.body))).toMatchObject({
+      models: ['deepseek-flash', 'deepseek-reasoner'],
+    })
+  })
+
+  it('旧后端只有单个 model 时归一化为模型列表，避免管理页空白', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      providers: [{
+        id: 'dashscope', label: '阿里云百炼', baseUrl: 'https://example.com',
+        model: 'qwen-max', capabilities: ['chat'], keyConfigured: true,
+      }],
+      routes: [{ capability: 'vision', providerId: 'dashscope', model: 'qwen-vl-max', voice: null }],
+    }), { status: 200 }))
+
+    const result = await getModelSettings(fetchImpl as unknown as typeof fetch)
+    expect(result.providers[0].models).toEqual(['qwen-max', 'qwen-vl-max'])
   })
 
   it('流式地址默认不带 queryExpansion，HyDE 才写入', () => {

@@ -1,6 +1,7 @@
 # Python 对照样例
 
-与 Java 概念一一对应，默认读仓库根目录 `.env`（`AI_PROVIDER` 默认 `deepseek`）。
+与 Java 概念一一对应。它是独立进程的轻量对照实现，不连接 Java 的数据库模型设置，
+仍读取仓库根目录 `.env` 中标注为“仅 Python”的 `AI_PROVIDER` / `PROVIDER_*` 变量。
 
 ```bash
 uv sync --group dev

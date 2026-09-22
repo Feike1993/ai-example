@@ -41,3 +41,8 @@ if (!window.ResizeObserver) {
     disconnect() {}
   }
 }
+
+// Mantine Combobox 打开时会把当前选项滚入视口，jsdom 没有该浏览器 API。
+if (!HTMLElement.prototype.scrollIntoView) {
+  HTMLElement.prototype.scrollIntoView = () => undefined
+}

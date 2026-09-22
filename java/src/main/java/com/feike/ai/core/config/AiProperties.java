@@ -3,24 +3,15 @@ package com.feike.ai.core.config;
 import com.feike.ai.samples.mcp.service.McpSampleService;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.boot.context.properties.bind.ConstructorBinding;
-
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * LLM 接入与样例行为配置，绑定 {@code app.ai.*}。
  * <p>
- * 多 Provider：按 id 选 OpenAI 兼容网关，默认 DeepSeek。Embedding 与 Chat 分离。
+ * 这里只保留教学行为参数；Provider、模型、路由和密钥统一存储在数据库模型设置中。
  *
- * @param defaultProvider     未传 provider 时使用的 id
- * @param temperature         全局默认采样温度；Provider 未单独配置时用此值
- * @param providers           OpenAI 兼容网关列表，key 为 provider id
  * @param structured          结构化输出重试策略
  * @param agent               Agent Loop 步数上限
- * @param embeddingProvider   Embedding 用的 Provider id（本仓固定 dashscope）
- * @param embedding           Embedding 模型与维度
  * @param rag                 RAG 分块 / topK / 开关
  * @param context             上下文工程：消息条数、token 预算、存储实现
  * @param multiagent          多 Agent 步数上限
@@ -30,13 +21,8 @@ import java.util.Map;
  */
 @ConfigurationProperties(prefix = "app.ai")
 public record AiProperties(
-    String defaultProvider,
-    Double temperature,
-    Map<String, Provider> providers,
     Structured structured,
     Agent agent,
-    String embeddingProvider,
-    Embedding embedding,
     Rag rag,
     ContextSettings context,
     MultiAgent multiagent,
@@ -45,26 +31,11 @@ public record AiProperties(
     Guardrail guardrail
 ) {
     public AiProperties {
-        if (defaultProvider == null || defaultProvider.isBlank()) {
-            defaultProvider = "deepseek";
-        }
-        if (temperature == null) {
-            temperature = 0.2;
-        }
-        if (providers == null) {
-            providers = new LinkedHashMap<>();
-        }
         if (structured == null) {
             structured = new Structured(2, true, true, true, 200, false);
         }
         if (agent == null) {
             agent = new Agent(8);
-        }
-        if (embeddingProvider == null || embeddingProvider.isBlank()) {
-            embeddingProvider = "dashscope";
-        }
-        if (embedding == null) {
-            embedding = new Embedding("text-embedding-v3", 1024);
         }
         if (rag == null) {
             rag = new Rag(true, 4, 400, 1, true, new Rag.Hybrid(true, 60, 4, false), new Rag.Hyde(true, true), new Rag.Chunking("ai-example-demo-semantic", "ai-example-demo-parent", 200, true));
@@ -83,55 +54,6 @@ public record AiProperties(
         }
         if (guardrail == null) {
             guardrail = new Guardrail(java.util.List.of("违禁演示词", "BLOCKED_DEMO"));
-        }
-    }
-
-    /**
-     * 单个 OpenAI 兼容网关。
-     *
-     * @param label          前端展示名；空则用 provider id
-     * @param baseUrl        网关地址，可带或不带 {@code /v1}
-     * @param apiKey         调用密钥
-     * @param model          聊天模型名
-     * @param temperature    覆盖全局温度；为空则用 {@link AiProperties#temperature()}
-     * @param enableThinking Qwen3 等思考模型：{@code false} 时经 extraBody 关闭 thinking，
-     *                       否则默认开思考会把正文写进 {@code reasoning}、{@code content} 为空
-     * @param bypassProxy    {@code true} 时 OkHttp 使用 {@link java.net.Proxy#NO_PROXY}，
-     *                       避免 IDE/系统 HTTPS 代理把「公网域名解析到内网 IP」的网关打到代理上超时
-     * @param capabilities   此 Provider 当前模型支持的能力，例如 {@code chat}、{@code vision}、{@code embedding}
-     */
-    public record Provider(
-        String label,
-        String baseUrl,
-        String apiKey,
-        String model,
-        Double temperature,
-        Boolean enableThinking,
-        Boolean bypassProxy,
-        List<String> capabilities
-    ) {
-        /** 保持既有测试和代码中的七参数 Provider 构造方式兼容。 */
-        public Provider(
-            String label,
-            String baseUrl,
-            String apiKey,
-            String model,
-            Double temperature,
-            Boolean enableThinking,
-            Boolean bypassProxy
-        ) {
-            this(label, baseUrl, apiKey, model, temperature, enableThinking, bypassProxy, List.of("chat"));
-        }
-
-        @ConstructorBinding
-        public Provider {
-            capabilities = capabilities == null || capabilities.isEmpty()
-                ? List.of("chat")
-                : capabilities.stream()
-                    .filter(item -> item != null && !item.isBlank())
-                    .map(item -> item.trim().toLowerCase(java.util.Locale.ROOT))
-                    .distinct()
-                    .toList();
         }
     }
 
@@ -172,23 +94,6 @@ public record AiProperties(
         public Agent {
             if (maxSteps < 1) {
                 maxSteps = 1;
-            }
-        }
-    }
-
-    /**
-     * Embedding 模型配置（与 Chat Provider 的 model 字段独立）。
-     *
-     * @param model      如 text-embedding-v3
-     * @param dimensions 向量维度，须与 pgvector 表一致
-     */
-    public record Embedding(String model, int dimensions) {
-        public Embedding {
-            if (model == null || model.isBlank()) {
-                model = "text-embedding-v3";
-            }
-            if (dimensions < 1) {
-                dimensions = 1024;
             }
         }
     }

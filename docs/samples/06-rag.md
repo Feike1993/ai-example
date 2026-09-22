@@ -10,7 +10,7 @@ RAG = 检索 + 生成：
 注意：
 
 - 分块过大丢精度，过小丢语义；本仓用固定 token 分块做演示
-- Chat 模型不一定有 Embedding：本仓 **Embedding 固定 DashScope `text-embedding-v3`**，Chat 仍可切换 DeepSeek 等
+- Chat 模型不一定有 Embedding：在“模型与服务设置”中分别维护 `chat` 与 `embedding` 能力路由
 - GIGO：检索差，生成再强也容易胡说；前端展示 `sources` 便于核对
 - **空检索拒答**：命中条数 `< app.ai.rag.min-sources`（默认 1）时 `retrievalEmpty=true`；若 `skip-llm-when-empty=true`（默认）则跳过 LLM，返回固定拒答，避免编造
 
@@ -18,7 +18,7 @@ RAG = 检索 + 生成：
 
 ```bash
 docker compose up -d
-# .env 里填 PROVIDER_DASHSCOPE_API_KEY（Embedding）以及聊天用的 Key
+# .env 填 PRODUCTION_KEK；启动后在“模型与服务设置”中配置聊天与 Embedding 路由/API Key
 cd java && ./gradlew bootRun
 ```
 
@@ -57,9 +57,9 @@ uv run python -m ai_example.samples.rag
 ## 对照 / 拷贝
 
 - Java：`samples.rag` + `docker-compose.yml` 的 pgvector
-- Embedding：`LlmProviderRegistry.embeddingModel()`（DashScope）；Chat 仍可切换
+- Embedding：`LlmProviderRegistry.embeddingModel()` 动态读取数据库 `embedding` 路由；Chat 读取 `chat` 路由
 - Python：`samples.rag` 内存向量 + 余弦相似度；空 hits 时同样可短路拒答
-- Embedding Provider 与 Chat Provider **分开配置**
+- Embedding Provider 与 Chat Provider 在“模型与服务设置”中**分开配置**
 - 详见 [backlog](../backlog.md)、[baseline-patches](../baseline-patches.md) A3
 - **强制 citation（第十一期）**：`citationMode=required` 时结构化引用并校验 `sourceId`，见 [23-rag-citation.md](23-rag-citation.md)
 

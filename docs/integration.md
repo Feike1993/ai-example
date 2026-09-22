@@ -5,7 +5,7 @@
 ## 通用准备
 
 1. 依赖：Spring AI BOM `2.0.0` + `spring-ai-starter-model-openai`
-2. 配置：`app.ai.providers` 多网关 + `default-provider`；RAG 另配 Embedding（本仓用 DashScope）
+2. 配置：Provider、模型、路由和 API Key 统一维护在数据库“模型与服务设置”；`app.ai.*` 只保留教学行为参数
 3. Prompt 放 `resources/prompts/`，经 `PromptLoader` 加载；不要把长 prompt 写进 Service
 
 ### PromptLoader
@@ -23,7 +23,7 @@
 
 ### Chat
 
-拷 `ApiPathResolver.java`、`LlmProviderRegistry.java`、`AiProperties.java`。
+拷 `ApiPathResolver.java`、`LlmProviderRegistry.java`、`AiProperties.java`，以及 `production/modelsettings`、`production/secret` 中的数据库模型设置基础设施和对应 Flyway 迁移。若业务项目已有配置中心，可用同一接口替换 `GlobalModelSettingsService`。
 
 ### 结构化输出
 
@@ -49,7 +49,7 @@
 ### RAG
 
 - 拷 `samples.rag` + `spring-ai-starter-vector-store-pgvector`
-- **Embedding 与 Chat Provider 分离**：很多聊天网关没有 Embedding；本仓用 `app.ai.embedding-provider=dashscope`
+- **Embedding 与 Chat Provider 分离**：很多聊天网关没有 Embedding；本仓在数据库能力路由中分别配置 `chat` 与 `embedding`
 - 先保证 ingest 幂等与 `sources` 回传，再考虑混合检索 / 查询改写 / HyDE
 
 ## 第三期

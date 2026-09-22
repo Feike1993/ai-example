@@ -65,7 +65,7 @@ Java：**Spring Boot 4.1 + Spring AI 2.0 + Gradle**；Python：**LangGraph / MCP
 | 12  | RAG vs 记忆    | 双路对照                         | `POST /ai-example/rag/query/compare-memory`                   | `samples.rag_memory_compare`    |
 
 
-文档：[学习路径](docs/learning-path.md) · [基础补丁](docs/baseline-patches.md) · [集成说明](docs/integration.md) · [第二期](docs/phase2.md) · [第三期](docs/phase3.md) · [第四期](docs/phase4.md) · [第五期](docs/phase5.md) · [第六期](docs/phase6.md) · [第七期](docs/phase7.md) · [第八期](docs/phase8.md) · [第九期](docs/phase9.md) · [第十期](docs/phase10.md) · [第十一期](docs/phase11.md) · [第十二期](docs/phase12.md) · [第十三期](docs/phase13.md) · [CHANGELOG](CHANGELOG.md) · [刻意不做 backlog](docs/backlog.md)
+文档：[学习路径](docs/learning-path.md) · [模型与服务设置](docs/model-settings.md) · [基础补丁](docs/baseline-patches.md) · [集成说明](docs/integration.md) · [第二期](docs/phase2.md) · [第三期](docs/phase3.md) · [第四期](docs/phase4.md) · [第五期](docs/phase5.md) · [第六期](docs/phase6.md) · [第七期](docs/phase7.md) · [第八期](docs/phase8.md) · [第九期](docs/phase9.md) · [第十期](docs/phase10.md) · [第十一期](docs/phase11.md) · [第十二期](docs/phase12.md) · [第十三期](docs/phase13.md) · [CHANGELOG](CHANGELOG.md) · [刻意不做 backlog](docs/backlog.md)
 
 ## 环境
 
@@ -73,12 +73,12 @@ Java：**Spring Boot 4.1 + Spring AI 2.0 + Gradle**；Python：**LangGraph / MCP
 - Python **3.11+**（[uv](https://docs.astral.sh/uv/)）
 - Node.js **22.13+**（`pnpm@11` 依赖 `node:sqlite`；在 **frontend/** 目录执行，不要在仓库根目录跑 `pnpm start`）
 - Docker（完整容器化运行，或仅启动 PostgreSQL + pgvector；工业级链路另需 Redis）
-- API Key：**聊天**默认 DeepSeek；**Embedding（RAG）**需要 DashScope
+- 模型配置：教学场与工业场共用 PostgreSQL 中的“模型与服务设置”；API Key 使用 KEK 加密保存
 
 ```bash
 cp .env.example .env
-# PROVIDER_DEEPSEEK_API_KEY=...   # 或 AI_API_KEY
-# PROVIDER_DASHSCOPE_API_KEY=...  # RAG Embedding 必填
+# 生成并填写 PRODUCTION_KEK：openssl rand -base64 32
+# 启动后登录工业级页面，在“模型与服务设置”中填写 Provider API Key 与能力路由
 ```
 
 ## 使用 Docker Compose 运行完整系统
@@ -89,7 +89,7 @@ Redis 给工业级链路用：run 状态与 SSE 断线续传（`Last-Event-ID`�
 
 ```bash
 cp .env.example .env
-# 编辑 .env，至少填入实际使用的 Provider Key
+# 编辑 .env，填写 PRODUCTION_KEK；Provider Key 启动后在“模型与服务设置”中填写
 
 #1. `docker compose up`
 #根据 `docker-compose.yml` 启动 / 创建容器
@@ -144,8 +144,8 @@ docker compose down
 
 ```bash
 cp .env.example .env
-# 至少填 PROVIDER_DEEPSEEK_API_KEY（聊天）与 PROVIDER_DASHSCOPE_API_KEY（RAG Embedding）
-# 工业级 /api/v1 还需要 PRODUCTION_KEK（例如 openssl rand -base64 32）
+# 填写 PRODUCTION_KEK（例如 openssl rand -base64 32）
+# 启动后登录工业级页面，在“模型与服务设置”中配置聊天和 Embedding Provider/API Key
 
 # 必选：PostgreSQL + pgvector（Java 启动、RAG 都需要）
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres
@@ -338,7 +338,7 @@ uv run pytest
 - RAG 拆成 ingest / retrieve / generate，不含教学用的 compare 分支；查询扩展默认 `none`，请求可开 `rewrite` / `hyde`（复用 `core/rag`）
 - `POST /api/v1/rag/ingest` 仅 ADMIN，**202** 任务；进度 `GET /api/v1/rag/ingest/jobs/{jobId}` 与 ops snapshot
 - SSE 契约：`meta → sources → delta* → step* → usage → done|error`，带 `runId` / `seq`；断线用 `GET /api/v1/runs/{runId}/stream` + `Last-Event-ID` 续传
-- **第四阶段 E2E**：`cd frontend && pnpm test:e2e`。默认套件覆盖登录、安全/可观测面板、401、alice ingest 403、输入护栏、alice/admin 工具探针、媒体探针 401/422、带图流式无 JWT 401、超张数 422、文档超件数 / 抽出违禁词 422、Agent 带文档超件数 / 违禁词 422（不打 Chat LLM / VL / ASR / TTS / 真 Agent 循环）。空检索会先走 Embedding，因此 `pnpm test:e2e:keys` 仅在已配 `PROVIDER_DASHSCOPE_API_KEY` 时跑。可选 `PLAYWRIGHT_BASE_URL=http://localhost:8088` 打 Compose 前端；不要用 `vite preview`（无 API 代理）。
+- **第四阶段 E2E**：`cd frontend && pnpm test:e2e`。默认套件覆盖登录、安全/可观测面板、401、alice ingest 403、输入护栏、alice/admin 工具探针、媒体探针 401/422、带图流式无 JWT 401、超张数 422、文档超件数 / 抽出违禁词 422、Agent 带文档超件数 / 违禁词 422（不打 Chat LLM / VL / ASR / TTS / 真 Agent 循环）。空检索会先走 Embedding，因此 `pnpm test:e2e:keys` 仅在数据库模型设置中已配置 Embedding 路由和密钥时跑。可选 `PLAYWRIGHT_BASE_URL=http://localhost:8088` 打 Compose 前端；不要用 `vite preview`（无 API 代理）。
 - **第五阶段压测**：`./loadtest/run.sh all`（Java 需在 8080 且已设 `PRODUCTION_KEK`）。本机 k6 打 `/api/v1`：廉价读、护栏 422、令牌桶 429、登录限流。默认不打 Chat LLM / Embedding，不进 CI。说明见 [loadtest/README.md](loadtest/README.md)。
 - **第六阶段多实例**：Compose 起 `java-a` + `java-b`，Nginx `:8088` 负载均衡。验证步骤（起栈、脚本、手工 curl、端口冲突）见 [docs/industrial-ha.md](docs/industrial-ha.md)；一键对照 `./scripts/industrial-ha.sh`。
 - **第七阶段**：生产 RAG 可选 rewrite/HyDE；ADMIN ingest 走 Redis Stream；`POST /api/v1/secrets/rotate` 本地重加密；Compose Prometheus `:9090` + Grafana `:3300`（容器内仍为 `3000`；scrape token，不匿名）；`./loadtest/run.sh` 写 `loadtest/results/latest-summary.json`，可观测面板展示。人工验证（起栈、curl、页面、KEK 轮换、Grafana、压测摘要）见 [docs/industrial-ops.md](docs/industrial-ops.md)。
@@ -366,7 +366,7 @@ uv run pytest
 
 失败时保持真实 HTTP 状态（401/403/429 等），JSON 为 `{ "code", "message" }`：`code` 是稳定机器码（与 SSE `error` 事件对齐），`message` 是给用户看的简体中文。未知异常只回 `internal_error` / 「系统繁忙，请稍后重试」，不回堆栈。成功体仍是现有 DTO，不套一层 `data`。教学样例路径（`/rag`、`/chat` 等）的错误形态不变。
 
-**信封加密，不用 Vault。** LLM Key 与 JWT HMAC 用 AES-256-GCM 写入 Postgres 表 `prod_secret`。能解开密文的主密钥 KEK 只来自环境变量 `PRODUCTION_KEK`（`openssl rand -base64 32`），**永不入库**。轮换窗口内可同时设 `PRODUCTION_KEK_PREVIOUS`，ADMIN `POST /api/v1/secrets/rotate` 用当前 KEK 重加密；云 KMS 仍不做。缺 KEK 时应用照常启动，`/api/v1` 返回 503。
+**信封加密，不用 Vault。** 教学场与工业场共用的 LLM Key 以及 JWT HMAC 用 AES-256-GCM 写入 Postgres 表 `prod_secret`。能解开密文的主密钥 KEK 只来自环境变量 `PRODUCTION_KEK`（`openssl rand -base64 32`），**永不入库**。轮换窗口内可同时设 `PRODUCTION_KEK_PREVIOUS`，ADMIN `POST /api/v1/secrets/rotate` 用当前 KEK 重加密；云 KMS 仍不做。缺 KEK 时应用仍可启动，但所有真实模型调用返回 503。
 
 **可观测。** 业务指标见 `GET /api/v1/ops/snapshot`（需登录）。Prometheus 刮取 `/ai-example/actuator/prometheus` 用 `PRODUCTION_METRICS_TOKEN`（Compose 默认 `dev-metrics-token`），不放行匿名。Grafana `http://localhost:3300`（默认 admin/admin；容器内端口仍为 `3000`），Jaeger `http://localhost:16686`。压测摘要 `GET /api/v1/ops/loadtest`。响应头带 `traceparent`，SSE `meta` 带 `traceId`。
 

@@ -80,12 +80,36 @@ export type OpsSnapshot = {
   ingestError?: string | null
 }
 
-export type GlobalProvider = { id: string; label: string; baseUrl: string; model: string; capabilities: string[]; keyConfigured: boolean }
+export type GlobalProvider = {
+  id: string
+  label: string
+  baseUrl: string
+  model: string
+  models: string[]
+  capabilities: string[]
+  temperature: number | null
+  enableThinking: boolean | null
+  bypassProxy: boolean
+  keyConfigured: boolean
+}
 export type ModelRoute = { capability: string; providerId: string; model: string; voice: string | null }
 export type ModelSettings = { providers: GlobalProvider[]; routes: ModelRoute[] }
 
 export async function getModelSettings(fetchImpl: typeof fetch = fetch): Promise<ModelSettings> {
-  return requestJson<ModelSettings>(`${PRODUCTION_BASE}/model-settings`, { method: 'GET' }, fetchImpl)
+  type ProviderPayload = Omit<GlobalProvider, 'models'> & { models?: string[] }
+  const settings = await requestJson<{ providers: ProviderPayload[]; routes: ModelRoute[] }>(
+    `${PRODUCTION_BASE}/model-settings`, { method: 'GET' }, fetchImpl,
+  )
+  return {
+    ...settings,
+    providers: settings.providers.map((provider) => {
+      const providerModels = provider.models?.length ? provider.models : [provider.model]
+      const routedModels = settings.routes
+        .filter((route) => route.providerId === provider.id)
+        .map((route) => route.model)
+      return { ...provider, models: [...new Set([...providerModels, ...routedModels].filter(Boolean))] }
+    }),
+  }
 }
 
 export async function putModelRoute(capability: string, body: Omit<ModelRoute, 'capability'>, fetchImpl: typeof fetch = fetch): Promise<void> {
@@ -94,7 +118,16 @@ export async function putModelRoute(capability: string, body: Omit<ModelRoute, '
   }, fetchImpl)
 }
 
-export async function putGlobalProvider(id: string, body: { label: string; baseUrl: string; model: string; capabilities: string[]; apiKey?: string }, fetchImpl: typeof fetch = fetch): Promise<void> {
+export async function putGlobalProvider(id: string, body: {
+  label: string
+  baseUrl: string
+  models: string[]
+  capabilities: string[]
+  temperature?: number
+  enableThinking?: boolean | null
+  bypassProxy?: boolean
+  apiKey?: string
+}, fetchImpl: typeof fetch = fetch): Promise<void> {
   await requestJson<void>(`${PRODUCTION_BASE}/model-settings/providers/${encodeURIComponent(id)}`, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   }, fetchImpl)

@@ -8,7 +8,6 @@ import com.feike.ai.production.rag.ingest.service.impl.RedisProductionIngestJobS
 import com.feike.ai.production.rag.retrieve.manager.ProductionQueryExpander;
 import com.feike.ai.production.rag.retrieve.service.impl.ProductionRetrievalServiceImpl;
 
-import com.feike.ai.core.config.AiProperties;
 import com.feike.ai.core.rag.RagKeywordRetriever;
 import com.feike.ai.production.agent.service.ProductionAgentService;
 import com.feike.ai.production.audit.service.AuditService;
@@ -28,15 +27,13 @@ import com.feike.ai.production.media.service.impl.ProductionMediaServiceImpl;
 import com.feike.ai.production.modelsettings.service.GlobalModelSettingsService;
 import com.feike.ai.production.observability.service.ProductionMetrics;
 import com.feike.ai.production.rag.generate.service.ProductionAnswerGenerator;
+import com.feike.ai.production.rag.config.ProductionVectorStoreManager;
 import com.feike.ai.production.rag.ingest.service.ProductionIngestJobService;
 import com.feike.ai.production.rag.ingest.service.ProductionIngestService;
 import com.feike.ai.production.rag.retrieve.service.ProductionRetrievalService;
 import com.feike.ai.production.ratelimit.manager.IdempotencyManager;
 import com.feike.ai.production.ratelimit.manager.RedisTokenBucket;
-import com.feike.ai.production.secret.manager.EnvSecretResolver;
-import com.feike.ai.production.secret.dao.impl.JdbcSecretDAOImpl;
 import com.feike.ai.production.secret.manager.ProductionModelFactory;
-import com.feike.ai.production.secret.manager.SecretBootstrap;
 import com.feike.ai.production.secret.dao.SecretResolver;
 import com.feike.ai.production.speech.manager.DashScopeSpeechClient;
 import com.feike.ai.production.speech.service.ProductionSpeechService;
@@ -50,6 +47,7 @@ import com.feike.ai.production.sse.service.SseRunExecutor;
 import com.feike.ai.production.web.InstanceIdFilter;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreProperties;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -155,11 +153,11 @@ public class ProductionConfiguration {
      */
     @Bean
     public ProductionIngestService productionIngestService(
-        VectorStore vectorStore,
+        ProductionVectorStoreManager vectorStores,
         ObjectProvider<RagKeywordRetriever> keywordRetriever,
         ProductionProperties properties
     ) {
-        return new ProductionIngestServiceImpl(vectorStore, keywordRetriever.getIfAvailable(), properties);
+        return new ProductionIngestServiceImpl(vectorStores.vectorStore(), keywordRetriever.getIfAvailable(), properties);
     }
 
     /**
@@ -216,13 +214,13 @@ public class ProductionConfiguration {
      */
     @Bean
     public ProductionRetrievalService productionRetrievalService(
-        VectorStore vectorStore,
+        ProductionVectorStoreManager vectorStores,
         ObjectProvider<RagKeywordRetriever> keywordRetriever,
         ProductionModelFactory models,
         ProductionProperties properties
     ) {
         return new ProductionRetrievalServiceImpl(
-            vectorStore,
+            vectorStores.vectorStore(),
             keywordRetriever.getIfAvailable(),
             new ProductionQueryExpander(models),
             properties
@@ -326,63 +324,14 @@ public class ProductionConfiguration {
         return new ProductionGuardrail(properties, metrics);
     }
 
-    /**
-     * @param jdbc               JDBC
-     * @param properties         KEK
-     * @param transactionManager 重加密事务
-     * @return 信封存储
-     */
+    /** 生产 RAG 使用数据库中的 embedding 路由，教学侧 VectorStore 保持不变。 */
     @Bean
-    @ConditionalOnProperty(
-        prefix = "app.production.security", name = "secret-store", havingValue = "postgres", matchIfMissing = true)
-    public SecretResolver jdbcSecretStore(
+    public ProductionVectorStoreManager productionVectorStoreManager(
         JdbcTemplate jdbc,
-        ProductionProperties properties,
-        PlatformTransactionManager transactionManager
+        ProductionModelFactory models,
+        PgVectorStoreProperties properties
     ) {
-        return new JdbcSecretDAOImpl(jdbc, properties, new TransactionTemplate(transactionManager));
-    }
-
-    /**
-     * @return 内存密钥
-     */
-    @Bean
-    @ConditionalOnProperty(prefix = "app.production.security", name = "secret-store", havingValue = "env")
-    public SecretResolver envSecretStore() {
-        return new EnvSecretResolver();
-    }
-
-    /**
-     * @param secrets 存储
-     * @param ai      首次灌入用
-     * @return 启动灌入
-     */
-    @Bean
-    public SecretBootstrap secretBootstrap(SecretResolver secrets, AiProperties ai) {
-        return new SecretBootstrap(secrets, ai);
-    }
-
-    /** 全局 Provider 元数据和能力路由；密钥由 SecretResolver 单独加密保存。 */
-    @Bean
-    public GlobalModelSettingsService globalModelSettingsService(
-        JdbcTemplate jdbc, AiProperties ai, ProductionProperties properties, SecretResolver secrets
-    ) {
-        return new GlobalModelSettingsService(jdbc, ai, properties, secrets);
-    }
-
-    /**
-     * @param ai      baseUrl/model
-     * @param secrets 解密 key
-     * @return 生产模型工厂
-     */
-    @Bean
-    public ProductionModelFactory productionModelFactory(
-        AiProperties ai,
-        SecretResolver secrets,
-        ProductionProperties properties,
-        GlobalModelSettingsService settings
-    ) {
-        return new ProductionModelFactory(ai, secrets, properties, settings);
+        return new ProductionVectorStoreManager(jdbc, models, properties);
     }
 
     /**
@@ -446,21 +395,17 @@ public class ProductionConfiguration {
     }
 
     /**
-     * @param ai         baseUrl
      * @param secrets    Key
-     * @param properties 模型
      * @param jsonMapper 错误体
      * @return DashScope 语音 HTTP
      */
     @Bean
     public DashScopeSpeechClient dashScopeSpeechClient(
-        AiProperties ai,
         SecretResolver secrets,
-        ProductionProperties properties,
         JsonMapper jsonMapper,
         GlobalModelSettingsService settings
     ) {
-        return new DashScopeSpeechClient(ai, secrets, properties, jsonMapper, java.net.http.HttpClient.newHttpClient(), settings);
+        return new DashScopeSpeechClient(secrets, jsonMapper, settings);
     }
 
     /**

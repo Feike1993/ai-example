@@ -1,15 +1,11 @@
 package com.feike.ai.production.secret.manager;
 
-import com.feike.ai.core.LlmProviderRegistry;
-import com.feike.ai.production.secret.dao.SecretResolver;
-import com.feike.ai.production.secret.service.SecretUnavailableException;
-
-import com.feike.ai.core.config.AiProperties;
 import com.feike.ai.core.ApiPathResolver;
-import com.feike.ai.production.config.ProductionProperties;
 import com.feike.ai.production.modelsettings.model.GlobalProviderVO;
 import com.feike.ai.production.modelsettings.model.ModelRouteVO;
 import com.feike.ai.production.modelsettings.service.GlobalModelSettingsService;
+import com.feike.ai.production.secret.dao.SecretResolver;
+import com.feike.ai.production.secret.service.SecretUnavailableException;
 import com.feike.ai.production.web.BusinessException;
 import com.feike.ai.production.web.ErrorCodeEnum;
 import com.openai.client.OpenAIClient;
@@ -17,164 +13,137 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.openai.OpenAiEmbeddingModel;
+import org.springframework.ai.openai.OpenAiEmbeddingOptions;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 生产链路专用的 ChatModel 工厂：API Key 只从 {@link SecretResolver} 取。
- * <p>
- * 教学侧 {@code LlmProviderRegistry} 继续读环境变量，两边不抢同一份明文。
- * 密钥解不开时抛 {@link SecretUnavailableException}，由接口变成 503。
+ * 教学场与工业场共用的数据库模型工厂。Provider、模型、调用参数和能力路由只读
+ * 模型设置表，密钥只读 {@link SecretResolver}。
  */
 public class ProductionModelFactory {
 
     private static final Logger log = LoggerFactory.getLogger(ProductionModelFactory.class);
 
-    private final AiProperties aiProperties;
     private final SecretResolver secrets;
-    private final ProductionProperties production;
     private final GlobalModelSettingsService settings;
-    private final Map<String, OpenAiChatModel> cache = new ConcurrentHashMap<>();
+    private final Map<String, OpenAiChatModel> chatCache = new ConcurrentHashMap<>();
+    private final Map<String, OpenAiEmbeddingModel> embeddingCache = new ConcurrentHashMap<>();
 
-    /**
-     * @param aiProperties 取 baseUrl / model，不取明文 key
-     * @param secrets      信封解密后的 key
-     */
-    public ProductionModelFactory(AiProperties aiProperties, SecretResolver secrets) {
-        this(aiProperties, secrets, null);
-    }
-
-    /**
-     * @param aiProperties 取 baseUrl / model，不取明文 key
-     * @param secrets      信封解密后的 key
-     * @param production   视觉模型名；可空则只用 Provider 默认文本模型
-     */
-    public ProductionModelFactory(
-        AiProperties aiProperties,
-        SecretResolver secrets,
-        ProductionProperties production
-    ) {
-        this(aiProperties, secrets, production, null);
-    }
-
-    /** 数据库存储的全局 Provider/路由优先于启动 YAML；YAML 仍是首次灌入的兼容来源。 */
-    public ProductionModelFactory(
-        AiProperties aiProperties, SecretResolver secrets, ProductionProperties production, GlobalModelSettingsService settings
-    ) {
-        this.aiProperties = aiProperties;
+    public ProductionModelFactory(SecretResolver secrets, GlobalModelSettingsService settings) {
         this.secrets = secrets;
-        this.production = production;
         this.settings = settings;
     }
 
-    /**
-     * @param providerId Provider id；空则用默认
-     * @return 不挂工具的 ChatClient
-     */
     public ChatClient plainClient(String providerId) {
         return ChatClient.builder(chatModel(providerId)).build();
     }
 
-    /**
-     * @param providerId Provider id；空则用默认
-     * @return ChatModel，供 Agent 循环使用
-     */
+    /** 未指定 Provider 时严格使用 chat 能力路由；显式指定时使用该 Provider 的首选模型。 */
     public ChatModel chatModel(String providerId) {
-        String id = resolveId(providerId);
-        return cache.computeIfAbsent(id, key -> build(key, null));
+        ModelSelection selection = selection("chat", providerId);
+        return chatCache.computeIfAbsent(selection.cacheKey(), key -> buildChat(selection));
     }
 
-    /**
-     * 识图用的 ChatClient：同一把信封 Key，模型名换成视觉模型。
-     * <p>
-     * 与文本模型分缓存，避免把 {@code qwen-vl-plus} 写进文本 Client 影响后续纯文本问答。
-     *
-     * @param providerId Provider id；空则用 {@code media.vision-provider}
-     * @return 视觉 ChatClient
-     */
     public ChatClient visionClient(String providerId) {
         return ChatClient.builder(visionChatModel(providerId)).build();
     }
 
-    /**
-     * @param providerId Provider id；空则用视觉默认 Provider
-     * @return 视觉 ChatModel
-     */
+    /** 未指定 Provider 时严格使用 vision 能力路由。 */
     public ChatModel visionChatModel(String providerId) {
-        ModelRouteVO route = settings == null ? null : settings.route("vision");
-        String visionModel = route == null
-            ? (production == null ? "qwen-vl-plus" : production.media().visionModel())
-            : route.model();
-        String id = resolveVisionId(providerId);
-        return cache.computeIfAbsent(id + ":vision:" + visionModel, key -> build(id, visionModel));
+        ModelSelection selection = selection("vision", providerId);
+        return chatCache.computeIfAbsent(selection.cacheKey(), key -> buildChat(selection));
     }
 
-    private String resolveId(String providerId) {
-        if (providerId == null || providerId.isBlank()) {
-            ModelRouteVO route = settings == null ? null : settings.route("chat");
-            return route == null ? aiProperties.defaultProvider() : route.providerId();
-        }
-        return providerId.trim();
+    /** 生产 pgvector 专用 EmbeddingModel，维度沿用向量表 schema 配置。 */
+    public EmbeddingModel embeddingModel(int dimensions) {
+        ModelSelection selection = selection("embedding", null);
+        String key = selection.cacheKey() + ":dimensions:" + dimensions;
+        return embeddingCache.computeIfAbsent(key, ignored -> buildEmbedding(selection, dimensions));
     }
 
-    private String resolveVisionId(String providerId) {
+    private ModelSelection selection(String capability, String providerId) {
         if (providerId != null && !providerId.isBlank()) {
-            return providerId.trim();
+            GlobalProviderVO provider = requiredProvider(providerId.trim());
+            return new ModelSelection(capability, provider, provider.model());
         }
-        ModelRouteVO route = settings == null ? null : settings.route("vision");
-        if (route != null) {
-            return route.providerId();
+        ModelRouteVO route = settings.route(capability);
+        if (route == null) {
+            throw new BusinessException(ErrorCodeEnum.BAD_REQUEST, "模型与服务设置缺少 " + capability + " 能力路由");
         }
-        if (production != null) {
-            return production.media().visionProvider();
-        }
-        return "dashscope";
+        return new ModelSelection(capability, requiredProvider(route.providerId()), route.model());
     }
 
-    private OpenAiChatModel build(String providerId, String modelOverride) {
-        if (!secrets.available()) {
-            throw new SecretUnavailableException("工业级密钥不可用，无法创建 ChatModel");
-        }
-        AiProperties.Provider cfg = aiProperties.providers().get(providerId);
-        GlobalProviderVO dynamic = settings == null ? null : settings.provider(providerId);
-        if (cfg == null && dynamic == null) {
+    private GlobalProviderVO requiredProvider(String providerId) {
+        GlobalProviderVO provider = settings.provider(providerId);
+        if (provider == null) {
             throw new BusinessException(ErrorCodeEnum.UNKNOWN_PROVIDER, "未知 LLM Provider: " + providerId);
         }
-        String apiKey = secrets.get(SecretResolver.llmKey(providerId)).orElse("");
-        if (apiKey.isBlank()) {
-            throw new SecretUnavailableException("prod_secret 中没有 llm." + providerId);
+        return provider;
+    }
+
+    private OpenAiChatModel buildChat(ModelSelection selection) {
+        GlobalProviderVO provider = selection.provider();
+        OpenAIClient client = openAiClient(provider);
+        var optionsBuilder = OpenAiChatOptions.builder().model(selection.model());
+        if (provider.temperature() != null) {
+            optionsBuilder.temperature(provider.temperature());
         }
-        boolean bypassProxy = cfg != null && Boolean.TRUE.equals(cfg.bypassProxy());
-        OpenAIClient openAiClient = ApiPathResolver.buildOpenAiClient(
-            dynamic == null ? cfg.baseUrl() : dynamic.baseUrl(),
-            apiKey,
-            bypassProxy
-        );
-        Double temperature = cfg != null && cfg.temperature() != null ? cfg.temperature() : aiProperties.temperature();
-        String defaultModel = dynamic == null ? cfg.model() : dynamic.model();
-        String model = modelOverride == null || modelOverride.isBlank() ? defaultModel : modelOverride;
-        var optionsBuilder = OpenAiChatOptions.builder()
-            .model(model)
-            .temperature(temperature);
-        if (cfg != null && cfg.enableThinking() != null) {
+        if (provider.enableThinking() != null) {
             optionsBuilder.extraBody(Map.of(
-                "chat_template_kwargs",
-                Map.of("enable_thinking", cfg.enableThinking())
+                "chat_template_kwargs", Map.of("enable_thinking", provider.enableThinking())
             ));
         }
-        log.info("生产 ChatModel provider={} model={}", providerId, model);
+        log.info("生产 ChatModel capability={} provider={} model={}",
+            selection.capability(), provider.id(), selection.model());
         return OpenAiChatModel.builder()
-            .openAiClient(openAiClient)
-            .openAiClientAsync(openAiClient.async())
+            .openAiClient(client)
+            .openAiClientAsync(client.async())
             .options(optionsBuilder.build())
             .build();
     }
 
-    /** 管理员保存配置后清空本实例缓存；下一次调用按数据库路由重建。 */
+    private OpenAiEmbeddingModel buildEmbedding(ModelSelection selection, int dimensions) {
+        GlobalProviderVO provider = selection.provider();
+        OpenAIClient client = openAiClient(provider);
+        var options = OpenAiEmbeddingOptions.builder()
+            .model(selection.model())
+            .dimensions(dimensions)
+            .build();
+        log.info("生产 EmbeddingModel provider={} model={} dimensions={}",
+            provider.id(), selection.model(), dimensions);
+        return OpenAiEmbeddingModel.builder()
+            .openAiClient(client)
+            .options(options)
+            .build();
+    }
+
+    private OpenAIClient openAiClient(GlobalProviderVO provider) {
+        if (!secrets.available()) {
+            throw new SecretUnavailableException("工业级密钥不可用，无法创建模型客户端");
+        }
+        String apiKey = secrets.get(SecretResolver.llmKey(provider.id())).orElse("");
+        if (apiKey.isBlank()) {
+            throw new SecretUnavailableException("prod_secret 中没有 llm." + provider.id());
+        }
+        return ApiPathResolver.buildOpenAiClient(
+            provider.baseUrl(), apiKey, provider.bypassProxy());
+    }
+
+    /** 管理员保存 Provider 或能力路由后清空本实例缓存。 */
     public void invalidate() {
-        cache.clear();
+        chatCache.clear();
+        embeddingCache.clear();
+    }
+
+    private record ModelSelection(String capability, GlobalProviderVO provider, String model) {
+        private String cacheKey() {
+            return capability + ':' + provider.id() + ':' + model;
+        }
     }
 }

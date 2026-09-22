@@ -1,6 +1,6 @@
 package com.feike.ai.samples.chat.service.impl;
 
-import com.feike.ai.core.config.AiProperties;
+import com.feike.ai.production.modelsettings.model.GlobalProviderVO;
 import com.feike.ai.core.LlmProviderRegistry;
 import com.feike.ai.core.PromptLoader;
 import com.feike.ai.core.model.TokenUsageDTO;
@@ -49,7 +49,7 @@ public class ChatSampleServiceImpl implements ChatSampleService {
         // 2. 可选温度：须合并 Provider extraBody，否则会冲掉 enable_thinking
         if (temperature != null) {
             var optionsBuilder = OpenAiChatOptions.builder().temperature(temperature);
-            AiProperties.Provider cfg = registry.providerConfig(resolved);
+            GlobalProviderVO cfg = registry.providerConfig(resolved);
             if (cfg != null && cfg.enableThinking() != null) {
                 optionsBuilder.extraBody(Map.of(
                     "chat_template_kwargs",

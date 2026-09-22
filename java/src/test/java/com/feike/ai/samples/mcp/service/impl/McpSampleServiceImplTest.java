@@ -81,17 +81,7 @@ class McpSampleServiceImplTest {
     ) {
         LlmProviderRegistry registry = mock(LlmProviderRegistry.class);
         AiProperties properties = new AiProperties(
-            "deepseek",
-            0.2,
-            null,
-            null,
-            null,
-            "dashscope",
-            null,
-            null,
-            null,
-            null,
-            null,
+            null, null, null, null, null, null,
             new AiProperties.Mcp(initialMode, "dev-mcp-token"),
             null
         );

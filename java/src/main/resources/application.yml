@@ -85,10 +85,6 @@ spring:
       timeout: 3s
       connect-timeout: 2s
   ai:
-    openai:
-      # 仅占位：真正的 ChatClient 由 LlmProviderRegistry 按 app.ai.providers 手动创建，避免双模型
-      api-key: ${AI_API_KEY:placeholder}
-      base-url: ${AI_BASE_URL:https://api.deepseek.com}
     retry:
       max-attempts: 1
       on-client-errors: false
@@ -123,13 +119,7 @@ spring:
 
 app:
   ai:
-    default-provider: ${AI_PROVIDER:deepseek}
-    # 调度器参数；各 Provider 可单独覆盖
-    temperature: ${AI_TEMPERATURE:0.2}
-    embedding-provider: dashscope
-    embedding:
-      model: text-embedding-v3
-      dimensions: 1024
+    # 仅保留教学行为参数；Provider、模型、路由、温度和密钥统一由数据库模型设置提供。
     rag:
       enabled: ${RAG_ENABLED:true}
       top-k: 4
@@ -156,44 +146,6 @@ app:
       mode: ${MCP_MODE:remote}
       # 与 mcp-server app.mcp.auth.bearer-token / MCP_BEARER_TOKEN 保持一致
       remote-bearer-token: ${MCP_BEARER_TOKEN:dev-mcp-token}
-    providers:
-      deepseek:
-        label: DeepSeek
-        base-url: https://api.deepseek.com
-        api-key: ${PROVIDER_DEEPSEEK_API_KEY:${AI_API_KEY:}}
-        model: ${PROVIDER_DEEPSEEK_MODEL:deepseek-v4-flash}
-        capabilities: [chat, tools]
-      dashscope:
-        label: 阿里云百炼
-        base-url: https://dashscope.aliyuncs.com/compatible-mode
-        api-key: ${PROVIDER_DASHSCOPE_API_KEY:}
-        model: ${PROVIDER_DASHSCOPE_MODEL:qwen3.8-max}
-        capabilities: [chat, vision, embedding, asr, tts]
-      kimi:
-        label: Kimi
-        base-url: https://api.moonshot.cn/v1
-        api-key: ${PROVIDER_KIMI_API_KEY:}
-        model: ${PROVIDER_KIMI_MODEL:kimi-latest}
-        capabilities: [chat, vision]
-        temperature: 1
-      glm:
-        label: 智谱 GLM
-        base-url: https://open.bigmodel.cn/api/coding/paas/v4
-        api-key: ${PROVIDER_GLM_API_KEY:}
-        model: ${PROVIDER_GLM_MODEL:glm-5}
-        capabilities: [chat, tools]
-      # id 不用 qwen3.5：YAML/Spring 会把点当成嵌套路径
-      qwen35:
-        label: qwen3.5
-        base-url: https://vllm.naradapower.com
-        api-key: ${PROVIDER_QWEN35_API_KEY:}
-        model: ${PROVIDER_QWEN35_MODEL:qwennaradav1}
-        capabilities: [chat, tools]
-        # 默认 thinking 时 OpenAI 兼容响应 content=null、正文在 reasoning，本仓读不到
-        enable-thinking: false
-        # 域名常解析到内网 IP；IDEA https.proxyHost 不会因 10.0.0.0/8 nonProxy 规则绕过主机名
-        # true: 忽略 JVM 代理设置，直连 false: 按 JVM 代理设置代理
-        bypass-proxy: true
     # 结构化输入参数
     structured:
       # 重试次数
@@ -242,7 +194,7 @@ app:
         - 违禁演示词
         - BLOCKED_DEMO
 
-  # 工业级链路：与 app.ai.*（教学样例）完全分开的一套配置
+  # 工业级业务行为配置；模型 Provider、能力路由和密钥与教学场共用数据库设置。
   production:
     # 代码里默认 false（属性缺失时不启用）；本仓部署显式打开
     enabled: ${PRODUCTION_ENABLED:true}
@@ -280,7 +232,7 @@ app:
       seq-retries: ${PRODUCTION_SESSION_SEQ_RETRIES:3}
     security:
       # Base64 的 32 字节 AES-256 KEK。生成：openssl rand -base64 32
-      # 空则 /api/v1 503，教学样例不受影响
+      # 空则教学和工业场的真实模型调用均返回 503
       kek: ${PRODUCTION_KEK:}
       # 轮换窗口：旧密文仍用上一把解，重加密后可去掉
       kek-previous: ${PRODUCTION_KEK_PREVIOUS:}
@@ -310,13 +262,6 @@ app:
         - audio/webm
         - audio/wav
         - audio/mpeg
-      vision-model: ${PRODUCTION_VISION_MODEL:qwen-vl-plus}
-      vision-provider: ${PRODUCTION_VISION_PROVIDER:dashscope}
-      asr-model: ${PRODUCTION_ASR_MODEL:qwen3-asr-flash}
-      asr-provider: ${PRODUCTION_ASR_PROVIDER:dashscope}
-      tts-model: ${PRODUCTION_TTS_MODEL:qwen3-tts-flash}
-      tts-provider: ${PRODUCTION_TTS_PROVIDER:dashscope}
-      tts-voice: ${PRODUCTION_TTS_VOICE:Cherry}
       max-speak-chars: ${PRODUCTION_TTS_MAX_CHARS:200}
       # 一轮最多几张；超过走 422 media_too_many，不调模型
       max-images: ${PRODUCTION_MEDIA_MAX_IMAGES:3}

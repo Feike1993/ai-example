@@ -1,6 +1,9 @@
 package com.feike.ai.production.config;
 
-import com.feike.ai.core.config.AiProperties;
+import com.feike.ai.production.modelsettings.config.ModelSettingsConfiguration;
+import com.feike.ai.production.modelsettings.service.GlobalModelSettingsService;
+import com.feike.ai.production.secret.dao.SecretResolver;
+import com.feike.ai.production.secret.manager.ProductionModelFactory;
 import com.feike.ai.production.chat.service.ProductionChatService;
 import com.feike.ai.production.lock.manager.InMemorySessionLock;
 import com.feike.ai.production.lock.manager.RedisSessionLock;
@@ -10,6 +13,7 @@ import com.feike.ai.production.session.dao.ProductionChatSessionDAO;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreProperties;
 import org.springframework.boot.autoconfigure.context.PropertyPlaceholderAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -38,11 +42,13 @@ class ProductionConfigurationTest {
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
         .withConfiguration(org.springframework.boot.autoconfigure.AutoConfigurations.of(
             PropertyPlaceholderAutoConfiguration.class))
-        .withUserConfiguration(StubCollaborators.class, PropertiesHolder.class, ProductionConfiguration.class)
+        .withUserConfiguration(StubCollaborators.class, PropertiesHolder.class,
+            ModelSettingsConfiguration.class, ProductionConfiguration.class)
         .withPropertyValues(
             "app.production.enabled=true",
             "app.production.stream.event-log=memory",
-            "app.production.security.secret-store=env"
+            "app.production.security.secret-store=env",
+            "spring.ai.vectorstore.pgvector.dimensions=1024"
         );
 
     @Test
@@ -51,6 +57,9 @@ class ProductionConfigurationTest {
             assertThat(context).doesNotHaveBean(ProductionChatService.class);
             assertThat(context).doesNotHaveBean(ProductionChatSessionDAO.class);
             assertThat(context).doesNotHaveBean(SessionLock.class);
+            assertThat(context).hasSingleBean(GlobalModelSettingsService.class);
+            assertThat(context).hasSingleBean(ProductionModelFactory.class);
+            assertThat(context).hasSingleBean(SecretResolver.class);
         });
     }
 
@@ -91,11 +100,6 @@ class ProductionConfigurationTest {
     static class StubCollaborators {
 
         @Bean
-        AiProperties aiProperties() {
-            return new AiProperties(null, null, null, null, null, null, null, null, null, null, null, null, null);
-        }
-
-        @Bean
         MeterRegistry meterRegistry() {
             return new SimpleMeterRegistry();
         }
@@ -127,7 +131,7 @@ class ProductionConfigurationTest {
     }
 
     @Configuration(proxyBeanMethods = false)
-    @EnableConfigurationProperties(ProductionProperties.class)
+    @EnableConfigurationProperties({ProductionProperties.class, PgVectorStoreProperties.class})
     static class PropertiesHolder {
     }
 }

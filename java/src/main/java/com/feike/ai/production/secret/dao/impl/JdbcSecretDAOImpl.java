@@ -23,7 +23,7 @@ import java.util.Optional;
  * 轮换窗口内可同时持有 {@code PRODUCTION_KEK_PREVIOUS}：当前钥匙解不开时再试上一把。
  * ADMIN {@code POST /api/v1/secrets/rotate} 会按当前 kek-id 重加密全部行。
  * KEK 解析失败时 {@link #available()} 为 false：此时 get/put 抛 503 语义异常，
- * 应用其余部分（教学样例）不受影响。
+ * 应用仍可启动，但教学场和工业场的真实模型调用都会返回 503。
  */
 public class JdbcSecretDAOImpl implements SecretResolver {
 

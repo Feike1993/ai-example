@@ -5,7 +5,7 @@ import com.feike.ai.production.secret.service.SecretUnavailableException;
 import java.util.Optional;
 
 /**
- * 工业级密钥读取口。
+ * 教学场与工业场共用的密钥读取口。
  * <p>
  * 实现分 postgres（密文表 + KEK）和 env（单测 / 无库调试）。调用方只认名字，
  * 不关心密文怎么存。{@link #available()} 为 false 时接口应 503，而不是在构造期炸掉。
